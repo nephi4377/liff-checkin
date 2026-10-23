@@ -786,6 +786,10 @@ function renderSingleArea(layer, area, isSelected) {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.id = area.id;
 
+    if (area.type === 'wall' && area.points?.length >= 3 && !area.pathData) {
+        area.pathData = calculateWallPath(area.points, area.thickness || 15);
+    }
+
     // [修正] 鎖定邏輯：同時檢查「鎖定繪圖」與「鎖定牆壁」
     const lockDrawnAreas = document.getElementById('lock-drawn-areas').checked;
     const lockWalls = document.getElementById('lock-walls-toggle') ? document.getElementById('lock-walls-toggle').checked : false;
@@ -1767,9 +1771,7 @@ function handleKeyDown(e) {
     }
     if (e.key.toLowerCase() === 'd' || e.key === 'Delete') { // [您的要求] 增加 Delete 鍵支援
         e.preventDefault();
-        const idToDelete = selectedCabId;
-        deselectAll();
-        deleteCabById(idToDelete);
+        deleteSelectedCabinets();
         return;
     }
     const step = e.shiftKey ? 10 : snapGridStepCm;
@@ -1862,6 +1864,14 @@ function groupSelectedCabinets() {
     if (targets.length < 2) {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
+    }
+    const touchedGroupIds = new Set(targets.map((c) => c.layoutGroupId).filter(Boolean));
+    if (touchedGroupIds.size) {
+        placedCabinets.forEach((cab) => {
+            if (cab.layoutGroupId && touchedGroupIds.has(cab.layoutGroupId)) {
+                delete cab.layoutGroupId;
+            }
+        });
     }
     const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
@@ -1962,20 +1972,33 @@ function moveSelectedCabLayer(direction) {
     }
 }
 
-function deleteCabById(id) {
-    const cab = placedCabinets.find((c) => c.id === id);
-    const idsToRemove = new Set([id]);
-    if (cab?.layoutGroupId) {
-        placedCabinets
-            .filter((c) => c.layoutGroupId === cab.layoutGroupId)
-            .forEach((c) => idsToRemove.add(c.id));
+function deleteSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length) {
+        if (selectedCabId) deleteCabById(selectedCabId);
+        return;
     }
+    const idsToRemove = new Set();
+    targets.forEach((cab) => {
+        idsToRemove.add(cab.id);
+        if (cab.layoutGroupId) {
+            placedCabinets
+                .filter((c) => c.layoutGroupId === cab.layoutGroupId)
+                .forEach((c) => idsToRemove.add(c.id));
+        }
+    });
     placedCabinets = placedCabinets.filter((c) => !idsToRemove.has(c.id));
     deselectAll();
     renderAllCabinets();
     updateQuotation();
     saveState();
     renderLayerVisibilityPanel();
+}
+
+function deleteCabById(id) {
+    if (!id) return;
+    setCabinetSelection([id], id);
+    deleteSelectedCabinets();
 }
 
 // [新增] 刪除標註
@@ -2273,8 +2296,10 @@ function handleGlobalMove(e) {
 }
 
 function endDrag() {
+    const wasDraggingBg = isDraggingBg;
     if (isDraggingCab) saveState();
     if (isResizing) saveState();
+    if (wasDraggingBg) saveState();
     if (isDraggingVertex) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
@@ -2407,12 +2432,8 @@ function selectArea(id) {
     const area = drawnAreas.find(a => a.id === id);
 
     if (area) {
-        const group = document.querySelector(`#drawn-areas-layer g[data-id="${id}"]`);
-        if (group) {
-            group.querySelector('polygon').classList.add('selected');
-            // [您的要求] 為選取的區域產生可拖曳的頂點
-            renderVertexHandles(area);
-        }
+        renderAllDrawnAreas();
+        renderVertexHandles(area);
 
         document.getElementById('selected-info').style.display = 'block';
         
@@ -4142,6 +4163,32 @@ function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
+    quotationManualOverrides = state.quotationManualOverrides
+        ? JSON.parse(JSON.stringify(state.quotationManualOverrides))
+        : {};
+    layerVisibility = state.layerVisibility
+        ? JSON.parse(JSON.stringify(state.layerVisibility))
+        : {};
+
+    if (state.background) {
+        bgPosition = state.background.position || { x: 0, y: 0 };
+        bgScale = state.background.scale ?? 1.0;
+        const bgImg = document.getElementById('bg-img');
+        if (bgImg && state.background.src) {
+            if (state.background.src.startsWith('data:image')) {
+                bgImg.src = state.background.src;
+                bgImg.style.display = 'block';
+                document.getElementById('bg-controls')?.classList.remove('opacity-50', 'pointer-events-none');
+            } else if (!state.background.src || state.background.src === window.location.href) {
+                bgImg.style.display = 'none';
+                bgImg.removeAttribute('src');
+            }
+        }
+        const scaleInput = document.getElementById('bg-scale');
+        const scaleNum = document.getElementById('bg-scale-num');
+        if (scaleInput) scaleInput.value = String(bgScale);
+        if (scaleNum) scaleNum.value = String(bgScale);
+    }
 
     const constructionAreaEl = document.getElementById('construction-area');
     if (constructionAreaEl) {
@@ -4151,6 +4198,9 @@ function loadState(state) {
     renderAllCabinets();
     renderAllDrawnAreas();
     renderAllAnnotations(); // [新增]
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
+    updateBgTransform();
     updateQuotation();
     deselectAll();
     deselectAllAreas();
