@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>LayoutPlanner 2D 平面出圖預覽</title>
+    <style>
+        body { font-family: system-ui, sans-serif; padding: 2rem; color: #334155; }
+    </style>
+</head>
+<body>
+    <p>正在開啟示範佈局與<strong>2D 平面出圖</strong>預覽（不覆蓋正式版）…</p>
+    <script>
+        (function () {
+            const q = 'lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json';
+            const host = location.hostname || '';
+            const planner = /githack\.com$/i.test(host) ? 'LP_LayoutPlanner.html' : 'LP_LayoutPlanner';
+            location.replace(`${planner}?${q}`);
+        })();
+    </script>
+</body>
+</html>
