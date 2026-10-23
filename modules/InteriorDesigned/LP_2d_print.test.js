@@ -6,6 +6,8 @@ import {
     computePrintContentScale,
     computePrintDrawableSize,
     computePrintSheetContentScale,
+    resolvePrintScaleBar,
+    estimatePrintScaleRatioForSheet,
     formatFloorplanPrintPngFilename,
     projectPointOnSegment,
     resolvePrintSheetSpec,
@@ -102,8 +104,43 @@ describe('LP_2d_print helpers', () => {
     });
 });
 
+describe('resolvePrintScaleBar', () => {
+    it('A4 2000px workspace 100cm bar ≈27px', () => {
+        const ppc = computePrintSheetContentScale('A4_LANDSCAPE', 2000);
+        const bar = resolvePrintScaleBar(ppc);
+        expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBeGreaterThanOrEqual(25);
+        expect(bar.barPx).toBeLessThanOrEqual(29);
+    });
+
+    it('A4 3000px workspace 100cm bar ≈18px', () => {
+        const ppc = computePrintSheetContentScale('A4_LANDSCAPE', 3000);
+        const bar = resolvePrintScaleBar(ppc);
+        expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBeGreaterThanOrEqual(16);
+        expect(bar.barPx).toBeLessThanOrEqual(20);
+    });
+
+    it('A3 3000px workspace 100cm bar ≈29px', () => {
+        const ppc = computePrintSheetContentScale('A3_LANDSCAPE', 3000);
+        const bar = resolvePrintScaleBar(ppc);
+        expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBeGreaterThanOrEqual(27);
+        expect(bar.barPx).toBeLessThanOrEqual(31);
+    });
+});
+
+describe('estimatePrintScaleRatioForSheet', () => {
+    it('與圖紙 contentScale 推算一致', () => {
+        const label = estimatePrintScaleRatioForSheet('A4_LANDSCAPE', 2000);
+        expect(label).toMatch(/^1:\d+$/);
+        const n = parseInt(label.split(':')[1], 10);
+        expect(n).toBeGreaterThan(50);
+    });
+});
+
 describe('assemblePrintSheetOptions', () => {
-    it('A3 可繪區較大時比例尺 bar 像素較 A4 長', () => {
+    it('A3 可繪區較大時比例尺 bar 像素較 A4 長（同 workspace）', () => {
         const base = {
             workspacePx: 2000,
             placedCabinets: [],

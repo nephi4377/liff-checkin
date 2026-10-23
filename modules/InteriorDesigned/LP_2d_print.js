@@ -307,6 +307,46 @@ export function buildScaleBarLabel(pixelsPerCmOnSheet, barCm = 100) {
     return { barCm, barPx, label: `${barCm} cm` };
 }
 
+const SCALE_BAR_CM_STEPS = [100, 200, 500];
+
+/**
+ * 依圖面像素密度選 100／200／500cm 刻度（不抬高 pixelsPerCm 下限）
+ * @param {number} pixelsPerCmOnSheet
+ * @param {{ minBarPx?: number, maxBarPx?: number }} [options]
+ */
+export function resolvePrintScaleBar(pixelsPerCmOnSheet, options = {}) {
+    const maxBarPx = options.maxBarPx ?? 200;
+    const ppc = Number(pixelsPerCmOnSheet);
+    if (!Number.isFinite(ppc) || ppc <= 0) {
+        return buildScaleBarLabel(0, 100);
+    }
+    let barCm = 100;
+    if (ppc * 100 > maxBarPx) {
+        for (const step of [200, 500]) {
+            if (ppc * step <= maxBarPx) {
+                barCm = step;
+                break;
+            }
+        }
+        if (ppc * barCm > maxBarPx) {
+            barCm = 500;
+        }
+    }
+    return buildScaleBarLabel(ppc, barCm);
+}
+
+/** 螢幕出圖 96dpi 假設下，圖紙比例分母（與比例尺 bar 一致） */
+export function estimatePrintScaleRatioForSheet(sheetId, workspacePx) {
+    const ppc = computePrintSheetContentScale(sheetId, workspacePx);
+    if (!ppc || ppc <= 0) return '1:—';
+    const pxPerCmPaper = 96 / 2.54;
+    const planExtentPx = workspacePx * ppc;
+    const paperCm = planExtentPx / pxPerCmPaper;
+    if (paperCm <= 0) return '1:—';
+    const denom = Math.max(1, Math.round(workspacePx / paperCm));
+    return `1:${denom}`;
+}
+
 /**
  * @param {object[]} points
  * @param {number} workspacePx

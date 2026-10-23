@@ -4,7 +4,7 @@
 
 import {
     buildAllPrintDimensions,
-    buildScaleBarLabel,
+    resolvePrintScaleBar,
     categoryColorToCssHex,
     computePrintDrawableSize,
     computePrintSheetContentScale,
@@ -206,7 +206,7 @@ export function assemblePrintSheetOptions(params) {
         planCloneHtml,
     } = params;
     const pixelsPerCm = computePrintSheetContentScale(sheetId, workspacePx);
-    const scaleBar = buildScaleBarLabel(Math.max(pixelsPerCm, 0.4), 100);
+    const scaleBar = resolvePrintScaleBar(pixelsPerCm);
     return {
         sheetId,
         workspacePx,

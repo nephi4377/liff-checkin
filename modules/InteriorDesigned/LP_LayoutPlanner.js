@@ -24,7 +24,7 @@ import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
-import { estimatePrintScaleRatio, LP_PRINT_TITLE_DEFAULTS } from './LP_2d_print.js';
+import { estimatePrintScaleRatioForSheet, LP_PRINT_TITLE_DEFAULTS } from './LP_2d_print.js';
 import {
     assemblePrintSheetOptions,
     buildPrintSheetElement,
@@ -4267,7 +4267,7 @@ async function runFloorplanPrintExport(mode) {
     });
     const titleBlock = readPrintTitleBlockFromForm();
     if (!document.getElementById('lp-print-field-scale')?.value?.trim()) {
-        titleBlock.scale = `比例：${estimatePrintScaleRatio(allPts, workspacePx)}`;
+        titleBlock.scale = `比例：${estimatePrintScaleRatioForSheet(sheetId, workspacePx)}`;
     }
     const planHtml = buildPlanCloneMarkupForPrint();
     buildPrintSheetElement(
