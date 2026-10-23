@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { buildLayout3DDescriptor, openingAssociatesWithWall, openingCutsWall } from './LP_3D_scene.js';
 import {
     WALK_BODY_RADIUS_CM,
@@ -10,6 +11,7 @@ import {
     moveWithWalkCollision,
     openingSpanOnEdge,
     partitionSegmentToObb,
+    partitionRotationY,
     pushCircleOffObb,
     resolveWalkBodyRadiusCm,
     resolveWalkPosition,
@@ -203,15 +205,26 @@ describe('buildWallInnerCollisionSegments', () => {
 });
 
 describe('fixture OBB 與隔間牆', () => {
-    it('45° 隔間牆 mesh rotation 與 OBB 軸向一致（B8）', () => {
+    it('partitionRotationY：+45° 段以真實 Object3D 將局部 +X 對齊段向', () => {
         const obb = partitionSegmentToObb(100, 200, 300, 400, 15);
-        const rotY = -Math.atan2(obb.sin, obb.cos);
-        const dirX = Math.cos(rotY);
-        const dirZ = Math.sin(rotY);
-        const segLen = Math.hypot(200, 200);
-        expect(dirX).toBeCloseTo(obb.cos, 5);
-        expect(dirZ).toBeCloseTo(-obb.sin, 5);
-        expect(obb.halfW).toBeCloseTo(segLen / 2, 5);
+        const mesh = new THREE.Object3D();
+        mesh.rotation.y = partitionRotationY(obb);
+        const localX = new THREE.Vector3(1, 0, 0);
+        localX.applyQuaternion(mesh.quaternion);
+        expect(localX.x).toBeCloseTo(0.7071, 3);
+        expect(localX.y).toBeCloseTo(0, 5);
+        expect(localX.z).toBeCloseTo(0.7071, 3);
+        expect(obb.halfW).toBeCloseTo(Math.hypot(200, 200) / 2, 5);
+    });
+
+    it('partitionRotationY：−45° 段局部 +X 方向', () => {
+        const obb = partitionSegmentToObb(0, 0, 200, -200, 15);
+        const mesh = new THREE.Object3D();
+        mesh.rotation.y = partitionRotationY(obb);
+        const localX = new THREE.Vector3(1, 0, 0);
+        localX.applyQuaternion(mesh.quaternion);
+        expect(localX.x).toBeCloseTo(0.7071, 3);
+        expect(localX.z).toBeCloseTo(-0.7071, 3);
     });
 
     it('櫃體 OBB 依寬深與旋轉阻擋（非固定 20cm 圓）', () => {
