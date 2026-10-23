@@ -5003,8 +5003,8 @@ function centerView() {
     }
 }
 
-// 應用程式進入點
-window.onload = () => {
+// 應用程式進入點（module 晚於 load 時仍須啟動，例如 githack + dynamic import）
+function bootLayoutPlannerApp() {
     // 【核心修正】修正手機裝置偵測邏輯。
     // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
     // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
@@ -5042,7 +5042,13 @@ window.onload = () => {
     setTimeout(centerView, 100);
 
     maybeInitLayoutPlannerUrlPreview();
-};
+}
+
+if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', bootLayoutPlannerApp);
+} else {
+    bootLayoutPlannerApp();
+}
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)
 function updateSelectedPriceDisplay(id) {
