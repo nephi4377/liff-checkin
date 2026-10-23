@@ -57,6 +57,7 @@ async function runToggleCycle(page) {
 
 test.describe('LayoutPlanner 3D perf / memory', () => {
   test('大型配置反覆 2D↔3D 切換：heap 與 RAF 不洩漏', async ({ page, browserName }) => {
+    test.setTimeout(180000);
     test.skip(browserName !== 'chromium', 'performance.memory 僅 Chromium');
 
     await page.goto('/LP_LayoutPlanner?lpPreview=1', { waitUntil: 'domcontentloaded' });

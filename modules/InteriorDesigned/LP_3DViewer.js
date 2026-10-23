@@ -9,10 +9,14 @@ import {
     ringCentroidXZ,
     fixtureFootprintSamplePointsXZ,
     pointInPolygonXZ,
+    pointInWallBand,
+    axisAlignedBoundsXZ,
+    boundsXZMatch,
 } from './LP_3D_scene.js';
 import {
     buildFixtureMeshGroup,
     createLabelSprite,
+    LP_3D_CATEGORY_COLORS,
 } from './LP_3D_furniture.js';
 import { createWalkController } from './LP_3D_walk.js';
 import { disposeObject3D, disposeBrushGeometry } from './LP_3D_dispose.js';
@@ -34,9 +38,30 @@ function shapePointXZ(p) {
     return { x: p.x, y: -p.z };
 }
 
+function shapeSignedArea(ring) {
+    let sum = 0;
+    for (let i = 0; i < ring.length; i++) {
+        const a = shapePointXZ(ring[i]);
+        const b = shapePointXZ(ring[(i + 1) % ring.length]);
+        sum += a.x * b.y - b.x * a.y;
+    }
+    return sum / 2;
+}
+
+/** Three.js Shape 外圈需 CCW（shape 平面） */
+function ringForShapeOuter(ring) {
+    if (!ring?.length) return ring;
+    return shapeSignedArea(ring) < 0 ? [...ring].reverse() : ring;
+}
+
+function ringForShapeHole(ring) {
+    return [...ringForShapeOuter(ring)].reverse();
+}
+
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
-    outer.forEach((p, i) => {
+    const outerRing = ringForShapeOuter(outer);
+    outerRing.forEach((p, i) => {
         const s = shapePointXZ(p);
         if (i === 0) shape.moveTo(s.x, s.y);
         else shape.lineTo(s.x, s.y);
@@ -44,7 +69,8 @@ function makeShapeFromRing(outer, inner) {
     shape.closePath();
     if (inner && inner.length >= 3) {
         const hole = new THREE.Path();
-        inner.forEach((p, i) => {
+        const innerRing = ringForShapeHole(inner);
+        innerRing.forEach((p, i) => {
             const s = shapePointXZ(p);
             if (i === 0) hole.moveTo(s.x, s.y);
             else hole.lineTo(s.x, s.y);
@@ -57,7 +83,8 @@ function makeShapeFromRing(outer, inner) {
 
 function makeShapeFromSingleRing(ring) {
     const shape = new THREE.Shape();
-    ring.forEach((p, i) => {
+    const oriented = ringForShapeOuter(ring);
+    oriented.forEach((p, i) => {
         const s = shapePointXZ(p);
         if (i === 0) shape.moveTo(s.x, s.y);
         else shape.lineTo(s.x, s.y);
@@ -140,6 +167,10 @@ export function createLayoutPlanner3DViewer(options) {
     const contentGroup = { current: null };
     const ceilingGroup = { current: null };
     const labelGroup = { current: null };
+    const wallMeshes = { current: [] };
+    const floorMeshes = { current: [] };
+    const fixtureGroups = { current: new Map() };
+    const ORBIT_WALL_CUT_HEIGHT_CM = 100;
 
     const hintEl = overlayEl?.querySelector('#lp-3d-hint');
     const btnOrbit = overlayEl?.querySelector('#lp-3d-btn-orbit');
@@ -197,6 +228,7 @@ export function createLayoutPlanner3DViewer(options) {
             if (ceilingToggle) ceilingToggle.checked = false;
             if (ceilingGroup.current) ceilingGroup.current.visible = false;
         }
+        applyOrbitWallPresentation();
     }
 
     function resetWalkCamera(desc) {
@@ -264,6 +296,7 @@ export function createLayoutPlanner3DViewer(options) {
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
         controls.target.set(0, 120, 0);
+        controls.addEventListener('end', () => applyOrbitWallPresentation());
 
         const hemi = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 0.9);
         scene.add(hemi);
@@ -332,6 +365,7 @@ export function createLayoutPlanner3DViewer(options) {
             drawnAreas: raw.drawnAreas,
         });
         lastDesc = desc;
+        lastOrbitWallCut = null;
         walkCollisionCache.invalidate();
         const defaults = LP_3D_DEFAULTS;
         const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
@@ -353,7 +387,7 @@ export function createLayoutPlanner3DViewer(options) {
 
         const ws = desc.workspaceSize;
         const grid = new THREE.GridHelper(ws, Math.round(ws / 100), 0xb8c4d4, 0xdbe4ef);
-        grid.position.y = 0.05;
+        grid.position.y = -0.5;
         root.add(grid);
 
         const floorMat = new THREE.MeshStandardMaterial({
@@ -364,8 +398,14 @@ export function createLayoutPlanner3DViewer(options) {
         const floorRings = desc.floors.length
             ? desc.floors.map((f) => f.ring)
             : (desc.walls[0] ? [desc.walls[0].inner] : []);
+        floorMeshes.current = [];
         for (const ring of floorRings) {
-            if (ring?.length >= 3) root.add(buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat));
+            if (ring?.length >= 3) {
+                const slab = buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat);
+                slab.userData.lp3dFloor = true;
+                floorMeshes.current.push(slab);
+                root.add(slab);
+            }
         }
 
         const ceilingMat = new THREE.MeshStandardMaterial({
@@ -396,20 +436,31 @@ export function createLayoutPlanner3DViewer(options) {
             roughness: 0.88,
             metalness: 0.04,
         });
+        wallMeshes.current = [];
         for (const wall of desc.walls) {
             const brush = buildWallBrush(wall, wallMat, openings, defaults);
+            brush.userData.lp3dWall = true;
+            wallMeshes.current.push(brush);
             root.add(brush);
         }
 
+        fixtureGroups.current = new Map();
+        const cabinetCount = desc.fixtures.filter((f) => f.kind === 'cabinet').length;
+        const showCabinetLabels = cabinetCount <= 12;
         for (const fix of desc.fixtures) {
             const group = buildFixtureMeshGroup(THREE, fix);
             group.position.set(fix.centerX, 0, fix.centerZ);
             group.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
+            group.userData.lp3dFixtureId = fix.id;
+            group.userData.lp3dFixtureKind = fix.kind;
+            fixtureGroups.current.set(fix.id, group);
             root.add(group);
 
-            if (fix.label && fix.kind === 'cabinet') {
-                const sprite = createLabelSprite(THREE, fix.label);
-                const topY = fix.baseYCm + fix.heightCm + 12;
+            if (showCabinetLabels && fix.label && fix.kind === 'cabinet') {
+                const accent = LP_3D_CATEGORY_COLORS[fix.displayCategory]
+                    ?? LP_3D_CATEGORY_COLORS.cabinet;
+                const sprite = createLabelSprite(THREE, fix.label, accent);
+                const topY = fix.baseYCm + fix.heightCm + 18;
                 sprite.position.set(fix.centerX, topY, fix.centerZ);
                 labels.add(sprite);
             }
@@ -422,6 +473,50 @@ export function createLayoutPlanner3DViewer(options) {
 
         if (viewMode === 'orbit') resetOrbitCamera(desc);
         else resetWalkCamera(desc);
+        applyOrbitWallPresentation();
+    }
+
+    function isOrbitTopDownView() {
+        if (!camera || !controls || !lastDesc) return false;
+        const wallH = lastDesc.walls?.[0]?.heightCm ?? LP_3D_DEFAULTS.WALL_HEIGHT_CM;
+        const dx = camera.position.x - controls.target.x;
+        const dz = camera.position.z - controls.target.z;
+        const dy = camera.position.y - controls.target.y;
+        const horiz = Math.hypot(dx, dz);
+        return dy > wallH * 1.05 && horiz < dy * 0.2;
+    }
+
+    let lastOrbitWallCut = null;
+
+    function applyOrbitWallPresentation() {
+        if (!camera || viewMode !== 'orbit' || !wallMeshes.current.length) return;
+        const wallH = lastDesc?.walls?.[0]?.heightCm ?? LP_3D_DEFAULTS.WALL_HEIGHT_CM;
+        const cut = !isOrbitTopDownView();
+        if (cut === lastOrbitWallCut) return;
+        lastOrbitWallCut = cut;
+        for (const mesh of wallMeshes.current) {
+            mesh.scale.y = cut ? ORBIT_WALL_CUT_HEIGHT_CM / wallH : 1;
+            const mat = mesh.material;
+            if (!mat) continue;
+            mat.transparent = cut;
+            mat.opacity = cut ? 0.38 : 1;
+            mat.depthWrite = !cut;
+            mat.needsUpdate = true;
+        }
+    }
+
+    function updateLabelScreenSizes() {
+        if (!camera || !renderer || !labelGroup.current?.children?.length) return;
+        const pxH = 38;
+        const viewH = Math.max(renderer.domElement.clientHeight, 1);
+        const vFov = (camera.fov * Math.PI) / 180;
+        labelGroup.current.children.forEach((sprite) => {
+            const d = Math.max(camera.position.distanceTo(sprite.position), 40);
+            const worldH = 2 * Math.tan(vFov / 2) * d * (pxH / viewH);
+            const img = sprite.material?.map?.image;
+            const aspect = img?.width && img?.height ? img.width / img.height : 2.6;
+            sprite.scale.set(worldH * aspect, worldH, 1);
+        });
     }
 
     function tick(now) {
@@ -430,25 +525,71 @@ export function createLayoutPlanner3DViewer(options) {
         lastTick = now;
         if (viewMode === 'walk') walk.update(delta);
         else controls.update();
+        updateLabelScreenSizes();
         renderer.render(scene, camera);
         animationId = requestAnimationFrame(tick);
+    }
+
+    function meshWorldCentersXZ(object) {
+        const out = [];
+        const v = new THREE.Vector3();
+        object.traverse((obj) => {
+            if (obj.isMesh) {
+                obj.getWorldPosition(v);
+                out.push({ x: v.x, z: v.z });
+            }
+        });
+        return out;
+    }
+
+    function floorMeshBoundsXZ() {
+        const floor = floorMeshes.current[0];
+        if (!floor) return null;
+        const box = new THREE.Box3().setFromObject(floor);
+        return {
+            minX: box.min.x,
+            maxX: box.max.x,
+            minZ: box.min.z,
+            maxZ: box.max.z,
+        };
+    }
+
+    function openingSubMeshInWallBand(wall, op, group) {
+        const centers = meshWorldCentersXZ(group);
+        return centers.every((p) => {
+            if (pointInWallBand(p.x, p.z, wall)) return true;
+            return openingAssociatesWithWall(wall, { ...op, centerX: p.x, centerZ: p.z });
+        });
     }
 
     function computeRoomAcceptanceSnapshot() {
         if (!lastDesc) return null;
         const floorRing = lastDesc.walkBounds?.rings?.[0];
+        const innerBounds = floorRing ? axisAlignedBoundsXZ(floorRing) : null;
+        const meshBounds = floorMeshBoundsXZ();
         const openings = lastDesc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
         const cabinets = lastDesc.fixtures.filter((f) => f.kind === 'cabinet');
+        const sprite = labelGroup.current?.children?.find((c) => c.userData?.lp3dCabinetLabel);
         return {
             ceilingVisible: Boolean(ceilingGroup.current?.visible),
+            floorBoundsMatchInner: Boolean(
+                innerBounds && meshBounds && boundsXZMatch(innerBounds, meshBounds, 2.5),
+            ),
+            innerBounds,
+            floorMeshBounds: meshBounds,
             openingWallHits: openings.map((op) => {
                 const associated = lastDesc.walls.find((w) => openingAssociatesWithWall(w, op));
                 const cuts = lastDesc.walls.some((w) => openingCutsWall(w, op));
+                const group = fixtureGroups.current.get(op.id);
+                const subMeshesInWall = Boolean(
+                    associated && group && openingSubMeshInWallBand(associated, op, group),
+                );
                 return {
                     id: op.id,
                     kind: op.kind,
                     intersectsWall: Boolean(associated),
                     csgCut: cuts,
+                    subMeshesInWall,
                 };
             }),
             cabinetsInsideFloor: cabinets.map((cab) => {
@@ -460,6 +601,25 @@ export function createLayoutPlanner3DViewer(options) {
                 return { id: cab.id, inside };
             }),
             labelCount: labelGroup.current?.children?.length ?? 0,
+            labelScreen: (() => {
+                if (!sprite || !camera || !renderer) {
+                    return { visible: false, textReadable: false };
+                }
+                const d = Math.max(camera.position.distanceTo(sprite.position), 40);
+                const viewH = Math.max(renderer.domElement.clientHeight, 1);
+                const vFov = (camera.fov * Math.PI) / 180;
+                const worldH = sprite.scale.y;
+                const pixelHeight = (worldH * viewH) / (2 * Math.tan(vFov / 2) * d);
+                const img = sprite.material?.map?.image;
+                const aspect = img?.width && img?.height ? img.width / img.height : 2.6;
+                const pixelWidth = pixelHeight * aspect;
+                return {
+                    visible: true,
+                    pixelWidth,
+                    pixelHeight,
+                    textReadable: pixelWidth >= 72 && pixelHeight >= 20,
+                };
+            })(),
         };
     }
 
@@ -474,6 +634,14 @@ export function createLayoutPlanner3DViewer(options) {
             setWalkPosition: (x, z) => walk?.setPosition(x, z),
             lookWalkAt: (x, z) => walk?.lookAt(x, z),
             getRoomAcceptanceSnapshot: () => computeRoomAcceptanceSnapshot(),
+            resetWalkRoomPreview: () => {
+                if (!walk || !lastDesc) return;
+                viewMode = 'walk';
+                applyViewMode();
+                walk.setPosition(-430, -360);
+                walk.lookAt(-455, -680);
+                updateLabelScreenSizes();
+            },
         };
         mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
         mountEl.__lp3dRebuild = () => viewer.rebuild();

@@ -60,6 +60,33 @@ export function resolvePlacedCabinet3DKind(cab) {
 }
 
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
+/** 場景 XZ 環的軸對齊外框（cm） */
+export function axisAlignedBoundsXZ(ring) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    if (!ring?.length) {
+        return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+    }
+    for (const p of ring) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minZ = Math.min(minZ, p.z);
+        maxZ = Math.max(maxZ, p.z);
+    }
+    return { minX, maxX, minZ, maxZ };
+}
+
+/** 兩個 XZ 外框是否在容差內一致 */
+export function boundsXZMatch(a, b, toleranceCm = 2) {
+    const t = toleranceCm;
+    return Math.abs(a.minX - b.minX) <= t
+        && Math.abs(a.maxX - b.maxX) <= t
+        && Math.abs(a.minZ - b.minZ) <= t
+        && Math.abs(a.maxZ - b.maxZ) <= t;
+}
+
 export function ringCentroidXZ(ring) {
     if (!ring?.length) return { x: 0, z: 0 };
     let x = 0;

@@ -9,6 +9,8 @@ import {
     offsetPolygon,
     clampPointToWalkRings,
     pointInPolygonXZ,
+    axisAlignedBoundsXZ,
+    boundsXZMatch,
 } from './LP_3D_scene.js';
 
 describe('canvasToSceneXZ', () => {
@@ -244,6 +246,18 @@ describe('lp-3d-spec-demo fixture', () => {
         expect(openingCutsWall(wall, window)).toBe(true);
         const ring = wall.inner;
         expect(pointInPolygonXZ(cab.centerX, cab.centerZ, ring)).toBe(true);
+    });
+});
+
+describe('boundsXZMatch', () => {
+    it('容差內判定外框一致', () => {
+        const a = axisAlignedBoundsXZ([
+            { x: -10, z: -20 },
+            { x: 10, z: 20 },
+        ]);
+        const b = { minX: -10.5, maxX: 10.5, minZ: -19.5, maxZ: 20.5 };
+        expect(boundsXZMatch(a, b, 1)).toBe(true);
+        expect(boundsXZMatch(a, b, 0.2)).toBe(false);
     });
 });
 

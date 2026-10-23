@@ -448,10 +448,13 @@ test.describe('LayoutPlanner E2E', () => {
 
     const snapshot = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(snapshot?.ceilingVisible).toBe(false);
+    expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈').toBe(true);
     expect(snapshot?.labelCount).toBeGreaterThanOrEqual(1);
+    expect(snapshot?.labelScreen?.textReadable, '櫃體標籤應達可讀像素尺寸').toBe(true);
     for (const hit of snapshot?.openingWallHits ?? []) {
       expect(hit.intersectsWall, `${hit.kind} ${hit.id} 應貼齊牆體`).toBe(true);
       expect(hit.csgCut, `${hit.kind} ${hit.id} 應在牆帶內開洞`).toBe(true);
+      expect(hit.subMeshesInWall, `${hit.kind} ${hit.id} 子 mesh 應在牆帶內`).toBe(true);
     }
     for (const cab of snapshot?.cabinetsInsideFloor ?? []) {
       expect(cab.inside, `櫃體 ${cab.id} 應在地板內`).toBe(true);
@@ -461,7 +464,15 @@ test.describe('LayoutPlanner E2E', () => {
 
     await page.locator('#lp-3d-btn-preset-corner').click();
     await page.waitForTimeout(800);
-    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-eye-level.png'), fullPage: false });
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-oblique.png'), fullPage: false });
+
+    await page.locator('#lp-3d-btn-walk').click();
+    await expect(page.locator('#lp-3d-btn-walk')).toHaveClass(/lp-3d-active/);
+    await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.resetWalkRoomPreview?.());
+    await page.waitForTimeout(900);
+    const walkSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
+    expect(walkSnap?.labelScreen?.textReadable).toBe(true);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-walk.png'), fullPage: false });
   });
 
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {
