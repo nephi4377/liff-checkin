@@ -8,6 +8,11 @@ import {
     buildQuotationFirebaseUpdatePayload,
     applyRemoteProgressByExactId,
     findNameSpecHintsForSync,
+    buildRemoteQuotationSyncBaseline,
+    remoteQuotationSyncBaselineChanged,
+    formatRemoteChangedAbortMessage,
+    fingerprintLocalItemsForSyncCheck,
+    runLocalQuotationIdDuplicateCheck,
 } from './LP_budgetweb_cloud_sync.js';
 
 /**
@@ -27,6 +32,24 @@ export async function runBudgetWebQuotationCloudSync(opts) {
         return { ok: false, reason: 'missing_project_no' };
     }
 
+    if (opts.allowProductionSync === false) {
+        alertFn(
+            '預覽模式（lpPreview=1）禁止正式「同步至雲端」。\n請使用正式站 BudgetWeb，並完成工項 id 檢查後再同步。',
+        );
+        return { ok: false, reason: 'preview_mode' };
+    }
+
+    const localItems = opts.localItems || [];
+    const idCheck =
+        opts.localIdDuplicateCheck || runLocalQuotationIdDuplicateCheck(localItems);
+    if (
+        !idCheck.ok
+        || idCheck.fingerprint !== fingerprintLocalItemsForSyncCheck(localItems)
+    ) {
+        alertFn(idCheck.message || '同步前請先執行工項 id 檢查並修正問題。');
+        return { ok: false, reason: 'id_check_failed', idCheck };
+    }
+
     let snapshot;
     try {
         snapshot = await opts.readQuotationSnapshot(`quotations/${projectNo}`);
@@ -39,9 +62,10 @@ export async function runBudgetWebQuotationCloudSync(opts) {
     const existingData = isNewQuotationNode ? null : snapshot.val();
     const remoteContext = existingData?.context || null;
     const remoteItems = remoteContext?.items || [];
+    const remoteBaseline = buildRemoteQuotationSyncBaseline(existingData);
 
     const { mergedItems, diff, blockingErrors } = prepareCloudQuotationSync({
-        localItems: opts.localItems || [],
+        localItems,
         remoteContext,
     });
 
@@ -55,7 +79,7 @@ export async function runBudgetWebQuotationCloudSync(opts) {
         return { ok: false, reason: 'would_remove_remote' };
     }
 
-    const hints = findNameSpecHintsForSync(opts.localItems || [], remoteItems);
+    const hints = findNameSpecHintsForSync(localItems, remoteItems);
     const confirmText = formatSyncDiffForConfirm(diff, hints);
     if (diff.hasChanges || diff.preservedRemoteOnly.length > 0 || hints.length) {
         if (!confirmFn(confirmText)) {
@@ -63,13 +87,30 @@ export async function runBudgetWebQuotationCloudSync(opts) {
         }
     }
 
-    const exportItems = applyRemoteProgressByExactId(mergedItems, remoteItems);
+    let freshSnapshot;
+    try {
+        freshSnapshot = await opts.readQuotationSnapshot(`quotations/${projectNo}`);
+    } catch (readErr) {
+        alertFn(`寫回前重讀雲端失敗，同步已中止（未寫入）。\n${readErr?.message || readErr}`);
+        return { ok: false, reason: 'reread_failed', error: readErr };
+    }
+    const freshExists = freshSnapshot.exists();
+    const freshData = freshExists ? freshSnapshot.val() : null;
+    if (remoteQuotationSyncBaselineChanged(remoteBaseline, freshData)) {
+        alertFn(formatRemoteChangedAbortMessage());
+        return { ok: false, reason: 'remote_changed_since_baseline' };
+    }
+
+    const freshRemoteItems = freshData?.context?.items || remoteItems;
+    const exportItems = applyRemoteProgressByExactId(mergedItems, freshRemoteItems);
 
     const finalExport = {
         案號: projectNo,
         total_summary: {
             ...(opts.totalSummary || {}),
-            siteName: remoteContext?.total_summary?.siteName || '載入中...',
+            siteName: freshData?.context?.total_summary?.siteName
+                || remoteContext?.total_summary?.siteName
+                || '載入中...',
             overall_completion:
                 Math.round(
                     exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / exportItems.length,
@@ -80,7 +121,7 @@ export async function runBudgetWebQuotationCloudSync(opts) {
 
     const updatePayload = buildQuotationFirebaseUpdatePayload({
         finalContext: finalExport,
-        isNewQuotationNode,
+        isNewQuotationNode: !freshExists,
     });
 
     await opts.updateQuotation(`quotations/${projectNo}`, updatePayload);

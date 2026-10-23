@@ -899,8 +899,20 @@
             prepareCloudQuotationSync: mod.prepareCloudQuotationSync,
             formatSyncDiffForConfirm: mod.formatSyncDiffForConfirm,
             buildQuotationFirebaseUpdatePayload: mod.buildQuotationFirebaseUpdatePayload,
+            runLocalQuotationIdDuplicateCheck: mod.runLocalQuotationIdDuplicateCheck,
         };
         return cloudSyncHelpers;
+    }
+
+    const lpPreviewMode = new URLSearchParams(window.location.search).get('lpPreview') === '1';
+    if (lpPreviewMode) {
+        ['syncCloudBtn', 'floatSyncBtn'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.disabled = true;
+                el.title = '預覽模式（lpPreview=1）禁止正式同步至雲端';
+            }
+        });
     }
 
     document.getElementById('syncCloudBtn').addEventListener('click', async () => {
@@ -921,10 +933,18 @@
                 BudgetQuoteParser.sanitizeItemForExport(r.data),
             );
 
+            const idCheck = syncMod.runLocalQuotationIdDuplicateCheck(localItems);
+            if (!idCheck.ok) {
+                alert(idCheck.message);
+                return;
+            }
+
             const result = await runBudgetWebQuotationCloudSync({
                 projectNo,
                 localItems,
                 totalSummary: processedData.total_summary,
+                allowProductionSync: !lpPreviewMode,
+                localIdDuplicateCheck: idCheck,
                 readQuotationSnapshot: async () => {
                     const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
                     return {

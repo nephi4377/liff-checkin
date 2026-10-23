@@ -10,6 +10,9 @@ import {
     matchRemoteItemByExactId,
     applyRemoteProgressByExactId,
     findNameSpecHintsForSync,
+    runLocalQuotationIdDuplicateCheck,
+    buildRemoteQuotationSyncBaseline,
+    remoteQuotationSyncBaselineChanged,
 } from './LP_budgetweb_cloud_sync.js';
 
 describe('LP_budgetweb_cloud_sync', () => {
@@ -85,6 +88,26 @@ describe('LP_budgetweb_cloud_sync', () => {
         };
         const text = formatSyncDiffForConfirm(diff);
         expect(text).toContain('變更筆數超過');
+    });
+
+    it('runLocalQuotationIdDuplicateCheck 通過／重複 id 失敗', () => {
+        const ok = runLocalQuotationIdDuplicateCheck([{ id: 'A', name: 'x' }]);
+        expect(ok.ok).toBe(true);
+        const bad = runLocalQuotationIdDuplicateCheck([{ id: 'A' }, { id: 'A' }]);
+        expect(bad.ok).toBe(false);
+        expect(bad.duplicateIds).toEqual(['A']);
+    });
+
+    it('remote baseline 進度指紋變動', () => {
+        const baseline = buildRemoteQuotationSyncBaseline({
+            last_updated: 't1',
+            context: { items: [{ id: 'X', completion_percent: 0 }] },
+        });
+        const changed = {
+            last_updated: 't1',
+            context: { items: [{ id: 'X', completion_percent: 50 }] },
+        };
+        expect(remoteQuotationSyncBaselineChanged(baseline, changed)).toBe(true);
     });
 
     it('確認視窗列出保留的雲端獨有列', () => {

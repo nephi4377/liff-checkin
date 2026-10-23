@@ -33,6 +33,96 @@ export function buildNameSpecKey(it) {
  * @param {Array<object>|null|undefined} items
  * @returns {string[]} duplicate ids
  */
+/**
+ * 同步前 id 檢查（等同 check-quotation-duplicate-ids，不 migrate）
+ * @param {Array<object>} localItems
+ */
+export function fingerprintLocalItemsForSyncCheck(localItems) {
+    return (localItems || [])
+        .map((it, index) => {
+            const id = normStr(it?.id);
+            return id ? id : `__missing@${index}`;
+        })
+        .join('|');
+}
+
+export function runLocalQuotationIdDuplicateCheck(localItems) {
+    const missing = findItemsMissingId(localItems, 'local');
+    const duplicateIds = findDuplicateItemIds(localItems);
+    const fingerprint = fingerprintLocalItemsForSyncCheck(localItems);
+    const ok = missing.length === 0 && duplicateIds.length === 0;
+    let message = '工項 id 檢查通過，可進行同步前確認。';
+    if (!ok) {
+        const parts = [];
+        if (duplicateIds.length) parts.push(`重複 id：${duplicateIds.join(', ')}`);
+        if (missing.length) {
+            parts.push(
+                `缺 id：${missing.map((r) => `第 ${r.index + 1} 筆 ${r.name}`).join('；')}`,
+            );
+        }
+        message = `工項 id 檢查未通過（請修正後再同步，勿自動 migrate）：\n${parts.join('\n')}`;
+    }
+    return { ok, fingerprint, duplicateIds, missingRows: missing, message };
+}
+
+/**
+ * 寫回前重讀比對：雲端 items 進度指紋 + last_updated
+ * @param {object|null} existingData quotations/{projectNo} 節點
+ */
+export function buildRemoteQuotationSyncBaseline(existingData) {
+    const isNewQuotationNode = !existingData;
+    const remoteContext = existingData?.context || null;
+    const remoteItems = remoteContext?.items || [];
+    return {
+        isNewQuotationNode,
+        lastUpdated: existingData?.last_updated ?? null,
+        itemCount: remoteItems.length,
+        itemsFingerprint: fingerprintRemoteItemsForSyncGuard(remoteItems),
+    };
+}
+
+export function fingerprintRemoteItemsForSyncGuard(items) {
+    return (items || [])
+        .map((it) => {
+            const id = normStr(it?.id);
+            if (!id) return '';
+            const cp = it.completion_percent ?? '';
+            const v = it.verification?.is_ok === true ? '1' : it.verification?.is_ok === false ? '0' : '';
+            return `${id}:${cp}:${v}`;
+        })
+        .filter(Boolean)
+        .sort()
+        .join(';');
+}
+
+/**
+ * @param {ReturnType<typeof buildRemoteQuotationSyncBaseline>} baseline
+ * @param {object|null} freshExistingData
+ */
+export function remoteQuotationSyncBaselineChanged(baseline, freshExistingData) {
+    const freshExists = Boolean(freshExistingData);
+    if (baseline.isNewQuotationNode) {
+        return freshExists;
+    }
+    if (!freshExists) {
+        return true;
+    }
+    const fresh = buildRemoteQuotationSyncBaseline(freshExistingData);
+    return (
+        fresh.lastUpdated !== baseline.lastUpdated
+        || fresh.itemsFingerprint !== baseline.itemsFingerprint
+        || fresh.itemCount !== baseline.itemCount
+    );
+}
+
+export function formatRemoteChangedAbortMessage() {
+    return (
+        '雲端報價資料在您確認後已變更（時間戳或工項進度與初次讀取不同）。\n' +
+        '為避免覆蓋他人更新，同步已中止。\n' +
+        '請重新載入雲端資料、再次檢查 id 後再同步。'
+    );
+}
+
 export function findDuplicateItemIds(items) {
     const seen = new Set();
     const dups = new Set();
