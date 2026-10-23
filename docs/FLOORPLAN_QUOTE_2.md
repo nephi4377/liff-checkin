@@ -12,7 +12,7 @@
 | `docs/FLOORPLAN_QUOTE_2.md` | 本說明與預覽連結 |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.js` | 集中計價規則（待豪哥定價） |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.test.js` | 單元測試 |
-| `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 僅櫃體匯出（排除門／窗／牆） |
+| `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 報價匯出篩選（`quoteExport` / `quoteSourceType` / `quoteCategory`，與 3D 脫鉤） |
 | `modules/InteriorDesigned/LP_cabinet_quote_filter.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.js` | 櫃體清單 → 草稿列 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.test.js` | 單元測試 |
@@ -33,8 +33,16 @@
 
 ## 流程
 
-1. **LayoutPlanner**（`?lpPreview=1`）放置櫃體 → 預算 Modal → **匯出報價明細** → 下載 `layout-quote-draft-*.json`（**僅 `resolvePlacedCabinet3DKind === 'cabinet'`**，門／窗／牆不匯出）
-2. **BudgetWeb**（`?lpPreview=1`）→ Step 0b 選 JSON → **確認合併**（僅追加、同 `id` 略過）→ 同步雲端前 **讀雲端＋id union＋diff 確認**（`LP_budgetweb_cloud_sync.js`）
+1. **LayoutPlanner**（`?lpPreview=1`）放置櫃體 → 預算 Modal → **匯出報價明細** → 下載 `layout-quote-draft-*.json`（`quoteExport:false` 或 `quoteSourceType`／`quoteCategory` 標開口／家具者排除；名稱含「門／窗」的櫃體仍可匯出）
+2. **BudgetWeb**（`?lpPreview=1`）→ Step 0b 選 JSON → **確認合併**（僅追加、同 `id` 略過）→ **正式頁**「同步至雲端」：讀取失敗即中止；`id` union＋diff 確認；`update()` 只寫 `context/items` 等子路徑（保留 `is_closed`／`closed_at` 等根節點欄位）
+
+### 正式 BudgetWeb「同步至雲端」行為（非 lpPreview 閘內，本 PR 會影響正式頁）
+
+- 讀取 `quotations/{案號}` 失敗：**不寫入**，提示錯誤（不再當空案）。
+- 僅 `snapshot.exists() === false` 視為新案。
+- 同步前驗證：本地／雲端工項須有唯一 `id`；缺 `id` 或重複 `id` 中止。
+- 寫入改為 **`ref.update({ 'context/items': …, 'context/total_summary': …, … })`**，不 `set()` 整筆節點。
+- 合併驗收進度時，除 `id` 外可用 **名稱＋規格** 唯一備援對應；比對 diff 前本地空 `price` 會先補雲端值。
 
 ## 獨立預覽（raw.githack.com）
 
