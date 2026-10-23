@@ -328,7 +328,7 @@
      * @param {string} sheetName
      * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
      */
-    /** 同表內 id：與 quotation-item-id-migrate.js claimUniqueItemIdForSheet 邏輯一致 */
+    /** 同表內 id：與 quotation-item-id-migrate.mjs claimUniqueItemIdForSheet 邏輯一致 */
     function assignUniqueItemIdForSheet(sheetUsedIds, baseId) {
         const id = String(baseId);
         if (!sheetUsedIds.has(id)) {

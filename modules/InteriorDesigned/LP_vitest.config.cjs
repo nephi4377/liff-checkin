@@ -22,6 +22,7 @@ module.exports = defineConfig({
             'LP_quote_placement_meta.test.js',
             'LP_migrate_quotation_item_ids.test.js',
             'LP_budget_quote_parser_lib.test.js',
+            'LP_tools_commonjs_compat.test.js',
             'LP_budgetweb_import_merge.test.js',
             'LP_preview_hosts.test.js',
             'LP_3DViewer_lifecycle.test.js',

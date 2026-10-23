@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { migrateDuplicateItemIdsOnly } from '../../tools/quotation-item-id-migrate.js';
+import { migrateDuplicateItemIdsOnly } from '../../tools/quotation-item-id-migrate.mjs';
 import { findDuplicateItemIds } from './LP_budgetweb_cloud_sync.js';
 
 const execFileAsync = promisify(execFile);

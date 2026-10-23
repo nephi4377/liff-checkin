@@ -14,7 +14,7 @@
 | `modules/InteriorDesigned/LP_quote_pricing_rules.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 報價匯出篩選（旗標優先；無旗標時 model3dKind 開口／排除分類／家具） |
 | `modules/InteriorDesigned/LP_quote_placement_meta.js` | 匯出時推斷；存檔僅保留使用者明確旗標 |
-| `tools/quotation-item-id-migrate.js` | 僅真重複 id 補 `_2`/`_3`（與 migrate 腳本共用） |
+| `tools/quotation-item-id-migrate.mjs` | 僅真重複 id 補 `_2`/`_3`（與 migrate 腳本共用） |
 | `modules/InteriorDesigned/LP_budgetweb_firebase_sync.js` | 可測的雲端同步流程 |
 | `tools/budget-quote-parser-lib.js` | 解析同表重複 id → `_2`、`_3` |
 | `tools/scripts/check-quotation-duplicate-ids.mjs` | 只讀檢查重複 id |

@@ -4,7 +4,7 @@
  * 預設 dry-run；--write-out 寫檔（不連 Firebase）。執行正式雲端前須豪哥核准。
  */
 import fs from 'fs';
-import { migrateDuplicateItemIdsOnly } from '../quotation-item-id-migrate.js';
+import { migrateDuplicateItemIdsOnly } from '../quotation-item-id-migrate.mjs';
 
 const args = process.argv.slice(2);
 const inPath = args[0];
