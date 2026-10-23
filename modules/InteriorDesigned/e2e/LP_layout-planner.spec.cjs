@@ -422,6 +422,7 @@ test.describe('LayoutPlanner E2E', () => {
     const shotDir = path.join(__dirname, '..', 'test-results', 'floorplan-2d-3-segment');
     fs.mkdirSync(shotDir, { recursive: true });
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#zoom-reset-btn').click();
     await page.locator('#draw-floor-btn').click();
     const canvas = page.locator('#design-canvas');
     await canvas.click({ position: { x: 200, y: 200 } });

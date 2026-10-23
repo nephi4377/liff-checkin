@@ -252,6 +252,19 @@
         <p>對齊 11_1 SPEC | 全量分頁掃描 | 自動排除</p>
     </header>
 
+    <div id="lpImportBox" class="sheet-selector" style="display:none; margin-bottom:20px; padding:20px; border-color:#0d9488;">
+        <h3 style="margin-top:0; font-size:16px;">Step 0b: 匯入 LayoutPlanner 櫃體草稿（預覽）</h3>
+        <p style="font-size:12px; color:#444; margin:0 0 10px 0;">
+            選擇平面工具匯出的 <code>layout-quote-draft-*.json</code>。僅<strong>追加</strong>工項至下方列表，不刪除既有 Excel 解析結果；合併前會再次確認。
+        </p>
+        <input type="file" id="lpDraftFileInput" accept=".json,application/json" style="display:block; margin-bottom:8px;">
+        <span id="lpImportStatus" style="font-size:12px; color:#666;"></span><br>
+        <button type="button" id="lpImportMergeBtn" disabled
+            style="margin-top:10px; font-size:13px; padding:8px 14px; border:none; border-radius:6px; background:#0d9488; color:#fff; cursor:pointer;">
+            確認合併至工項列表
+        </button>
+    </div>
+
     <div id="projectNoInitialBox" class="sheet-selector" style="display:block; margin-bottom:20px; padding:20px;">
         <h3 style="margin-top:0; font-size:16px;">Step 0: 填寫案號 (必要)</h3>
         <input type="text" id="projectNoInput" placeholder="案號 (例: 742)" style="padding:8px; margin-right:10px; width:200px;">
@@ -911,6 +924,71 @@
     });
 
     document.getElementById('floatSyncBtn').addEventListener('click', () => document.getElementById('syncCloudBtn').click());
+
+    // --- LayoutPlanner 草稿匯入（FLOORPLAN-QUOTE-2，僅 ?lpPreview=1）---
+    let pendingLpDraft = null;
+
+    (async function initLpDraftImport() {
+        const params = new URLSearchParams(window.location.search);
+        const preview = params.get('lpPreview') === '1';
+        const box = document.getElementById('lpImportBox');
+        if (!preview || !box) return;
+        box.style.display = 'block';
+
+        const {
+            mergeLayoutPlannerDraftIntoProcessedData,
+            validateLayoutPlannerQuoteDraft,
+        } = await import('../modules/InteriorDesigned/LP_budgetweb_import_merge.js');
+
+        const fileInput = document.getElementById('lpDraftFileInput');
+        const statusEl = document.getElementById('lpImportStatus');
+        const mergeBtn = document.getElementById('lpImportMergeBtn');
+
+        fileInput.addEventListener('change', async (e) => {
+            pendingLpDraft = null;
+            mergeBtn.disabled = true;
+            const file = e.target.files && e.target.files[0];
+            if (!file) {
+                statusEl.textContent = '';
+                return;
+            }
+            try {
+                const text = await file.text();
+                const draft = JSON.parse(text);
+                const v = validateLayoutPlannerQuoteDraft(draft);
+                if (!v.ok) {
+                    statusEl.textContent = `❌ ${v.error}`;
+                    return;
+                }
+                pendingLpDraft = draft;
+                const n = (draft.items || []).length;
+                statusEl.textContent = `✅ 已讀取 ${n} 筆櫃體草稿（尚未合併）`;
+                mergeBtn.disabled = false;
+            } catch (err) {
+                statusEl.textContent = `❌ 無法解析 JSON：${err.message}`;
+            }
+        });
+
+        mergeBtn.addEventListener('click', () => {
+            if (!pendingLpDraft) return;
+            const prevItems = processedData ? processedData.items.filter((r) => r.type === 'item').length : 0;
+            const incoming = (pendingLpDraft.items || []).length;
+            const msg = `將把 LayoutPlanner 草稿 ${incoming} 筆工項追加至列表。\n\n`
+                + `目前列表約 ${prevItems} 筆工項；合併不會刪除既有資料（相同 id 會略過）。\n\n確定合併？`;
+            if (!confirm(msg)) return;
+
+            const { merged, stats } = mergeLayoutPlannerDraftIntoProcessedData(processedData, pendingLpDraft);
+            processedData = merged;
+            previewArea.style.display = 'block';
+            document.getElementById('addItemBox').style.display = 'block';
+            document.getElementById('floatingToolbar').style.display = 'flex';
+            renderPreview();
+            statusEl.textContent = `✅ 已合併：新增 ${stats.added} 筆，略過重複 ${stats.skippedDuplicate} 筆`;
+            mergeBtn.disabled = true;
+            pendingLpDraft = null;
+            fileInput.value = '';
+        });
+    })();
 </script>
 </body>
 </html>

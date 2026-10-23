@@ -78,7 +78,7 @@ export function layoutLineToBudgetWebItem(row, zone, seq) {
     return {
         id: `LP_${safeKey}`,
         zone: zone || row.group || '未分類',
-        category_tag: inferCategoryTag(row.name, spec),
+        category_tag: row.categoryTag || inferCategoryTag(row.name, spec),
         name: String(row.name || '').trim(),
         spec,
         qty: qtyStr,

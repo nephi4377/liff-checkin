@@ -1544,8 +1544,12 @@
         <div class="modal-content max-w-4xl w-[95vw]">
             <span id="quote-export-draft-close" class="absolute top-2 right-4 text-2xl cursor-pointer"
                 role="button" tabindex="0" aria-label="關閉">&times;</span>
-            <h2 id="quote-export-draft-title" class="text-lg font-bold mb-2">匯出報價明細（草稿）</h2>
+            <h2 id="quote-export-draft-title" class="text-lg font-bold mb-2">匯出櫃體報價明細（草稿）</h2>
             <p id="quote-export-draft-summary" class="text-sm text-gray-600 mb-3"></p>
+            <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                僅匯出平面櫃體（名稱、類別、寬深高、數量、空間）。列總價預設為「待豪哥定價」；請下載 JSON 後至
+                <strong>BudgetWeb 預覽</strong>（<code>tools/BudgetWeb_Standalone.html?lpPreview=1</code>）合併至報價列表，確認後再同步雲端。
+            </p>
             <p class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
                 此為 LayoutPlanner 自動計價轉出的<strong>草稿</strong>，欄位對齊 BudgetWeb 工項 JSON；請在 BudgetWeb 補案號後再同步雲端，勿直接當正式合約報價。
             </p>

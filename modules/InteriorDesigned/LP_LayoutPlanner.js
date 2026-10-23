@@ -24,6 +24,12 @@ import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
+import { buildCabinetQuoteLineItemsFromLayout } from './LP_cabinet_quote_lines.js';
+import {
+    LP_QUOTE_PRICING_RULES_VERSION,
+    listPricingDecisionsForOwner,
+    PENDING_PRICE_LABEL,
+} from './LP_quote_pricing_rules.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -3449,7 +3455,10 @@ function renderQuoteExportDraftModal(draft) {
     if (summary) {
         const n = (draft.items || []).length;
         const total = draft.total_summary?.grand_total ?? 0;
-        summary.textContent = `共 ${n} 筆工項草稿 · 合計約 $${Number(total).toLocaleString()}（未含稅／未寫雲端）`;
+        const priceHint = total > 0
+            ? `合計約 $${Number(total).toLocaleString()}`
+            : '列總價皆待豪哥定價';
+        summary.textContent = `共 ${n} 筆櫃體草稿 · ${priceHint}（未含稅／未寫雲端）`;
     }
     modal.style.display = 'flex';
 }
@@ -3460,18 +3469,24 @@ function closeQuoteExportDraftModal() {
 }
 
 function exportQuoteDraftDetails() {
-    const quotation = getQuotationForDisplay();
-    const lineItems = quotation.lineItems.map((item) => {
-        if (item.isHeader) return item;
-        return { ...item, specNote: quotationDisplaySpecNote(item) };
-    });
+    const lineItems = buildCabinetQuoteLineItemsFromLayout(placedCabinets);
+    if (!lineItems.some((row) => !row.isHeader)) {
+        showGlobalNotification('請先在平面圖放置櫃體後再匯出', 4000, 'warning');
+        return;
+    }
     lastQuoteExportDraft = buildLayoutPlannerQuoteDraft({
         lineItems,
-        grandTotal: quotation.grandTotal,
-        meta: { exportedAt: new Date().toISOString() },
+        grandTotal: 0,
+        meta: {
+            exportedAt: new Date().toISOString(),
+            pricingRulesVersion: LP_QUOTE_PRICING_RULES_VERSION,
+            pricingPolicy: 'cabinet_geometry_only',
+            priceStatusDefault: PENDING_PRICE_LABEL,
+            pendingPricingDecisions: listPricingDecisionsForOwner(),
+        },
     });
     renderQuoteExportDraftModal(lastQuoteExportDraft);
-    showGlobalNotification('已產生報價明細草稿（可下載 JSON／CSV）', 'success');
+    showGlobalNotification('已產生櫃體報價草稿（單價待豪哥定價，可下載 JSON／CSV）', 'success');
 }
 
 function downloadQuoteExportDraftJson() {
