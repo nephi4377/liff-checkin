@@ -4,6 +4,7 @@
  */
 var fs = require('fs');
 var path = require('path');
+var cacheBust = require('./test-cache-bust-helper');
 var root = path.join(__dirname, '..');
 var shared = path.join(__dirname, '../../../shared');
 
@@ -21,11 +22,6 @@ assert(navJs.indexOf('keepCount') >= 0 || navJs.indexOf('hasKeep') >= 0, 'keeps 
 assert(!/body\.acct-embed\s+\.nav\s*,/.test(css) && !/body\.acct-embed\s+\.nav\s*\{/.test(css),
   'CSS must not display:none all .nav in embed');
 
-function cacheBustVer(html, assetRe) {
-  var m = html.match(assetRe);
-  return m ? m[1] : null;
-}
-
 var embedPages = ['payment_request.html', 'accounting_ingest.html', 'ledger_history.html', 'submit_records.html'];
 var navVers = [];
 var layoutVers = [];
@@ -38,12 +34,23 @@ embedPages.forEach(function (name) {
   } else {
     assert(html.indexOf('id="navSubmitRecordsLink"') >= 0, name + ' has 送出紀錄 cross-link');
   }
-  var navV = cacheBustVer(html, /accounting_nav\.js\?v=(\d+)/);
-  assert(navV, name + ' links accounting_nav.js with ?v= cache bust');
+  var navV = cacheBust.assertNumericCacheBust(
+    html,
+    cacheBust.RE.accountingNav,
+    name + ' accounting_nav.js cache bust',
+    4
+  );
   navVers.push(navV);
-  var layoutV = cacheBustVer(html, /accounting_layout\.css\?v=(\d+)/);
-  assert(layoutV, name + ' links accounting_layout.css with ?v= cache bust');
+  var layoutV = cacheBust.assertNumericCacheBust(
+    html,
+    cacheBust.RE.accountingLayout,
+    name + ' accounting_layout.css cache bust',
+    8
+  );
   layoutVers.push(layoutV);
+  if (name === 'ledger_history.html') {
+    cacheBust.assertLedgerHistoryCacheBustFloors(html);
+  }
 });
 
 assert(new Set(navVers).size === 1, 'embed-nav pages share one accounting_nav.js ?v= (' + navVers.join(',') + ')');

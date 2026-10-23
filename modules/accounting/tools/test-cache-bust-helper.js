@@ -10,8 +10,32 @@ var RE = {
   accountingShell: new RegExp('(?:^|["\'\\/])accounting_shell\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   accountingTaxMode: new RegExp('(?:^|["\'\\/])accounting_tax_mode\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   accountingLightbox: new RegExp('(?:^|["\'\\/])accounting_lightbox\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingLayout: new RegExp('(?:^|["\'\\/])accounting_layout\\.css\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingBoot: new RegExp('(?:^|["\'\\/])accounting_boot\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingCache: new RegExp('(?:^|["\'\\/])accounting_cache\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingUi: new RegExp('(?:^|["\'\\/])accounting_ui\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingNav: new RegExp('(?:^|["\'\\/])accounting_nav\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  operatorContext: new RegExp('(?:^|["\'\\/])operator_context\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
   hubAppJs: new RegExp('(?:^|["\'\\/])app\\.js\\?v=([\\w.+-]+)' + VERSION_LOOKAHEAD, 'g')
 };
+
+/** Floors from LIFF-INTEGRATE-1 audit (main + #197/#203 subset on ledger_history). */
+var LEDGER_HISTORY_CACHE_BUST_FLOORS = [
+  { reKey: 'accountingLayout', min: 8, label: 'accounting_layout.css' },
+  { reKey: 'operatorContext', min: 4, label: 'operator_context.js' },
+  { reKey: 'accountingApi', min: 106, label: 'accounting_api.js' },
+  { reKey: 'accountingCache', min: 34, label: 'accounting_cache.js' },
+  { reKey: 'accountingLightbox', min: 22, label: 'accounting_lightbox.js' },
+  { reKey: 'accountingUi', min: 33, label: 'accounting_ui.js' },
+  { reKey: 'accountingNav', min: 4, label: 'accounting_nav.js' },
+  { reKey: 'accountingBoot', min: 15, label: 'accounting_boot.js' }
+];
+
+function assertLedgerHistoryCacheBustFloors(html) {
+  LEDGER_HISTORY_CACHE_BUST_FLOORS.forEach(function (row) {
+    assertNumericCacheBust(html, RE[row.reKey], 'ledger_history ' + row.label + ' cache bust', row.min);
+  });
+}
 
 var HUB_APP_JS_MIN_TOKEN = '26.10.13.1';
 
@@ -203,6 +227,8 @@ function runSelfTests() {
 
 module.exports = {
   RE: RE,
+  LEDGER_HISTORY_CACHE_BUST_FLOORS: LEDGER_HISTORY_CACHE_BUST_FLOORS,
+  assertLedgerHistoryCacheBustFloors: assertLedgerHistoryCacheBustFloors,
   HUB_APP_JS_MIN_TOKEN: HUB_APP_JS_MIN_TOKEN,
   extractCacheBustVer: extractCacheBustVer,
   extractAllCacheBustVers: extractAllCacheBustVers,
