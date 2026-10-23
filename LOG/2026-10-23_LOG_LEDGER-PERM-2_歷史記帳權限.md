@@ -6,4 +6,4 @@
 | 前端 | `ledger_entry_map.js`、`ledger_history.html`、`accounting_api.js?v=108` |
 | 後端 | Backend_GAS PR #218（契約假設寫在 map 檔頭） |
 | 驗證 | `node modules/accounting/tools/test-ledger-perm-2.js` 等 |
-| 預覽 | jsDelivr @ commit（見 PR #98 body；需 LIFF／主控台） |
+| 預覽 | raw.githack @ `9e2407fec5658de19949fb66d9a84879cc75082d`（見 PR #98；需 LIFF／主控台） |
