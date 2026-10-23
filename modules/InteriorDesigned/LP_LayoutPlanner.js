@@ -21,6 +21,14 @@ import {
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
 import {
+    detectLayoutPlannerTouchUi,
+    bindPrimaryPointerDown,
+    installCanvasPinchPan,
+    createRafThrottle,
+    isPrimaryPointerButton,
+    LP_MOBILE_LONG_PRESS_MS,
+} from './LP_layout_mobile.js';
+import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
@@ -143,6 +151,9 @@ let annotationDragType = null; // 'box' or 'target'
 let annotationDragOffset = { x: 0, y: 0 }; // [修正] 補上遺漏的變數宣告
 // [v8.8 新增] 全局畫布縮放比列
 let viewScale = 1.0;
+let lpTouchUiMode = false;
+/** @type {ReturnType<typeof createRafThrottle> | null} */
+let renderDrawnAreasThrottle = null;
 // [v8.8 補回] 歷史紀錄堆疊
 let history = [];
 let historyIndex = -1;
@@ -896,20 +907,23 @@ function renderVertexHandles(area) {
         const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         handle.setAttribute('cx', point.x);
         handle.setAttribute('cy', point.y);
-        handle.setAttribute('r', '6'); // 控點大小
+        handle.setAttribute('r', lpTouchUiMode ? '12' : '6'); // 控點大小（觸控加大）
         handle.setAttribute('fill', '#ffffff');
         handle.setAttribute('stroke', '#3b82f6'); // [您的要求] 修正拼寫錯誤
         handle.setAttribute('stroke-width', '2');
         handle.style.cursor = 'move';
 
-        // 為每個控點綁定 mousedown 事件
-        handle.addEventListener('mousedown', (e) => {
+        const startVertexDrag = (e) => {
+            if (!isPrimaryPointerButton(e)) return;
             e.stopPropagation();
+            if (e.pointerType === 'touch') e.preventDefault();
             historyGesture.begin();
             isDraggingVertex = true;
             draggedAreaId = area.id;
             draggedVertexIndex = index;
-        });
+        };
+        handle.addEventListener('mousedown', startVertexDrag);
+        handle.addEventListener('pointerdown', startVertexDrag);
         handleGroup.appendChild(handle);
     });
 }
@@ -997,7 +1011,7 @@ function renderAllAnnotations() {
         const targetDot = document.createElementNS(svgns, "circle");
         targetDot.setAttribute("cx", anno.targetX);
         targetDot.setAttribute("cy", anno.targetY);
-        targetDot.setAttribute("r", "6");
+        targetDot.setAttribute("r", lpTouchUiMode ? "12" : "6");
         targetDot.setAttribute("fill", "#f97316");
         targetDot.setAttribute("stroke", "white");
         targetDot.setAttribute("stroke-width", "2");
@@ -1005,7 +1019,7 @@ function renderAllAnnotations() {
         targetDot.style.pointerEvents = "auto"; // 允許拖曳
         
         // 綁定指示點拖曳事件
-        targetDot.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'target'));
+        bindPrimaryPointerDown(targetDot, (e) => startAnnotationDrag(e, anno, 'target'));
         svg.appendChild(targetDot);
 
         // B. 繪製說明方塊 (HTML Div)
@@ -1028,7 +1042,7 @@ function renderAllAnnotations() {
         `;
 
         // 綁定方塊拖曳事件
-        box.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'box'));
+        bindPrimaryPointerDown(box, (e) => startAnnotationDrag(e, anno, 'box'));
         
         layer.appendChild(box);
     });
@@ -1088,13 +1102,39 @@ function renderCabinet(cab) {
         <div class="size-label">${Math.round(cab.currentW)}x${Math.round(cab.currentH)} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)</div>
     `;
 
-    // 綁定元件拖曳事件
-    el.onmousedown = (e) => startCabDrag(e, cab);
+    bindPrimaryPointerDown(el, (e) => startCabDrag(e, cab));
+    if (lpTouchUiMode) {
+        let longPressTimer = null;
+        let pressStartX = 0;
+        let pressStartY = 0;
+        el.addEventListener('pointerdown', (e) => {
+            if (!isPrimaryPointerButton(e)) return;
+            clearTimeout(longPressTimer);
+            pressStartX = e.clientX;
+            pressStartY = e.clientY;
+            longPressTimer = setTimeout(() => {
+                selectCabinet(cab.id);
+                showMobileCabinetSheet();
+            }, LP_MOBILE_LONG_PRESS_MS);
+        });
+        el.addEventListener('pointermove', (e) => {
+            if (!longPressTimer) return;
+            if (Math.hypot(e.clientX - pressStartX, e.clientY - pressStartY) > 10) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        });
+        const clearPress = () => {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        };
+        el.addEventListener('pointerup', clearPress);
+        el.addEventListener('pointercancel', clearPress);
+    }
 
-    // 綁定拉伸控點事件
     const handles = el.querySelectorAll('.resize-handle');
     handles.forEach(handle => {
-        handle.addEventListener('mousedown', (e) => {
+        bindPrimaryPointerDown(handle, (e) => {
             const direction = handle.dataset.dir;
             dbgLog(`[Resize] Start resizing cab ${cab.id}, direction: ${direction}`);
             startResize(cab.id, e, direction);
@@ -2255,7 +2295,7 @@ function handleGlobalMove(e) {
                 area.pathData = calculateWallPath(area.points, thickness);
             }
             
-            renderAllDrawnAreas();
+            requestDrawnAreasRender();
         }
     }
 
@@ -3855,7 +3895,7 @@ function cancelDrawing(silent = false) {
 }
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
-    if (e.button !== 0 || isBgEditMode || isDrawing) return;
+    if (!isPrimaryPointerButton(e) || isBgEditMode || isDrawing) return;
     e.stopPropagation();
     if (e.shiftKey) {
         toggleCabinetInSelection(cab.id);
@@ -3892,7 +3932,7 @@ function startCabDrag(e, cab) {
 }
 
 function startResize(id, e, direction = null) {
-    if (e.button !== 0) return;
+    if (!isPrimaryPointerButton(e)) return;
     e.stopPropagation();
     historyGesture.begin();
     isResizing = true;
@@ -3914,7 +3954,7 @@ function startResize(id, e, direction = null) {
 
 // [新增] 開始拖曳標註
 function startAnnotationDrag(e, anno, type) {
-    if (e.button !== 0) return;
+    if (!isPrimaryPointerButton(e)) return;
     e.stopPropagation();
     historyGesture.begin();
     isDraggingAnnotation = true;
@@ -4251,6 +4291,111 @@ function initLayoutPlanner3D() {
     });
 }
 
+function requestDrawnAreasRender() {
+    if (!lpTouchUiMode) {
+        renderAllDrawnAreas();
+        return;
+    }
+    if (!renderDrawnAreasThrottle) {
+        renderDrawnAreasThrottle = createRafThrottle(() => renderAllDrawnAreas());
+    }
+    renderDrawnAreasThrottle();
+}
+
+function showMobileCabinetSheet() {
+    if (!lpTouchUiMode || !selectedCabId) return;
+    const sheet = document.getElementById('lp-mobile-cab-sheet');
+    const label = document.getElementById('lp-mobile-cab-sheet-label');
+    const cab = placedCabinets.find((c) => c.id === selectedCabId);
+    if (!sheet || !cab) return;
+    if (label) {
+        const name = cab.data?.name || cab.data?.title || '櫃體';
+        label.textContent = `${name} · ${Math.round(cab.currentW)}×${Math.round(cab.currentH)} cm`;
+    }
+    sheet.classList.remove('hidden');
+    sheet.setAttribute('aria-hidden', 'false');
+    const backdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (backdrop) {
+        backdrop.classList.remove('hidden');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function hideMobileCabinetSheet() {
+    const sheet = document.getElementById('lp-mobile-cab-sheet');
+    if (!sheet) return;
+    sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
+    const backdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (backdrop) {
+        backdrop.classList.add('hidden');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function initLayoutPlannerTouchUi() {
+    lpTouchUiMode = detectLayoutPlannerTouchUi();
+    if (!lpTouchUiMode) return;
+
+    document.body.classList.add('lp-touch-mode');
+    document.body.classList.remove('lp-ui-dock-both');
+    document.body.classList.add('lp-ui-dock-tb-float-bi');
+
+    const mobileWarn = document.getElementById('mobile-warning');
+    if (mobileWarn) {
+        mobileWarn.classList.add('hidden');
+        mobileWarn.style.display = 'none';
+    }
+
+    const toolboxWin = document.getElementById('toolbox-window');
+    const infoWin = document.getElementById('info-window');
+    if (toolboxWin) toolboxWin.style.display = 'none';
+    if (infoWin) infoWin.style.display = 'none';
+    document.getElementById('toggle-toolbox-btn')?.classList.remove('hidden');
+    document.getElementById('toggle-info-btn')?.classList.remove('hidden');
+
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (wrapper) {
+        installCanvasPinchPan(wrapper, {
+            getScale: () => viewScale,
+            setScale: (n) => updateViewZoom(n),
+            getScroll: () => ({ left: wrapper.scrollLeft, top: wrapper.scrollTop }),
+            setScroll: (left, top) => {
+                wrapper.scrollLeft = left;
+                wrapper.scrollTop = top;
+            },
+        });
+    }
+
+    const sheetBackdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (sheetBackdrop) {
+        sheetBackdrop.addEventListener('click', hideMobileCabinetSheet);
+    }
+    const sheetClose = document.getElementById('lp-mobile-cab-sheet-close');
+    if (sheetClose) sheetClose.addEventListener('click', hideMobileCabinetSheet);
+    const sheetRotate = document.getElementById('lp-mobile-cab-rotate-btn');
+    if (sheetRotate) {
+        sheetRotate.addEventListener('click', () => {
+            rotateSelectedCab();
+            hideMobileCabinetSheet();
+        });
+    }
+    const sheetDup = document.getElementById('lp-mobile-cab-duplicate-btn');
+    if (sheetDup) {
+        sheetDup.addEventListener('click', () => {
+            duplicateSelectedCab();
+            hideMobileCabinetSheet();
+        });
+    }
+    const sheetDel = document.getElementById('lp-mobile-cab-delete-btn');
+    if (sheetDel) {
+        sheetDel.addEventListener('click', () => {
+            deleteCabById(selectedCabId);
+            hideMobileCabinetSheet();
+        });
+    }
+}
+
 function bindGlobalPointerEndForDrag() {
     const finish = () => endDrag();
     window.addEventListener('mouseup', finish);
@@ -4270,10 +4415,18 @@ function bindGlobalPointerEndForDrag() {
 }
 
 function bindEventListeners() {
+    initLayoutPlannerTouchUi();
     initLayoutPlanner3D();
     // 全域事件（含視窗外放開，避免 undo 手勢卡住）
     bindGlobalPointerEndForDrag();
-    document.addEventListener('mousemove', handleGlobalMove);
+    document.addEventListener('mousemove', (e) => {
+        if (lpTouchUiMode) return;
+        handleGlobalMove(e);
+    });
+    document.addEventListener('pointermove', (e) => {
+        if (!lpTouchUiMode && e.pointerType === 'mouse') return;
+        handleGlobalMove(e);
+    });
     document.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('click', handleGlobalClick);
 
@@ -4965,31 +5118,19 @@ function centerView() {
 
 // 應用程式進入點
 window.onload = () => {
-    // 【核心修正】修正手機裝置偵測邏輯。
-    // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
-    // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
-    // 從而避免因 iframe 寬度造成的誤判。
-    const isMobile = /Mobi/i.test(navigator.userAgent);
-    if (isMobile) {
-        // 如果是手機，則顯示提示訊息並停止後續所有程式碼的執行
-        document.getElementById('mobile-warning').style.display = 'flex';
-        // 隱藏所有其他介面元素
-        document.querySelectorAll('body > *:not(#mobile-warning)').forEach(el => el.style.display = 'none');
-        return; // 終止執行
-    }
-
-    // 只有在電腦版才會執行以下程式碼
     if (isLayoutPlannerUrlPreview()) {
         document.documentElement.classList.add('lp-url-preview');
     }
     bindEventListeners();
     initWorkspaceAndUiFromStorage();
 
-    // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕
-    document.getElementById('toolbox-window').style.display = 'flex';
-    document.getElementById('info-window').style.display = 'flex';
-    document.getElementById('toggle-toolbox-btn').classList.add('hidden');
-    document.getElementById('toggle-info-btn').classList.add('hidden');
+    // [修改] 初始化視窗狀態：桌面預設打開工具箱和預算；觸控模式由 initLayoutPlannerTouchUi 收合
+    if (!lpTouchUiMode) {
+        document.getElementById('toolbox-window').style.display = 'flex';
+        document.getElementById('info-window').style.display = 'flex';
+        document.getElementById('toggle-toolbox-btn').classList.add('hidden');
+        document.getElementById('toggle-info-btn').classList.add('hidden');
+    }
 
     loadFromSheets();
     switchTab('settings'); // 預設顯示設定頁籤

@@ -1,3 +1,5 @@
+const { devices } = require('@playwright/test');
+
 /** @type {import('@playwright/test').PlaywrightTestConfig} */
 module.exports = {
   testDir: 'e2e',
@@ -13,11 +15,37 @@ module.exports = {
   },
   fullyParallel: false,
   workers: 1,
+  projects: [
+    {
+      name: 'chromium',
+      testIgnore: '**/LP_floorplan-mobile.spec.cjs',
+      use: {
+        baseURL: 'http://127.0.0.1:8765',
+        viewport: { width: 1280, height: 800 },
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    },
+    {
+      name: 'mobile-iphone',
+      testMatch: '**/LP_floorplan-mobile.spec.cjs',
+      use: {
+        browserName: 'chromium',
+        ...devices['iPhone 14'],
+        baseURL: 'http://127.0.0.1:8765',
+      },
+    },
+    {
+      name: 'mobile-ipad',
+      testMatch: '**/LP_floorplan-mobile.spec.cjs',
+      use: {
+        browserName: 'chromium',
+        ...devices['iPad Pro 11'],
+        baseURL: 'http://127.0.0.1:8765',
+      },
+    },
+  ],
   use: {
-    baseURL: 'http://127.0.0.1:8765',
-    viewport: { width: 1280, height: 800 },
-    userAgent:
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     trace: 'on-first-retry',
   },
   webServer: {

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
     <title>互動式室內設計規劃工具 - 專業版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- [新增] 引入 html2canvas 函式庫，用於將 DOM 轉為圖片 -->
@@ -581,6 +581,117 @@
             border-color: #06C755;
         }
 
+        body.lp-touch-mode {
+            touch-action: manipulation;
+        }
+
+        body.lp-touch-mode #canvas-wrapper {
+            touch-action: none;
+            padding: 12px;
+        }
+
+        body.lp-touch-mode .placed-cabinet.selected .resize-handle,
+        body.lp-touch-mode .placed-cabinet .resize-handle {
+            display: flex;
+        }
+
+        body.lp-touch-mode .resize-handle-w,
+        body.lp-touch-mode .resize-handle-e {
+            width: 22px;
+        }
+
+        body.lp-touch-mode .resize-handle-n,
+        body.lp-touch-mode .resize-handle-s {
+            height: 22px;
+        }
+
+        body.lp-touch-mode #canvas-header {
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 6px 8px;
+            max-height: 28vh;
+            overflow-y: auto;
+        }
+
+        body.lp-touch-mode #canvas-header .toggle-btn,
+        body.lp-touch-mode #canvas-header .contact-btn {
+            min-height: 36px;
+            font-size: 11px;
+            padding: 4px 8px;
+        }
+
+        body.lp-touch-mode #budget-modal .modal-content,
+        body.lp-touch-mode #quote-export-draft-modal .modal-content {
+            width: calc(100vw - 16px) !important;
+            max-width: calc(100vw - 16px) !important;
+            max-height: calc(100dvh - 24px);
+            margin: 8px auto;
+            overflow: auto;
+        }
+
+        body.lp-touch-mode #budget-table-container {
+            max-height: min(52dvh, 420px);
+        }
+
+        #lp-mobile-cab-sheet-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.45);
+            z-index: 12000;
+        }
+
+        #lp-mobile-cab-sheet {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 12010;
+            background: #fff;
+            border-radius: 16px 16px 0 0;
+            padding: 12px 16px 20px;
+            box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.15);
+        }
+
+        #lp-mobile-cab-sheet .lp-mobile-sheet-btn {
+            min-height: 44px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        @media (min-width: 768px) and (max-width: 1024px) {
+            body.lp-touch-mode #left-rail #toolbox-window,
+            body.lp-touch-mode #info-window {
+                max-width: min(320px, 42vw);
+            }
+        }
+
+        @media (max-width: 430px) {
+            body.lp-touch-mode #left-rail,
+            body.lp-touch-mode #right-rail {
+                display: none !important;
+            }
+
+            body.lp-touch-mode #minimized-bar {
+                left: 8px !important;
+                right: 8px !important;
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            body.lp-touch-mode #canvas-placeholder {
+                display: none !important;
+            }
+
+            body.lp-touch-mode #canvas-header {
+                font-size: 10px;
+                padding: 8px 10px;
+            }
+
+            body.lp-touch-mode #canvas-header span:last-child {
+                display: none;
+            }
+        }
+
         #canvas-wrapper {
             flex: 1;
             min-width: 0;
@@ -936,7 +1047,7 @@
 </head>
 
 <body class="bg-gray-100 font-sans text-gray-800 flex flex-col h-screen overflow-hidden lp-ui-dock-both">
-    <!-- [您的要求] 新增：手機版提示訊息 -->
+    <!-- 舊版全螢幕阻擋（預設隱藏；?lpDesktop=1 或桌面不顯示） -->
     <div id="mobile-warning" class="hidden fixed inset-0 bg-white z-[9999] items-center justify-center p-8">
         <div class="text-center">
             <svg class="mx-auto h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -944,8 +1055,8 @@
                 <path stroke-linecap="round" stroke-linejoin="round"
                     d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
             </svg>
-            <h2 class="mt-4 text-xl font-bold text-gray-800">請使用電腦瀏覽</h2>
-            <p class="mt-2 text-gray-600">此設計工具功能較為複雜，不適用於手機操作。<br><br>若有室內設計需求，歡迎與我們聯繫進行專業諮詢。</p>
+            <h2 class="mt-4 text-xl font-bold text-gray-800">建議使用較大螢幕</h2>
+            <p class="mt-2 text-gray-600">手機／平板已可基本操作平面圖；複雜報價建議使用電腦。<br><br>若有室內設計需求，歡迎與我們聯繫進行專業諮詢。</p>
             <p class="mt-6 font-bold text-green-600">添心設計</p>
             <!-- [新增] LINE 聯繫區塊 -->
             <div class="contact-card mt-6">
@@ -1573,6 +1684,20 @@
         </div>
     </div>
 
+    <div id="lp-mobile-cab-sheet-backdrop" class="hidden" aria-hidden="true"></div>
+    <div id="lp-mobile-cab-sheet" class="hidden" role="dialog" aria-labelledby="lp-mobile-cab-sheet-label" aria-hidden="true">
+        <div class="flex items-center justify-between gap-2 mb-3">
+            <p id="lp-mobile-cab-sheet-label" class="text-sm font-bold text-gray-800 truncate">櫃體</p>
+            <button id="lp-mobile-cab-sheet-close" type="button" class="text-gray-500 text-xl leading-none px-2" aria-label="關閉">×</button>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+            <button id="lp-mobile-cab-rotate-btn" type="button" class="lp-mobile-sheet-btn bg-blue-600 text-white">旋轉</button>
+            <button id="lp-mobile-cab-duplicate-btn" type="button" class="lp-mobile-sheet-btn bg-teal-600 text-white">複製</button>
+            <button id="lp-mobile-cab-delete-btn" type="button" class="lp-mobile-sheet-btn bg-red-600 text-white">刪除</button>
+        </div>
+        <p class="text-[11px] text-gray-500 mt-2">單指拖曳移動 · 雙指縮放平移畫布 · 長按開啟此選單</p>
+    </div>
+
     <!-- [新增] 繪圖模式遮罩 -->
     <div id="drawing-overlay"></div>
     <!-- [您的要求] 新增：頁面版權宣告 -->
@@ -1580,15 +1705,6 @@
         © 添心設計 Interior Design
     </div>
 
-    <!-- 僅先顯示手機全畫面提示（避免模組載入前短暫露出桌面 UI）；其餘封鎖與初始化在 LP_LayoutPlanner.js window.onload -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            if (/Mobi/i.test(navigator.userAgent)) {
-                var w = document.getElementById('mobile-warning');
-                if (w) w.style.display = 'flex';
-            }
-        });
-    </script>
 </body>
 
 </html>
