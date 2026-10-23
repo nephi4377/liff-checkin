@@ -4163,22 +4163,44 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+/** history 底圖：每步 snapshot 存 src 字串參照（與 #222 模型一致，支援 A→B→undo） */
 function snapshotBackgroundForHistory() {
     const bgImg = document.getElementById('bg-img');
     const src = bgImg?.src || '';
-    const hasDataBg = src.startsWith('data:image');
-    if (hasDataBg) layoutPlannerActiveBgDataUrl = src;
+    const srcRef = src.startsWith('data:image') ? src : '';
+    if (srcRef) layoutPlannerActiveBgDataUrl = srcRef;
     return {
         position: { x: bgPosition.x, y: bgPosition.y },
         scale: bgScale,
-        hasBackground: hasDataBg,
+        src: srcRef,
     };
 }
 
 function resolveBackgroundDataUrlFromState(bg) {
     if (bg?.src && String(bg.src).startsWith('data:image')) return bg.src;
-    if (bg?.hasBackground && layoutPlannerActiveBgDataUrl) return layoutPlannerActiveBgDataUrl;
     return '';
+}
+
+function historyBackgroundFieldsEqual(bgA, bgB) {
+    const a = bgA || {};
+    const b = bgB || {};
+    const srcA = a.src || '';
+    const srcB = b.src || '';
+    if (srcA !== srcB) return false;
+    const stripSrc = (bg) => {
+        const { src, ...rest } = bg;
+        return rest;
+    };
+    return JSON.stringify(stripSrc(a)) === JSON.stringify(stripSrc(b));
+}
+
+function historyStatesEquivalent(prev, next) {
+    if (!historyBackgroundFieldsEqual(prev.background, next.background)) return false;
+    const omitBg = (s) => {
+        const { background, ...rest } = s;
+        return rest;
+    };
+    return JSON.stringify(omitBg(prev)) === JSON.stringify(omitBg(next));
 }
 
 function applyBackgroundFromHistoryState(bg) {
@@ -4233,8 +4255,7 @@ function commitSaveState() {
         layerVisibility: JSON.parse(JSON.stringify(layerVisibility)),
     };
 
-    // 避免儲存與上一步完全相同的狀態
-    if (history.length > 0 && JSON.stringify(currentState) === JSON.stringify(history[history.length - 1])) {
+    if (history.length > 0 && historyStatesEquivalent(history[history.length - 1], currentState)) {
         return;
     }
 

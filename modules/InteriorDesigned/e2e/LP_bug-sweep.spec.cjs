@@ -88,6 +88,23 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     })).toBeLessThan(1);
   });
 
+  test('底圖 A→B→undo 為 A、redo 為 B', async ({ page }) => {
+    const bgA = path.join(__dirname, 'fixtures', 'lp-tiny-bg.png');
+    const bgB = path.join(__dirname, 'fixtures', 'lp-tiny-bg-alt.png');
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#bg-upload').setInputFiles(bgA);
+    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
+    const srcA = await page.evaluate(() => document.getElementById('bg-img')?.src || '');
+    await page.locator('#bg-upload').setInputFiles(bgB);
+    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
+    const srcB = await page.evaluate(() => document.getElementById('bg-img')?.src || '');
+    expect(srcA).not.toBe(srcB);
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('bg-img')?.src || '')).toBe(srcA);
+    await page.keyboard.press('Control+y');
+    await expect.poll(async () => page.evaluate(() => document.getElementById('bg-img')?.src || '')).toBe(srcB);
+  });
+
   test('復原後底圖隱藏（無 data URL 快照）', async ({ page }) => {
     const bgFile = path.join(__dirname, 'fixtures', 'lp-tiny-bg.png');
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
