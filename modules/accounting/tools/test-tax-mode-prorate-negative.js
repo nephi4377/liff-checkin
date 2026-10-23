@@ -65,7 +65,8 @@ var cacheBust = require('./test-cache-bust-helper');
 cacheBust.assertSameNumericCacheBust(
   [pay, rev],
   cacheBust.RE.accountingTaxMode,
-  'payment_request and ledger_review share accounting_tax_mode.js ?v='
+  'payment_request and ledger_review share accounting_tax_mode.js ?v=',
+  10
 );
 assert(!/a\s*>\s*0\)\s*pretax\s*\+=/.test(pay), 'payment_request ×5% 不再只加正數');
 assert(!/a\s*>\s*0\)\s*pretax\s*\+=/.test(rev), 'ledger_review ×5% 不再只加正數');

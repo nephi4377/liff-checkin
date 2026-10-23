@@ -23,7 +23,7 @@ assert(/ai-preaudit/.test(review), 'review has ai-preaudit styles');
 assert(/aiPreauditBannerHtml/.test(review), 'review banner helper');
 assert(/預審尚未完成，可直接審/.test(review), '123.1 missing copy');
 assert(/item\.ai_preaudit/.test(review), 'reads item.ai_preaudit');
-cacheBust.assertNumericCacheBust(review, cacheBust.RE.accountingApi, 'ledger_review accounting_api.js cache bust');
+cacheBust.assertNumericCacheBust(review, cacheBust.RE.accountingApi, 'ledger_review accounting_api.js cache bust', 105);
 assert(!/載入報價對應/.test(review), 'no #140 button-as-product UX');
 assert(!/btn-quote-audit/.test(review), 'no quote-audit button class');
 

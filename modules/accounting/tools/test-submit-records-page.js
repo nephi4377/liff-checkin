@@ -31,7 +31,7 @@ assert(html.indexOf('vendorPaymentUpdate') >= 0, 'edit via vendorPaymentUpdate')
 assert(html.indexOf('已匯款') >= 0 && html.indexOf('鎖定') >= 0, 'paid lock copy');
 assert(html.indexOf('submitted_by') >= 0, 'shows submitted_by');
 assert(html.indexOf('include_allocations') >= 0, 'loads allocations');
-cacheBust.assertNumericCacheBust(html, cacheBust.RE.accountingApi, 'submit_records accounting_api.js cache bust');
+cacheBust.assertNumericCacheBust(html, cacheBust.RE.accountingApi, 'submit_records accounting_api.js cache bust', 106);
 
 assert(index.indexOf('linkSubmitRecords') < 0, 'hub card removed');
 assert(index.indexOf('>送出紀錄<') < 0, 'hub has no 送出紀錄 label');

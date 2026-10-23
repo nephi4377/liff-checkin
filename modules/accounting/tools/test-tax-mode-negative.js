@@ -61,7 +61,8 @@ var cacheBust = require('./test-cache-bust-helper');
 cacheBust.assertSameNumericCacheBust(
   [pay, rev],
   cacheBust.RE.accountingTaxMode,
-  'payment_request and ledger_review share accounting_tax_mode.js ?v='
+  'payment_request and ledger_review share accounting_tax_mode.js ?v=',
+  10
 );
 assert(Tax.segHtml('inclusive', 'payment').indexOf('未稅・逐筆加 5%') < 0, 'segHtml 不顯示逐筆加 5% 選項');
 assert(Tax.segHtml('per_row', 'payment').indexOf('未稅・逐筆加 5%') < 0, '即使目前為 per_row 也不顯示該按鈕');

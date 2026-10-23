@@ -33,7 +33,7 @@ assert(shell.indexOf("if (frameEl.getAttribute('src') !== src) frameEl.setAttrib
 assert(shell.indexOf('bustQuickReviewListCache_') >= 0, 'busts quick_review list cache on remount');
 assert(shell.indexOf("removeItem('acct_quick_review_list_v2')") >= 0, 'clears acct_quick_review_list_v2');
 
-cacheBust.assertNumericCacheBust(index, cacheBust.RE.accountingShell, 'accounting index accounting_shell.js cache bust');
+cacheBust.assertNumericCacheBust(index, cacheBust.RE.accountingShell, 'accounting index accounting_shell.js cache bust', 11);
 
 assert(pay.indexOf("sessionStorage.removeItem('acct_quick_review_list_v2')") >= 0,
   'payment success clears quick_review list cache');
@@ -47,6 +47,11 @@ assert(iframeView.indexOf('about:blank') >= 0, 'IframeView blank-remount on src 
 assert(iframeView.indexOf('watch(') >= 0, 'IframeView watches src');
 assert(/:key="\(currentView\.src/.test(appJs) || appJs.indexOf(':key="(currentView.src') >= 0,
   'app.js keys IframeView by src+params');
-cacheBust.assertCacheBustToken(hubIndex, cacheBust.RE.hubAppJs, 'hub index app.js cache bust');
+cacheBust.assertCacheBustToken(
+  hubIndex,
+  cacheBust.RE.hubAppJs,
+  'hub index app.js cache bust',
+  cacheBust.HUB_APP_JS_MIN_TOKEN
+);
 
 console.log('test-shell-iframe-remount: ok');

@@ -34,7 +34,8 @@ assert(api.indexOf("body.action === 'accounting_policy'") >= 0, 'policy uses sho
 cacheBust.assertSameNumericCacheBust(
   [html, indexHtml],
   cacheBust.RE.accountingApi,
-  'payment_request and index share accounting_api.js ?v='
+  'payment_request and index share accounting_api.js ?v=',
+  108
 );
 assert(html.indexOf('本機測試（勿當正式稽核）') >= 0, 'legacy bypass label string may remain for dead branch');
 assert(html.indexOf('先進門再補員工名單') >= 0, 'showApp before waitForHubData');
