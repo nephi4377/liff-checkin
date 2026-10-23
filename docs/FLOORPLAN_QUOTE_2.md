@@ -15,9 +15,9 @@
 
 jsDelivr 範本：
 
-`https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@<SHA>/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
+`https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@0263a76/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
 
-`https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@<SHA>/tools/BudgetWeb_Standalone.html?lpPreview=1`
+`https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@0263a76/tools/BudgetWeb_Standalone.html?lpPreview=1`
 
 ## 計價規則（集中設定）
 
