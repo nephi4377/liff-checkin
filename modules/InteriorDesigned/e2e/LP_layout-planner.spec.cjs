@@ -453,10 +453,17 @@ test.describe('LayoutPlanner E2E', () => {
     expect(snapshot?.wallsHiddenTopDown, '俯視應隱藏牆體立面').toBe(true);
     expect(snapshot?.wallCapsVisibleTopDown, '俯視應顯示牆頂描邊').toBe(true);
     expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈（≤2cm）').toBe(true);
-    expect(snapshot?.floorInnerBoundsDelta?.maxEdge ?? 99).toBeLessThanOrEqual(2);
+    await page.locator('#lp-3d-btn-preset-top').click();
+    await page.waitForTimeout(700);
+    const topSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
+    expect(topSnap?.floorWallInnerDelta?.maxEdge ?? 99).toBeLessThanOrEqual(2);
+    const floorPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.verifyTopDownFloorMeetsWallPixels?.());
+    for (const dir of ['left', 'right', 'up', 'down']) {
+      expect(floorPx?.[dir]?.ok, `俯視地板→牆掃描 ${dir}`).toBe(true);
+    }
+    const cabPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
+    expect(cabPx?.isCabinetColor).toBe(true);
     expect(snapshot?.doorLeafMeshCount, '每扇門僅一塊門片 mesh').toBe(1);
-    const cabPixel = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
-    expect(cabPixel?.differsFromFloor, '俯視櫃體中心像素應與地板色不同').toBe(true);
     expect(snapshot?.cabinetMeshVisible, '鳥瞰應看見櫃體 mesh（非僅標籤）').toBe(true);
     expect(snapshot?.cabinetMeshScreen?.pixelArea ?? 0, '櫃體螢幕投影面積應足夠').toBeGreaterThan(100);
     expect(snapshot?.labelCount).toBeGreaterThanOrEqual(1);
@@ -471,8 +478,6 @@ test.describe('LayoutPlanner E2E', () => {
     }
 
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-orbit.png'), fullPage: false });
-    await page.locator('#lp-3d-btn-preset-top').click();
-    await page.waitForTimeout(600);
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-topdown.png'), fullPage: false });
 
     await page.locator('#lp-3d-btn-preset-corner').click();

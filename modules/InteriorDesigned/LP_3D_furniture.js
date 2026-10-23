@@ -216,7 +216,8 @@ export function buildFixtureMeshGroup(THREE, fix) {
         new THREE.MeshBasicMaterial({ color }),
     );
     topCap.position.set(0, base + h - 3, 0);
-    topCap.renderOrder = 5;
+    topCap.renderOrder = 8;
+    topCap.userData.lp3dCabinetTop = true;
     group.add(topCap);
     const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));
     const edgeMat = new THREE.LineBasicMaterial({ color: 0x3f1f08 });

@@ -21,14 +21,19 @@ test.describe('Githack 主頁 3D smoke（LP_LayoutPlanner.html）', () => {
     await page.waitForTimeout(2800);
     expect(errors).toHaveLength(0);
 
-    const orbitSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
-    expect(orbitSnap?.floorInnerBoundsDelta?.maxEdge ?? 99, '地板 mesh 應貼齊牆內圈（≤2cm）').toBeLessThanOrEqual(2);
+    await page.locator('#lp-3d-btn-preset-top').click();
+    await page.waitForTimeout(900);
+
+    const topSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
+    expect(topSnap?.floorWallInnerDelta?.maxEdge ?? 99, '地板 mesh vs 牆內面/cap（≤2cm）').toBeLessThanOrEqual(2);
+    const floorPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.verifyTopDownFloorMeetsWallPixels?.());
+    for (const dir of ['left', 'right', 'up', 'down']) {
+      expect(floorPx?.[dir]?.ok, `俯視地板→牆掃描 ${dir}`).toBe(true);
+    }
     const cabPx = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
-    expect(cabPx?.differsFromFloor, 'orbit 俯視櫃心像素≠地板').toBe(true);
+    expect(cabPx?.isCabinetColor, '俯視櫃體中心像素應為櫃體色').toBe(true);
 
     await page.screenshot({ path: path.join(ARTIFACTS, 'githack-main-orbit.png'), fullPage: false });
-    await page.locator('#lp-3d-btn-preset-top').click();
-    await page.waitForTimeout(700);
     await page.screenshot({ path: path.join(ARTIFACTS, 'githack-main-topdown.png'), fullPage: false });
 
     await page.locator('#lp-3d-btn-preset-corner').click();
