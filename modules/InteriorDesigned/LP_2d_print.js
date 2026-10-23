@@ -315,21 +315,23 @@ const SCALE_BAR_CM_STEPS = [100, 200, 500];
  * @param {{ minBarPx?: number, maxBarPx?: number }} [options]
  */
 export function resolvePrintScaleBar(pixelsPerCmOnSheet, options = {}) {
+    const minBarPx = options.minBarPx ?? 12;
     const maxBarPx = options.maxBarPx ?? 200;
     const ppc = Number(pixelsPerCmOnSheet);
     if (!Number.isFinite(ppc) || ppc <= 0) {
         return buildScaleBarLabel(0, 100);
     }
-    let barCm = 100;
-    if (ppc * 100 > maxBarPx) {
+    let barCm = SCALE_BAR_CM_STEPS[0];
+    const px100 = ppc * 100;
+    if (px100 >= minBarPx && px100 <= maxBarPx) {
+        return buildScaleBarLabel(ppc, 100);
+    }
+    if (px100 < minBarPx) {
         for (const step of [200, 500]) {
-            if (ppc * step <= maxBarPx) {
-                barCm = step;
-                break;
-            }
-        }
-        if (ppc * barCm > maxBarPx) {
-            barCm = 500;
+            const barPx = ppc * step;
+            if (barPx > maxBarPx) continue;
+            barCm = step;
+            if (barPx >= minBarPx) break;
         }
     }
     return buildScaleBarLabel(ppc, barCm);
@@ -345,17 +347,6 @@ export function estimatePrintScaleRatioForSheet(sheetId, workspacePx) {
     if (paperCm <= 0) return '1:—';
     const denom = Math.max(1, Math.round(workspacePx / paperCm));
     return `1:${denom}`;
-}
-
-/**
- * @param {object[]} points
- * @param {number} workspacePx
- */
-export function estimatePrintScaleRatio(points, workspacePx) {
-    const bounds = axisAlignedBoundsFromPoints(points?.length ? points : [{ x: 0, y: 0 }, { x: workspacePx, y: workspacePx }]);
-    const span = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, workspacePx * 0.3);
-    const ratio = Math.max(10, Math.round(workspacePx / span));
-    return `1:${ratio}`;
 }
 
 /**

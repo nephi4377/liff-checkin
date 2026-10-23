@@ -105,26 +105,29 @@ describe('LP_2d_print helpers', () => {
 });
 
 describe('resolvePrintScaleBar', () => {
-    it('A4 2000px workspace 100cm bar ≈27px', () => {
+    it('A4 2000px workspace 選 100cm 刻度', () => {
         const ppc = computePrintSheetContentScale('A4_LANDSCAPE', 2000);
         const bar = resolvePrintScaleBar(ppc);
         expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBe(Math.round(ppc * 100));
         expect(bar.barPx).toBeGreaterThanOrEqual(25);
         expect(bar.barPx).toBeLessThanOrEqual(29);
     });
 
-    it('A4 3000px workspace 100cm bar ≈18px', () => {
+    it('A4 3000px workspace 選 100cm 刻度', () => {
         const ppc = computePrintSheetContentScale('A4_LANDSCAPE', 3000);
         const bar = resolvePrintScaleBar(ppc);
         expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBe(Math.round(ppc * 100));
         expect(bar.barPx).toBeGreaterThanOrEqual(16);
         expect(bar.barPx).toBeLessThanOrEqual(20);
     });
 
-    it('A3 3000px workspace 100cm bar ≈29px', () => {
+    it('A3 3000px workspace 選 100cm 刻度', () => {
         const ppc = computePrintSheetContentScale('A3_LANDSCAPE', 3000);
         const bar = resolvePrintScaleBar(ppc);
         expect(bar.barCm).toBe(100);
+        expect(bar.barPx).toBe(Math.round(ppc * 100));
         expect(bar.barPx).toBeGreaterThanOrEqual(27);
         expect(bar.barPx).toBeLessThanOrEqual(31);
     });
@@ -132,10 +135,23 @@ describe('resolvePrintScaleBar', () => {
 
 describe('estimatePrintScaleRatioForSheet', () => {
     it('與圖紙 contentScale 推算一致', () => {
-        const label = estimatePrintScaleRatioForSheet('A4_LANDSCAPE', 2000);
-        expect(label).toMatch(/^1:\d+$/);
-        const n = parseInt(label.split(':')[1], 10);
-        expect(n).toBeGreaterThan(50);
+        const workspacePx = 2000;
+        const sheetId = 'A4_LANDSCAPE';
+        const label = estimatePrintScaleRatioForSheet(sheetId, workspacePx);
+        const ppc = computePrintSheetContentScale(sheetId, workspacePx);
+        const pxPerCmPaper = 96 / 2.54;
+        const planExtentPx = workspacePx * ppc;
+        const paperCm = planExtentPx / pxPerCmPaper;
+        const denom = Math.max(1, Math.round(workspacePx / paperCm));
+        expect(label).toBe(`1:${denom}`);
+    });
+});
+
+describe('resolvePrintScaleBar tier', () => {
+    it('100cm 過短時升級 200／500（minBarPx）', () => {
+        const bar = resolvePrintScaleBar(0.15, { minBarPx: 24, maxBarPx: 200 });
+        expect(bar.barCm).toBe(200);
+        expect(bar.barPx).toBe(30);
     });
 });
 
