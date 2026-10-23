@@ -381,6 +381,23 @@ test.describe('LayoutPlanner E2E', () => {
     expect(y).toBe(160);
   });
 
+  test('3D 無地板時選房間視線顯示 hint（僅牆體佈局）', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 20000 });
+    await page.selectOption('#lp-3d-preset-select', 'walk_room:0');
+    await page.waitForTimeout(400);
+    const snap = await page.evaluate(() => ({
+      mode: window.__LP3D_TEST_HOOKS__?.getViewMode?.(),
+      hint: window.__LP3D_TEST_HOOKS__?.getHintText?.(),
+    }));
+    expect(snap.mode).toBe('orbit');
+    expect(snap.hint).toContain('房間地板');
+  });
+
   test('3D 房間視線在 walk 未建立時自動建立並切入室內', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 700 });
     await page.goto(

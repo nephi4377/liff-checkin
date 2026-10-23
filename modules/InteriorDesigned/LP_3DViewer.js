@@ -370,7 +370,8 @@ export function createLayoutPlanner3DViewer(options) {
             setHint('尚未載入佈局，請稍候再選房間視線');
             return false;
         }
-        const ring = lastDesc.walkBounds?.rings?.[ringIndex];
+        const floor = lastDesc.floors?.[ringIndex];
+        const ring = floor?.ring;
         if (!ring?.length) {
             setHint('此佈局尚無可走動的房間地板，無法使用房間視線');
             return false;
