@@ -25,5 +25,9 @@ test.describe('LP-BUG-SWEEP-2 3D', () => {
     expect(size.w).toBeGreaterThan(100);
     expect(size.h).toBeGreaterThan(100);
     expect(errors.filter((m) => /WebGL|classList/i.test(m))).toHaveLength(0);
+    await page.screenshot({
+      path: '/opt/cursor/artifacts/lp-bug-sweep-2-3d-render.png',
+      fullPage: false,
+    });
   });
 });

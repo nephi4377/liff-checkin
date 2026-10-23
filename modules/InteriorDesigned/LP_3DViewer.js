@@ -41,6 +41,8 @@ import {
     createWalkCollisionCache,
     resolveWalkBodyRadiusCm,
     resolveWalkSpawnXZ,
+    resolveOpeningCutterCenterOnWall,
+    partitionSegmentToObb,
 } from './LP_3D_walk_collision.js';
 
 /** ExtrudeGeometry 旋轉後 shape.y 對應 world -Z，與 fixture 的 centerZ 一致 */
@@ -128,8 +130,9 @@ function buildWallBrush(wall, wallMat, openings, defaults) {
             op.heightCm + mh,
             Math.max(op.depthCm + md, 30),
         );
+        const cutCenter = resolveOpeningCutterCenterOnWall(wall, op);
         const cutBrush = new Brush(cutGeo);
-        cutBrush.position.set(op.centerX, op.baseYCm + op.heightCm / 2, op.centerZ);
+        cutBrush.position.set(cutCenter.centerX, op.baseYCm + op.heightCm / 2, cutCenter.centerZ);
         cutBrush.rotation.y = (-op.rotationDeg * Math.PI) / 180;
         cutBrush.updateMatrixWorld();
         const prev = brush;
@@ -580,6 +583,20 @@ export function createLayoutPlanner3DViewer(options) {
             root.add(planRing);
         }
 
+        const partitionHeight = defaults.WALL_HEIGHT_CM;
+        for (const pw of desc.partitionWalls || []) {
+            const obb = partitionSegmentToObb(pw.ax, pw.az, pw.bx, pw.bz, pw.thicknessCm);
+            const segLen = obb.halfW * 2;
+            const thick = obb.halfD * 2;
+            const geo = new THREE.BoxGeometry(segLen, partitionHeight, thick);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(obb.cx, partitionHeight / 2, obb.cz);
+            mesh.rotation.y = Math.atan2(obb.sin, obb.cos);
+            mesh.userData.lp3dPartitionWall = true;
+            wallMeshes.current.push(mesh);
+            root.add(mesh);
+        }
+
         fixtureGroups.current = new Map();
         const cabinetCount = desc.fixtures.filter((f) => f.kind === 'cabinet').length;
         const showCabinetLabels = cabinetCount <= 12;
@@ -588,6 +605,7 @@ export function createLayoutPlanner3DViewer(options) {
             const liftY = fix.kind === 'cabinet' ? 0.35 : 0;
             group.position.set(fix.centerX, liftY, fix.centerZ);
             group.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
+            if (fix.mirrored) group.scale.x = -1;
             group.userData.lp3dFixtureId = fix.id;
             group.userData.lp3dFixtureKind = fix.kind;
             fixtureGroups.current.set(fix.id, group);
@@ -1486,6 +1504,18 @@ export function createLayoutPlanner3DViewer(options) {
             walk = null;
             controls?.dispose();
             controls = null;
+            if (contentGroup.current) {
+                disposeObject3D(contentGroup.current);
+                contentGroup.current = null;
+            }
+            if (labelGroup.current) {
+                disposeObject3D(labelGroup.current);
+                labelGroup.current = null;
+            }
+            wallCapMatStandard?.dispose();
+            wallCapMatTopDown?.dispose();
+            wallCapMatStandard = null;
+            wallCapMatTopDown = null;
             if (renderer) {
                 renderer.dispose();
                 renderer.domElement?.remove();

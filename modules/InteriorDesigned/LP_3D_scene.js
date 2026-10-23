@@ -39,7 +39,6 @@ export function classifyPlacedCabinet3DKind(cab) {
     const inDoorWindowGroup = DOOR_WINDOW_GROUPS.has(group);
 
     if (WINDOW_NAME_RE.test(name)) return 'window';
-    if (DOOR_NAME_RE.test(name) && !WINDOW_NAME_RE.test(name)) return 'door';
     if (inDoorWindowGroup) {
         if (WINDOW_NAME_RE.test(name)) return 'window';
         if (DOOR_NAME_RE.test(name)) return 'door';
@@ -418,6 +417,7 @@ export function buildLayout3DDescriptor(layout, options = {}) {
             centerX: center.x,
             centerZ: center.z,
             rotationDeg: cab.rotation || 0,
+            mirrored: !!cab.mirrored,
             label: cab.data?.name || '',
         });
     }
