@@ -111,7 +111,7 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await expect(toggle).toBeChecked({ checked: wasChecked });
   });
 
-  test('手動報價覆寫可 Ctrl+Z 復原', async ({ page }) => {
+  test('手動報價覆寫可 undo 復原（非 input 原生 undo）', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
     await page.waitForSelector('#keyguard-cab-1');
@@ -121,10 +121,45 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await expect(nameInput).toBeVisible();
     const before = await nameInput.inputValue();
     await nameInput.fill(`${before}-SWEEP`);
-    await nameInput.dispatchEvent('input', { bubbles: true });
-    await page.waitForTimeout(200);
-    await page.keyboard.press('Control+z');
-    await expect(nameInput).toHaveValue(before);
+    await nameInput.blur();
+    await expect(page.locator('#undo-btn')).toBeEnabled();
+    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
+  });
+
+  test('手動報價覆寫可 redo', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const nameInput = page.locator('.budget-edit-input[data-field="name"]').first();
+    const before = await nameInput.inputValue();
+    const edited = `${before}-REDO`;
+    await nameInput.fill(edited);
+    await nameInput.blur();
+    await expect(page.locator('#undo-btn')).toBeEnabled();
+    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
+    await expect(page.locator('#redo-btn')).toBeEnabled();
+    await page.evaluate(() => document.getElementById('redo-btn').click());
+    await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(edited);
+  });
+
+  test('手動報價連字輸入僅佔一步歷史', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const nameInput = page.locator('.budget-edit-input[data-field="name"]').first();
+    const before = await nameInput.inputValue();
+    const typed = `${before}ABCDEFGHIJ`;
+    await nameInput.fill(typed);
+    await nameInput.blur();
+    await expect(page.locator('#undo-btn')).toBeEnabled();
+    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
   });
 
   test('復原還原施工面積欄位（history 快照一致）', async ({ page }) => {

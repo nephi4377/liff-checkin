@@ -3286,7 +3286,7 @@ function getQuotationForDisplay() {
     return { lineItems, subtotals: calc.subtotals, grandTotal };
 }
 
-function onBudgetFieldEdit(lineKey, field, rawValue) {
+function applyBudgetFieldEdit(lineKey, field, rawValue) {
     if (!lineKey) return;
     if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
     if (field === 'quantity' || field === 'totalPrice') {
@@ -3298,7 +3298,18 @@ function onBudgetFieldEdit(lineKey, field, rawValue) {
     const totalEl = document.getElementById('modal-total-price');
     if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
     updateQuotation();
-    saveState();
+}
+
+function commitBudgetFieldEdit(lineKey, field, rawValue) {
+    applyBudgetFieldEdit(lineKey, field, rawValue);
+    commitSaveState();
+}
+
+function refreshBudgetModalIfOpen() {
+    const modal = document.getElementById('budget-modal');
+    if (modal && modal.style.display === 'flex') {
+        renderBudgetTable();
+    }
 }
 
 function hideQuotationRow(lineKey) {
@@ -3307,6 +3318,7 @@ function hideQuotationRow(lineKey) {
     quotationManualOverrides[lineKey].hidden = true;
     renderBudgetTable();
     updateQuotation();
+    saveState();
 }
 
 function resetQuotationToAuto() {
@@ -4225,6 +4237,7 @@ function loadState(state) {
     applyLayerVisibilityRefresh();
     updateBgTransform();
     updateQuotation();
+    refreshBudgetModalIfOpen();
     deselectAll();
     deselectAllAreas();
     scheduleLp3dRebuild();
@@ -4235,6 +4248,7 @@ function undo() {
         historyIndex--;
         loadState(history[historyIndex]);
         updateUndoRedoButtons();
+        refreshBudgetModalIfOpen();
     }
 }
 
@@ -4243,6 +4257,7 @@ function redo() {
         historyIndex++;
         loadState(history[historyIndex]);
         updateUndoRedoButtons();
+        refreshBudgetModalIfOpen();
     }
 }
 
@@ -4495,7 +4510,17 @@ function bindEventListeners() {
         budgetTableBody.addEventListener('input', (e) => {
             const el = e.target;
             if (!el.classList.contains('budget-edit-input')) return;
-            onBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+            applyBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('focusout', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
         budgetTableBody.addEventListener('click', (e) => {
             const btn = e.target.closest('.budget-hide-row-btn');
