@@ -813,7 +813,7 @@
             type: 'item',
             raw: row.raw,
             data: {
-                id: `MANUAL_${index}`,
+                id: `MANUAL_${index}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
                 zone: row.zone || "未分類",
                 name: name,
                 spec: "", 
@@ -836,7 +836,7 @@
             type: 'item',
             raw: "手動新增",
             data: {
-                id: `APPEND_${Date.now().toString().slice(-4)}`,
+                id: `APPEND_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
                 zone: document.getElementById('addZone').value || "追加項",
                 name: name,
                 spec: document.getElementById('addSpec').value,
@@ -880,6 +880,8 @@
         cloudSyncHelpers = {
             prepareCloudQuotationSync: mod.prepareCloudQuotationSync,
             formatSyncDiffForConfirm: mod.formatSyncDiffForConfirm,
+            matchRemoteItemForLocal: mod.matchRemoteItemForLocal,
+            buildQuotationFirebaseUpdatePayload: mod.buildQuotationFirebaseUpdatePayload,
         };
         return cloudSyncHelpers;
     }
@@ -891,23 +893,38 @@
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
         try {
-            const { prepareCloudQuotationSync, formatSyncDiffForConfirm } = await loadCloudSyncHelpers();
+            const {
+                prepareCloudQuotationSync,
+                formatSyncDiffForConfirm,
+                matchRemoteItemForLocal,
+                buildQuotationFirebaseUpdatePayload,
+            } = await loadCloudSyncHelpers();
 
-            let existingData = null;
+            let snapshot;
             try {
-                const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
-                existingData = snapshot.val();
-            } catch (e) {}
+                snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+            } catch (readErr) {
+                alert('無法讀取雲端報價資料，同步已中止（未寫入）。\n' + (readErr?.message || readErr));
+                return;
+            }
+
+            const isNewQuotationNode = !snapshot.exists();
+            const existingData = isNewQuotationNode ? null : snapshot.val();
 
             const localItems = processedData.items.filter(r => r.type === 'item').map(r =>
                 BudgetQuoteParser.sanitizeItemForExport(r.data),
             );
 
             const remoteContext = existingData?.context || null;
-            const { mergedItems, diff } = prepareCloudQuotationSync({
+            const { mergedItems, diff, blockingErrors } = prepareCloudQuotationSync({
                 localItems,
                 remoteContext,
             });
+
+            if (blockingErrors?.length) {
+                alert('同步已中止：\n' + blockingErrors.join('\n'));
+                return;
+            }
 
             if (diff.removed.length > 0) {
                 alert('合併結果將刪除雲端工項，已中止。請聯繫開發。\n' + diff.removed.map((i) => i.id).join(', '));
@@ -918,8 +935,9 @@
                 if (!confirm(formatSyncDiffForConfirm(diff))) return;
             }
 
+            const remoteItems = remoteContext?.items || [];
             const exportItems = mergedItems.map((newItem) => {
-                const oldMatch = remoteContext?.items?.find((old) => old.id === newItem.id);
+                const oldMatch = matchRemoteItemForLocal(newItem, remoteItems);
                 if (oldMatch) {
                     newItem.completion_percent = oldMatch.completion_percent ?? newItem.completion_percent ?? 0;
                     newItem.verification = oldMatch.verification || newItem.verification || { is_ok: false };
@@ -939,11 +957,11 @@
                 items: exportItems
             };
 
-            await db.ref(`quotations/${projectNo}`).set({
-                context: finalExport,
-                last_updated: new Date().toLocaleString(),
-                sync_by: "AI_PREPROCESSOR"
+            const updatePayload = buildQuotationFirebaseUpdatePayload({
+                finalContext: finalExport,
+                isNewQuotationNode,
             });
+            await db.ref(`quotations/${projectNo}`).update(updatePayload);
 
             if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
                 window.open(`BudgetAuditor_Standalone_V2.html?projectNo=${projectNo}`, '_blank');

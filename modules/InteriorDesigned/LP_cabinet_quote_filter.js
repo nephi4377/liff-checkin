@@ -1,15 +1,58 @@
 /**
- * 報價匯出：僅「櫃體」計入明細，門／窗／牆體開口等排除（與 3D classify 一致）
+ * 報價匯出篩選：依明確欄位（quoteExport / quoteSourceType / quoteCategory），
+ * 不依 3D 分類或名稱猜門窗。
  */
-import { resolvePlacedCabinet3DKind } from './LP_3D_scene.js';
+
+const NON_EXPORT_SOURCE_TYPES = new Set([
+    'opening',
+    'door',
+    'window',
+    'wall',
+    'wallSegment',
+    'furniture',
+    'sofa',
+    'bed',
+    'appliance',
+]);
+
+const EXPORT_SOURCE_TYPES = new Set(['cabinet', 'floorplan_cabinet']);
+
+function readBoolFlag(cab, key) {
+    if (cab?.[key] === true || cab?.[key] === false) return cab[key];
+    if (cab?.data?.[key] === true || cab?.data?.[key] === false) return cab.data[key];
+    return undefined;
+}
+
+function readStringField(cab, key) {
+    const v = cab?.[key] ?? cab?.data?.[key];
+    if (v == null || v === '') return '';
+    return String(v).trim();
+}
 
 /**
  * @param {object} cab placedCabinets 元素
  * @returns {boolean}
  */
 export function isQuoteExportablePlacedCabinet(cab) {
-    const kind = resolvePlacedCabinet3DKind(cab);
-    return kind === 'cabinet';
+    if (!cab) return false;
+
+    const explicit = readBoolFlag(cab, 'quoteExport');
+    if (explicit === false) return false;
+    if (explicit === true) return true;
+
+    const sourceType = readStringField(cab, 'quoteSourceType');
+    if (sourceType) {
+        if (NON_EXPORT_SOURCE_TYPES.has(sourceType)) return false;
+        if (EXPORT_SOURCE_TYPES.has(sourceType)) return true;
+    }
+
+    const quoteCategory = readStringField(cab, 'quoteCategory');
+    if (quoteCategory === 'opening' || quoteCategory === 'furniture') return false;
+    if (quoteCategory === 'cabinet') return true;
+
+    if (!cab.data) return false;
+
+    return true;
 }
 
 /**

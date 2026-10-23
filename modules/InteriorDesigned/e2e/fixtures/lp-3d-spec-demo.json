@@ -24,7 +24,8 @@
         "width": 90,
         "depth": 15,
         "model3dKind": "door",
-        "quoteExport": false
+        "quoteExport": false,
+        "quoteSourceType": "opening"
       }
     },
     {
@@ -40,7 +41,8 @@
         "width": 150,
         "depth": 15,
         "model3dKind": "window",
-        "quoteExport": false
+        "quoteExport": false,
+        "quoteSourceType": "opening"
       }
     }
   ],
