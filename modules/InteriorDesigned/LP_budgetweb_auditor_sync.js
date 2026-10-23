@@ -50,12 +50,11 @@ export function buildAuditorCloudWriteBaselineFromFirebaseNode(nodeVal) {
  */
 export function buildAuditorCloudWriteBaselineAfterPayload(payload, priorRemoteNodeVal = null) {
     if (!payload?.context) return null;
-    const priorNorm = priorRemoteNodeVal
-        ? normalizeQuotationFirebaseSnapshot(priorRemoteNodeVal) || priorRemoteNodeVal
-        : null;
+    const prior =
+        priorRemoteNodeVal && typeof priorRemoteNodeVal === 'object' ? priorRemoteNodeVal : null;
     return buildRemoteQuotationSyncBaseline({
         audit_last_updated: payload.audit_last_updated ?? null,
-        last_updated: priorNorm?.last_updated ?? null,
+        last_updated: prior?.last_updated ?? null,
         context: payload.context,
         is_closed: payload.is_closed,
         closed_at: payload.closed_at,

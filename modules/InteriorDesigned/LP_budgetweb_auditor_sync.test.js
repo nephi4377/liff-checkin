@@ -56,6 +56,33 @@ describe('resolveAuditorFirebaseWriteGate (Auditor 實際寫入路徑)', () => {
         expect(gate.blocked).toBe(false);
     });
 
+    it('舊扁平節點僅 audit_last_updated（無 last_updated）寫入後不誤報 remote_changed', () => {
+        const items = [{ id: 'A', name: '工項', qty: '1', unit: '式' }];
+        const priorFlat = {
+            audit_last_updated: 'only-audit-stamp',
+            total_summary: { siteName: '扁平舊案' },
+            items,
+        };
+        const payload = {
+            audit_last_updated: 'auditor-write-1',
+            context: { items, total_summary: { siteName: '扁平舊案' } },
+        };
+        const baseline = buildAuditorCloudWriteBaselineAfterPayload(payload, priorFlat);
+        expect(baseline?.quotationLastUpdated).toBeNull();
+        expect(baseline?.auditLastUpdated).toBe('auditor-write-1');
+        const freshFlat = {
+            audit_last_updated: 'auditor-write-1',
+            total_summary: { siteName: '扁平舊案' },
+            items,
+        };
+        const gate = resolveAuditorFirebaseWriteGate({
+            remoteExists: true,
+            baseline,
+            freshVal: freshFlat,
+        });
+        expect(gate.blocked).toBe(false);
+    });
+
     it('BudgetWeb 只改 last_updated（總額）時偵測 remote_changed', () => {
         const items = [{ id: 'A', name: '工項', qty: '1', unit: '式' }];
         const baseline = buildRemoteQuotationSyncBaseline({

@@ -279,8 +279,8 @@ export function normalizeQuotationFirebaseSnapshot(nodeVal) {
     } = nodeVal;
     return {
         ...metaRest,
-        audit_last_updated: audit_last_updated ?? last_updated ?? null,
-        last_updated: last_updated ?? audit_last_updated ?? null,
+        audit_last_updated: audit_last_updated ?? null,
+        last_updated: last_updated ?? null,
         sync_by,
         is_closed: is_closed ?? undefined,
         closed_at: closed_at ?? undefined,
