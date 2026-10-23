@@ -1653,6 +1653,8 @@
        V2 STATE
        ============================================================ */
     let appData = null;
+    /** 載入雲端後的快照（寫回前重讀比對，FLOORPLAN-QUOTE-3） */
+    let auditorCloudWriteBaseline = null;
     let currentUser = { userId: 'unknown', displayName: '訪客' };
     let globalProjects = {};
     /** 個案 JSON 與「概覽快照」共用：超過天數不再使用快取 */
@@ -2197,6 +2199,17 @@
                     contextData.closed_by = data.closed_by || contextData.closed_by || null;
                 }
                 loadData(contextData, hubMap);
+                try {
+                    const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
+                    const syncMod = await import(syncModUrl);
+                    auditorCloudWriteBaseline = syncMod.buildRemoteQuotationSyncBaseline({
+                        last_updated: data.audit_last_updated || data.last_updated,
+                        context: data.context,
+                    });
+                } catch (e) {
+                    console.warn('[Auditor] 雲端 baseline 建立失敗', e);
+                    auditorCloudWriteBaseline = null;
+                }
                 const hSync = document.getElementById('h-sync');
                 if (hSync) hSync.innerText = data.last_updated || '剛剛';
                 saveToCache({ cloudUpdatedAt: data.last_updated || null });
@@ -2257,14 +2270,39 @@
             const projectNo = appData.案號 || 'UNKNOWN';
             refreshOverall();
             const nowDisplay = new Date().toLocaleString();
-            await db2.ref(`quotations/${projectNo}`).set({
+            const ref = db2.ref(`quotations/${projectNo}`);
+            const snapBefore = await ref.once('value');
+            if (snapBefore.exists() && auditorCloudWriteBaseline) {
+                const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
+                const { remoteQuotationSyncBaselineChanged } = await import(syncModUrl);
+                const fresh = snapBefore.val();
+                if (remoteQuotationSyncBaselineChanged(auditorCloudWriteBaseline, {
+                    last_updated: fresh.audit_last_updated || fresh.last_updated,
+                    context: fresh.context,
+                })) {
+                    showToast('雲端資料已變更（與載入時不同），同步已中止。請重新載入案場。', 'error', 6000);
+                    return;
+                }
+            }
+            const payload = {
                 context: JSON.parse(JSON.stringify(appData)),
                 audit_last_updated: nowDisplay,
                 sync_by: currentUser?.displayName || '本地測試員',
                 is_closed: !!appData.is_closed,
                 closed_at: appData.closed_at || null,
-                closed_by: appData.closed_by || null
-            });
+                closed_by: appData.closed_by || null,
+            };
+            await ref.update(payload);
+            try {
+                const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
+                const { buildRemoteQuotationSyncBaseline } = await import(syncModUrl);
+                auditorCloudWriteBaseline = buildRemoteQuotationSyncBaseline({
+                    last_updated: nowDisplay,
+                    context: payload.context,
+                });
+            } catch (e) {
+                console.warn('[Auditor] baseline 更新失敗', e);
+            }
             appData.items.forEach(it => { if (it.completion_percent === 100) it.is_ui_done = true; });
             renderList();
             document.getElementById('h-sync').innerText = nowDisplay;

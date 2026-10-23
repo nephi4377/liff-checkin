@@ -13,6 +13,7 @@ import {
     formatRemoteChangedAbortMessage,
     fingerprintLocalItemsForSyncCheck,
     runLocalQuotationIdDuplicateCheck,
+    planLegacyQuotationIdRemap,
 } from './LP_budgetweb_cloud_sync.js';
 
 /**
@@ -81,9 +82,17 @@ export async function runBudgetWebQuotationCloudSync(opts) {
 
     const hints = findNameSpecHintsForSync(localItems, remoteItems);
     const confirmText = formatSyncDiffForConfirm(diff, hints);
-    if (diff.hasChanges || diff.preservedRemoteOnly.length > 0 || hints.length) {
+    if (diff.hasChanges || diff.preservedRemoteOnly.length > 0 || hints.length || diff.legacyRemap?.matched?.length) {
         if (!confirmFn(confirmText)) {
             return { ok: false, reason: 'user_cancelled' };
+        }
+        if (diff.suggestCancelInflation) {
+            const ok2 = opts.confirmInflationFn
+                ? opts.confirmInflationFn()
+                : confirmFn('【二次確認】雲端獨有比例偏高，仍要寫入雲端？（建議取消）');
+            if (!ok2) {
+                return { ok: false, reason: 'inflation_warning_declined' };
+            }
         }
     }
 
@@ -102,7 +111,8 @@ export async function runBudgetWebQuotationCloudSync(opts) {
     }
 
     const freshRemoteItems = freshData?.context?.items || remoteItems;
-    const exportItems = applyRemoteProgressByExactId(mergedItems, freshRemoteItems);
+    const freshLegacy = planLegacyQuotationIdRemap(localItems, freshRemoteItems);
+    const exportItems = applyRemoteProgressByExactId(mergedItems, freshRemoteItems, freshLegacy);
 
     const finalExport = {
         案號: projectNo,

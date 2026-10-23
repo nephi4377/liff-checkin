@@ -18,6 +18,7 @@ module.exports = defineConfig({
             'LP_cabinet_quote_lines.test.js',
             'LP_cabinet_quote_filter.test.js',
             'LP_budgetweb_cloud_sync.test.js',
+            'LP_budgetweb_legacy_sync.test.js',
             'LP_budgetweb_firebase_sync.test.js',
             'LP_quote_placement_meta.test.js',
             'LP_migrate_quotation_item_ids.test.js',
