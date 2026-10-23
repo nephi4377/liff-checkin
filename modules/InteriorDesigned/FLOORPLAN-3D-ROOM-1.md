@@ -23,8 +23,8 @@
 
 **遠端（raw.githack.com，完整 commit SHA）** — 勿用 jsDelivr 開 `.html`（常變 `text/plain`）。首次可能出現 rawgit.hack 閘門，點 **Open the page**。
 
-- 一鍵入口：`…/LP_LayoutPlanner_3d_room_preview.html`（見 `docs/FLOORPLAN_INTEGRATE_1.md` 最新 SHA）
-- 等價（免轉址 stub）：`…/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
+- 一鍵：`https://raw.githack.com/nephi4377/liff-checkin/ce658285da1988c90c7489baa158f232bd5fee3d/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`
+- 等價：`https://raw.githack.com/nephi4377/liff-checkin/ce658285da1988c90c7489baa158f232bd5fee3d/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
 
 本機（repo 根目錄 `serve` 或 `modules/InteriorDesigned` `:8765`）：
 
