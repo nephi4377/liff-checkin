@@ -35,6 +35,14 @@ function parseIntegratesPrNumbers(body) {
   return dedupe(numbers);
 }
 
+/** Plain-text / CLI: any `#123` tokens in the string. */
+function parseIntegratesList(text) {
+  if (!text || typeof text !== 'string') return [];
+  const numbers = [];
+  extractPrNumbers(text, numbers);
+  return dedupe(numbers);
+}
+
 function extractPrNumbers(text, into) {
   const re = /#(\d+)/g;
   let m;
@@ -57,4 +65,5 @@ function dedupe(nums) {
 
 module.exports = {
   parseIntegratesPrNumbers,
+  parseIntegratesList,
 };

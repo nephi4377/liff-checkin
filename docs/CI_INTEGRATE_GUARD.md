@@ -16,7 +16,9 @@ For each **HTML/JS file changed** in the PR (three-dot diff vs base):
 - Equal or higher versions are allowed.
 - Prints a table of regressions when any are found.
 
-This catches accidental downgrades like `accounting_lightbox.js?v=22` → `?v=20` **when the base branch still had the higher number**. It does not fail when head is newer than base (typical integration bumps).
+This catches downgrades vs **main** when main still had the higher number.
+
+When the PR body includes an **`integrates`** block, check 1 also loads each listed source PR that touched the same HTML/JS file and requires head `?v=` to be **≥ the maximum** across **main and all those source heads** (per asset path). That catches the #209 pattern: main `v=20`, source `v=22`, integration head `v=20` → **fail** even though main-only compare passes.
 
 ### 2. Integration provenance (opt-in)
 

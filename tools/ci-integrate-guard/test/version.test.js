@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const { compareVersions, parseVersionToken, isVersionLower } = require('../lib/version');
 const { extractCacheBustRefs } = require('../lib/cache-bust');
-const { regressionsInFile } = require('../lib/regression');
+const { regressionsInFile, regressionsWithSourceCeiling } = require('../lib/regression');
 const fs = require('fs');
 const path = require('path');
 
@@ -78,6 +78,24 @@ describe('regression detector', () => {
     const base = fs.readFileSync(path.join(dir, 'ledger-base-v22.html'), 'utf8');
     const head = fs.readFileSync(path.join(dir, 'ledger-head-v20.html'), 'utf8');
     assert.equal(regressionsInFile('ledger_history.html', base, head).length, 1);
+  });
+
+  it('integration ceiling: main v20, source v22, head v20 fails', () => {
+    const asset = '../../shared/js/accounting_lightbox.js';
+    const main = `<script src="${asset}?v=20"></script>`;
+    const source = `<script src="${asset}?v=22"></script>`;
+    const head = `<script src="${asset}?v=20"></script>`;
+    const rows = regressionsWithSourceCeiling(
+      'modules/accounting/ledger_history.html',
+      main,
+      head,
+      [{ label: '#188', content: source }],
+    );
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].baseVersion, '22');
+    assert.equal(rows[0].headVersion, '20');
+    assert.equal(rows[0].ceilingSource, '#188');
+    assert.equal(regressionsInFile('modules/accounting/ledger_history.html', main, head).length, 0);
   });
 });
 
