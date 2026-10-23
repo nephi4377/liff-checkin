@@ -75,4 +75,8 @@ assert(api.indexOf('authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'recent mi
 assert(api.indexOf("action: 'accounting_ledger_void'") >= 0, 'void action');
 assert(api.indexOf("action: 'accounting_ledger_duplicate_review'") >= 0, 'dup review action');
 
+var sr = fs.readFileSync(path.join(root, 'submit_records.html'), 'utf8');
+assert(sr.indexOf('accounting_api.js?v=108') >= 0, 'submit_records api v=108');
+assert(sr.indexOf('readSubmitMineOnlyFlag') >= 0, 'submit_records mine_only gate');
+
 console.log('OK test-ledger-perm-2');
