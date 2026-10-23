@@ -15,6 +15,8 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
+  /** LEDGER-PERM-2：歷史記帳查「全部人」與老闆級審核（對齊 Backend_GAS #218） */
+  var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
   /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
   var PAYMENT_REQUEST_MIN_PERMISSION = 1;
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
@@ -539,6 +541,7 @@ var AccountingApi = (function () {
     CUSTOMER_FINANCE_MIN_PERMISSION: CUSTOMER_FINANCE_MIN_PERMISSION,
     SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
     VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
+    LEDGER_VIEW_ALL_MIN_PERMISSION: LEDGER_VIEW_ALL_MIN_PERMISSION,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
     PAYMENT_REQUEST_DENIED_MSG: PAYMENT_REQUEST_DENIED_MSG,
     INGEST_PERM_DENIED_MSG: INGEST_PERM_DENIED_MSG,
@@ -1230,7 +1233,7 @@ var AccountingApi = (function () {
       }, 120000);
     },
     /** 歷史記帳紀錄查詢（權限 ≥3；日期窗＝記帳時間／送出時間，不是交易日）
-     * ACCT-SEC-11：permission < MIN_PERMISSION(4) 一律 mine_only；≥4 預設全部、可選本人。
+     * LEDGER-PERM-2／#218：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(5) 一律 mine_only；≥5 可選全部、可選本人。
      * 預設近 30 天；逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
      * record_kind：all｜ledger｜payment_request。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
@@ -1239,7 +1242,7 @@ var AccountingApi = (function () {
       if (sessionOrToken && sessionOrToken.auth) {
         authPerm = Number(sessionOrToken.auth.permission || 0);
       }
-      var mineOnly = authPerm < MIN_PERMISSION
+      var mineOnly = authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION
         ? true
         : (opts.mine_only === undefined ? false : !!opts.mine_only);
       var body = {
@@ -1399,7 +1402,57 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
     },
-    /** 刪除已標註錯誤記帳（權限 ≥4） */
+    /** 作廢收支登錄列（本人或權限 ≥5；可選 void_reason）— LEDGER-PERM-2／#218 */
+    accountingLedgerVoid: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_void' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      var reason = String(opts.void_reason || opts.reason || '').trim();
+      if (reason) {
+        body.void_reason = reason;
+        body.reason = reason;
+      }
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
+    },
+    /** 疑重待審：權限 ≥5 確認或清除標記 — LEDGER-PERM-2／#218 */
+    accountingLedgerDuplicateReview: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_duplicate_review' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      var decision = String(opts.review_decision || opts.decision || '').trim().toLowerCase();
+      if (decision) {
+        body.review_decision = decision;
+        body.decision = decision;
+      }
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
+    },
+    /** @deprecated 改用 accountingLedgerVoid；保留相容舊版後端 */
     accountingLedgerDeleteFlagged: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'accounting_ledger_delete_flagged' };
