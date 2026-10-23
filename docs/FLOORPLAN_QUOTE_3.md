@@ -2,7 +2,7 @@
 
 ## 行為
 
-1. **寫回前重讀**：`runBudgetWebQuotationCloudSync` 在用戶確認後、Firebase `update` 前再次讀取雲端；比對 `last_updated` 與工項進度指紋（id + completion + verification）。有變動則中止，不寫入。
+1. **寫回前重讀**：用戶確認後、Firebase `update` 前再次讀取雲端；比對開始同步時快照的 `itemsContentHash`（全表 items 依 id 排序後之完整欄位 JSON hash：id／名稱／規格／數量／單位／單價／區域／進度／驗收等）與 `last_updated`。任一不同則中止，不寫入。
 2. **lpPreview**：`BudgetWeb_Standalone.html?lpPreview=1` 禁用同步按鈕，且 `allowProductionSync: false` 雙重阻擋。
 3. **同步前 id 檢查**：強制 `runLocalQuotationIdDuplicateCheck`（等同 CLI check，不執行 migrate）。
 
