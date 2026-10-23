@@ -228,6 +228,11 @@ export function partitionSegmentToObb(ax, az, bx, bz, thicknessCm) {
     };
 }
 
+/** 隔間牆 mesh 與 partitionSegmentToObb 共用的 Y 軸旋轉（弧度） */
+export function partitionRotationY(obb) {
+    return -Math.atan2(obb.sin, obb.cos);
+}
+
 /**
  * @param {number} x
  * @param {number} z

@@ -43,6 +43,7 @@ import {
     resolveWalkSpawnXZ,
     resolveOpeningCutterCenterOnWall,
     partitionSegmentToObb,
+    partitionRotationY,
 } from './LP_3D_walk_collision.js';
 
 /** ExtrudeGeometry 旋轉後 shape.y 對應 world -Z，與 fixture 的 centerZ 一致 */
@@ -170,7 +171,7 @@ function buildPartitionPlanMesh(obb, material) {
     const geo = new THREE.BoxGeometry(len, 0.4, thick);
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(obb.cx, 0.2, obb.cz);
-    mesh.rotation.y = -Math.atan2(obb.sin, obb.cos);
+    mesh.rotation.y = partitionRotationY(obb);
     mesh.userData.lp3dPartitionPlan = true;
     return mesh;
 }
@@ -606,7 +607,7 @@ export function createLayoutPlanner3DViewer(options) {
             const geo = new THREE.BoxGeometry(segLen, partitionHeight, thick);
             const mesh = new THREE.Mesh(geo, wallMat);
             mesh.position.set(obb.cx, partitionHeight / 2, obb.cz);
-            mesh.rotation.y = -Math.atan2(obb.sin, obb.cos);
+            mesh.rotation.y = partitionRotationY(obb);
             mesh.userData.lp3dPartitionWall = true;
             wallMeshes.current.push(mesh);
             root.add(mesh);
@@ -645,6 +646,7 @@ export function createLayoutPlanner3DViewer(options) {
                     dx: fix.widthCm * 0.52,
                     dz: -fix.depthCm * 0.42,
                 };
+                sprite.userData.lp3dLabelMirrored = !!fix.mirrored;
                 sprite.position.set(fix.centerX, topY, fix.centerZ);
                 labels.add(sprite);
             }
@@ -765,7 +767,8 @@ export function createLayoutPlanner3DViewer(options) {
             const worldH = 2 * Math.tan(vFov / 2) * d * (pxH / viewH);
             const img = sprite.material?.map?.image;
             const aspect = img?.width && img?.height ? img.width / img.height : 2.6;
-            sprite.scale.set(worldH * aspect, worldH, 1);
+            const flip = sprite.userData?.lp3dLabelMirrored ? -1 : 1;
+            sprite.scale.set(worldH * aspect * flip, worldH, 1);
         });
     }
 
