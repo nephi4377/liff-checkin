@@ -47,3 +47,4 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+          LP_E2E_ARTIFACTS: ${{ runner.temp }}/lp-artifacts

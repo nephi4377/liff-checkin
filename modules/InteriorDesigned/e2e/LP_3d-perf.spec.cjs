@@ -2,7 +2,8 @@ const { test, expect } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
 
-const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
+const { resolveE2eArtifactsDir } = require('./lp-e2e-artifacts.cjs');
+const ARTIFACTS = resolveE2eArtifactsDir();
 const ITERATIONS = Number(process.env.LP_3D_PERF_ITERATIONS || 20);
 const LARGE_FIXTURE = path.join(__dirname, 'fixtures', 'lp-perf-large.json');
 

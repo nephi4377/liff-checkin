@@ -2,7 +2,8 @@ const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
 
-const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
+const { resolveE2eArtifactsDir } = require('./lp-e2e-artifacts.cjs');
+const ARTIFACTS = resolveE2eArtifactsDir();
 
 async function get3dCanvasCoverage(page) {
   return page.evaluate(() => {

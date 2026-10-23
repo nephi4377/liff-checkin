@@ -3,8 +3,9 @@
  */
 const { test, expect } = require('@playwright/test');
 const path = require('path');
+const { resolveE2eArtifactsDir } = require('./lp-e2e-artifacts.cjs');
 
-const ARTIFACTS = '/opt/cursor/artifacts';
+const ARTIFACTS = resolveE2eArtifactsDir();
 const MAIN_PREVIEW_QUERY = 'lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json';
 
 test.describe('Githack 主頁 3D smoke（LP_LayoutPlanner.html）', () => {

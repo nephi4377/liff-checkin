@@ -22,6 +22,12 @@ import {
     createLabelSprite,
     LP_3D_CATEGORY_COLORS,
 } from './LP_3D_furniture.js';
+import {
+    LP_3D_PIXEL_SAMPLE_RGB,
+    colorDistanceRgb,
+    isBgLikeRgb,
+    isWallLikeRgb,
+} from './LP_3D_pixel_rgb.js';
 import { createWalkController } from './LP_3D_walk.js';
 import { disposeObject3D, disposeBrushGeometry } from './LP_3D_dispose.js';
 import {
@@ -217,10 +223,10 @@ export function createLayoutPlanner3DViewer(options) {
     const fixtureGroups = { current: new Map() };
     const ORBIT_OBLIQUE_WALL_OPACITY = 0.35;
     const WALL_TOP_CAP_THICKNESS_CM = 4;
-    const FLOOR_SAMPLE_RGB = { r: 245, g: 240, b: 232 };
-    const SCENE_BG_SAMPLE_RGB = { r: 226, g: 232, b: 240 };
-    const WALL_SAMPLE_RGB = { r: 148, g: 163, b: 184 };
-    const WALL_CAP_SAMPLE_RGB = { r: 51, g: 65, b: 85 };
+    const FLOOR_SAMPLE_RGB = LP_3D_PIXEL_SAMPLE_RGB.floor;
+    const SCENE_BG_SAMPLE_RGB = LP_3D_PIXEL_SAMPLE_RGB.sceneBg;
+    const WALL_SAMPLE_RGB = LP_3D_PIXEL_SAMPLE_RGB.wall;
+    const WALL_CAP_SAMPLE_RGB = LP_3D_PIXEL_SAMPLE_RGB.wallCap;
     const CABINET_SAMPLE_RGB = { r: 180, g: 83, b: 9 };
     const LABEL_BG_SAMPLE_RGB = { r: 15, g: 23, b: 42 };
 
@@ -922,26 +928,6 @@ export function createLayoutPlanner3DViewer(options) {
         return colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB) < 38;
     }
 
-    function isWallLikeRgb(rgb) {
-        const dCap = colorDistanceRgb(rgb, WALL_CAP_SAMPLE_RGB);
-        const dWall = colorDistanceRgb(rgb, WALL_SAMPLE_RGB);
-        const dFloor = colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB);
-        const dBg = colorDistanceRgb(rgb, SCENE_BG_SAMPLE_RGB);
-        const dMinWall = Math.min(dCap, dWall);
-        return dCap < 42
-            || dWall < 42
-            || (dMinWall < 68 && dMinWall + 10 < dBg)
-            || (
-                dFloor < 62
-                && dMinWall < 88
-                && dBg > 25
-            );
-    }
-
-    function isBgLikeRgb(rgb) {
-        return colorDistanceRgb(rgb, SCENE_BG_SAMPLE_RGB) < 22;
-    }
-
     function isCabinetLikeRgb(rgb) {
         return colorDistanceRgb(rgb, CABINET_SAMPLE_RGB) < 55
             && colorDistanceRgb(rgb, LABEL_BG_SAMPLE_RGB) > 35
@@ -1030,8 +1016,10 @@ export function createLayoutPlanner3DViewer(options) {
         const spanZ = bounds.maxZ - bounds.minZ;
         const insetX = Math.min(40, spanX * 0.07);
         const insetZ = Math.min(40, spanZ * 0.07);
+        // 北缘射线：西侧 8% 避开北门上的门窗平面标记
         const northX = bounds.minX + spanX * 0.08;
-        const southX = bounds.minX + spanX * 0.08;
+        // 南缘射线：东侧 82% 避开西侧矮柜 footprint（非笔误）
+        const southX = bounds.minX + spanX * 0.82;
         renderer.render(scene, camera);
         const center = projectWorldXZToScreen(cx, cz);
         return {
@@ -1103,10 +1091,6 @@ export function createLayoutPlanner3DViewer(options) {
         if (!group) return null;
         const box = new THREE.Box3().setFromObject(group);
         return box.isEmpty() ? null : box.max.y;
-    }
-
-    function colorDistanceRgb(a, b) {
-        return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
     }
 
     function sampleRendererPixel(screenX, screenY, skipRender = false) {

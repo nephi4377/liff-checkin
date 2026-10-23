@@ -109,7 +109,7 @@ export function attachDoorWindowPlanMarker(THREE, group, fix) {
         new THREE.BoxGeometry(w * 0.92, 1.8, Math.max(d, 6)),
         material,
     );
-    mesh.position.set(0, 0.15, 0);
+    mesh.position.set(0, 1.0, 0);
     mesh.renderOrder = 7;
     mesh.visible = false;
     mesh.userData.lp3dPlanMarker = true;
