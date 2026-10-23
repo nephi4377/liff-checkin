@@ -15,6 +15,7 @@ import {
     boundsXZDelta,
     computeWalkRoomPreviewPose,
     expandFloorRingToInnerFace,
+    assessLayout3DHeavyMode,
 } from './LP_3D_scene.js';
 import {
     buildFixtureMeshGroup,
@@ -36,6 +37,10 @@ import {
     renderSceneToPngBlob,
     downloadBlobAsFile,
     formatLayout3DPngFilename,
+    buildLayout3DViewPresetOptions,
+    isOrbitCameraPresetId,
+    parseWalkRoomPresetId,
+    computeWalkRoomEyePresetPose,
 } from './LP_3D_snapshot.js';
 import {
     createWalkCollisionCache,
@@ -140,13 +145,13 @@ function buildWallBrush(wall, wallMat, openings, defaults) {
     return brush;
 }
 
-function buildSlabMesh(ring, yCm, thicknessCm, material) {
+function buildSlabMesh(ring, yCm, thicknessCm, material, receiveShadow = true) {
     const shape = makeShapeFromSingleRing(ring);
     const geo = new THREE.ExtrudeGeometry(shape, { depth: thicknessCm, bevelEnabled: false });
     geo.rotateX(-Math.PI / 2);
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.y = yCm - thicknessCm;
-    mesh.receiveShadow = true;
+    mesh.receiveShadow = receiveShadow;
     return mesh;
 }
 
@@ -208,6 +213,8 @@ export function createLayoutPlanner3DViewer(options) {
     let orbitBookmark = null;
     let rebuildCount = 0;
     let walkCreateCount = 0;
+    let lastHeavyLayout = null;
+    let lastSceneMeshCount = 0;
     let topDownPresentationSeq = 0;
     let topDownPresentationAppliedSeq = 0;
 
@@ -357,6 +364,80 @@ export function createLayoutPlanner3DViewer(options) {
         applyOrbitPresetInternal(presetId, lastDesc);
     }
 
+    function applyWalkRoomEyePreset(ringIndex) {
+        ensureScene();
+        if (!lastDesc) {
+            setHint('尚未載入佈局，請稍候再選房間視線');
+            return false;
+        }
+        const floor = lastDesc.floors?.[ringIndex];
+        const ring = floor?.ring;
+        if (!ring?.length) {
+            setHint('此佈局尚無可走動的房間地板，無法使用房間視線');
+            return false;
+        }
+        ensureWalk();
+        if (!walk) {
+            setHint('無法啟動室內漫遊，請點「室內」後再試');
+            return false;
+        }
+        viewMode = 'walk';
+        applyViewMode();
+        const pose = computeWalkRoomEyePresetPose(ring);
+        if (pose) {
+            walk.setPosition(pose.x, pose.z);
+            walk.lookAt(pose.lookX, pose.lookZ);
+            if (pose.pitch != null) walk.setPitch(pose.pitch);
+            walk.resetLevelOrientation();
+        }
+        return true;
+    }
+
+    function syncViewPresetSelectOptions(desc) {
+        if (!presetSelect) return;
+        const { orbit, walkRooms } = buildLayout3DViewPresetOptions(desc);
+        const keep = presetSelect.value;
+        presetSelect.innerHTML = '<option value="" selected disabled>視角</option>';
+        for (const item of orbit) {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            presetSelect.appendChild(opt);
+        }
+        for (const item of walkRooms) {
+            const opt = document.createElement('option');
+            opt.value = item.id;
+            opt.textContent = item.label;
+            presetSelect.appendChild(opt);
+        }
+        if (keep && [...presetSelect.options].some((o) => o.value === keep)) {
+            presetSelect.value = keep;
+        } else {
+            presetSelect.value = '';
+        }
+    }
+
+    function applyViewPresetSelection(value) {
+        if (!value) return;
+        const roomIdx = parseWalkRoomPresetId(value);
+        if (roomIdx != null) {
+            applyWalkRoomEyePreset(roomIdx);
+            return;
+        }
+        if (isOrbitCameraPresetId(value)) {
+            applyOrbitPreset(value);
+        }
+    }
+
+    function countSceneMeshes() {
+        if (!scene) return 0;
+        let n = 0;
+        scene.traverse((obj) => {
+            if (obj.isMesh) n += 1;
+        });
+        return n;
+    }
+
     async function saveCurrentViewPng() {
         if (!renderer || !scene || !camera) return;
         renderer.render(scene, camera);
@@ -434,12 +515,7 @@ export function createLayoutPlanner3DViewer(options) {
         btnPresetCorner?.addEventListener('click', () => applyOrbitPreset(ORBIT_CAMERA_PRESETS.CORNER_ISO));
         presetSelect?.addEventListener('change', () => {
             const value = presetSelect.value;
-            if (!value) return;
-            if (value === ORBIT_CAMERA_PRESETS.TOP
-                || value === ORBIT_CAMERA_PRESETS.FRONT_ISO
-                || value === ORBIT_CAMERA_PRESETS.CORNER_ISO) {
-                applyOrbitPreset(value);
-            }
+            applyViewPresetSelection(value);
             presetSelect.value = '';
         });
         btnSavePng?.addEventListener('click', () => {
@@ -460,9 +536,12 @@ export function createLayoutPlanner3DViewer(options) {
             drawnAreas: raw.drawnAreas,
         });
         lastDesc = desc;
+        lastHeavyLayout = assessLayout3DHeavyMode(desc);
         lastOrbitWallCut = null;
         walkCollisionCache.invalidate();
+        syncViewPresetSelectOptions(desc);
         const defaults = LP_3D_DEFAULTS;
+        const simplifiedCabinets = lastHeavyLayout.heavy;
         const openings = desc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
 
         if (contentGroup.current) {
@@ -500,7 +579,7 @@ export function createLayoutPlanner3DViewer(options) {
         floorMeshes.current = [];
         for (const ring of floorRings) {
             if (ring?.length >= 3) {
-                const slab = buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat);
+                const slab = buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat, !simplifiedCabinets);
                 slab.userData.lp3dFloor = true;
                 const coverRing = expandFloorRingToInnerFace(ring, 1.2);
                 const topCover = buildFloorTopCoverMesh(coverRing, floorTopMat);
@@ -572,7 +651,7 @@ export function createLayoutPlanner3DViewer(options) {
         const cabinetCount = desc.fixtures.filter((f) => f.kind === 'cabinet').length;
         const showCabinetLabels = cabinetCount <= 12;
         for (const fix of desc.fixtures) {
-            const group = buildFixtureMeshGroup(THREE, fix);
+            const group = buildFixtureMeshGroup(THREE, fix, { simplifiedCabinets });
             const liftY = fix.kind === 'cabinet' ? 0.35 : 0;
             group.position.set(fix.centerX, liftY, fix.centerZ);
             group.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
@@ -614,6 +693,7 @@ export function createLayoutPlanner3DViewer(options) {
             restoreSolidWallsForWalk();
         }
         topDownPresentationAppliedSeq = topDownPresentationSeq;
+        lastSceneMeshCount = countSceneMeshes();
     }
 
     function isOrbitTopDownView() {
@@ -1368,6 +1448,11 @@ export function createLayoutPlanner3DViewer(options) {
         if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
         window.__LP3D_TEST_HOOKS__ = {
             getViewMode: () => viewMode,
+            getHintText: () => hintEl?.textContent ?? '',
+            clearWalkControllerForTest: () => {
+                walk?.dispose();
+                walk = null;
+            },
             getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getCameraY: () => camera?.position.y ?? null,
             getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
@@ -1489,6 +1574,8 @@ export function createLayoutPlanner3DViewer(options) {
                 walkCreateCount,
                 rendererChildCount: mountEl.childElementCount,
                 sceneChildCount: scene?.children?.length ?? 0,
+                sceneMeshCount: lastSceneMeshCount,
+                heavyLayout: lastHeavyLayout,
             };
         },
         rebuild,

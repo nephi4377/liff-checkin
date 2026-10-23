@@ -120,13 +120,19 @@ export function attachDoorWindowPlanMarker(THREE, group, fix) {
  * @param {typeof import('three')} THREE
  * @param {object} fix — descriptor fixture（含 displayCategory）
  */
-export function buildFixtureMeshGroup(THREE, fix) {
+/**
+ * @param {typeof import('three')} THREE
+ * @param {object} fix
+ * @param {{ simplifiedCabinets?: boolean }} [options]
+ */
+export function buildFixtureMeshGroup(THREE, fix, options = {}) {
     const group = new THREE.Group();
     const cat = fix.displayCategory || 'cabinet';
     const w = fix.widthCm;
     const d = fix.depthCm;
     const h = fix.heightCm;
     const base = fix.baseYCm;
+    const simplified = options.simplifiedCabinets === true;
 
     if (cat === 'door') {
         const leaf = mat(THREE, LP_3D_CATEGORY_COLORS.door);
@@ -161,6 +167,14 @@ export function buildFixtureMeshGroup(THREE, fix) {
         addBoxAt(group, THREE, fw, h, depth, frame, -w / 2 + fw / 2, base, 0);
         addBoxAt(group, THREE, fw, h, depth, frame, w / 2 - fw / 2, base, 0);
         addBoxAt(group, THREE, w, fw, depth, frame, 0, base + h - fw / 2, 0);
+        return group;
+    }
+
+    if (simplified) {
+        const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.cabinet;
+        const body = mat(THREE, color);
+        const mesh = addBox(group, THREE, w, h, d, body, base);
+        mesh.userData.lp3dCabinetBody = true;
         return group;
     }
 
