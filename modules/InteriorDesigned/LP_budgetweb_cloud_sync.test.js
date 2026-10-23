@@ -10,6 +10,10 @@ import {
     matchRemoteItemByExactId,
     applyRemoteProgressByExactId,
     findNameSpecHintsForSync,
+    runLocalQuotationIdDuplicateCheck,
+    buildRemoteQuotationSyncBaseline,
+    remoteQuotationSyncBaselineChanged,
+    normalizeQuotationFirebaseSnapshot,
 } from './LP_budgetweb_cloud_sync.js';
 
 describe('LP_budgetweb_cloud_sync', () => {
@@ -85,6 +89,112 @@ describe('LP_budgetweb_cloud_sync', () => {
         };
         const text = formatSyncDiffForConfirm(diff);
         expect(text).toContain('變更筆數超過');
+    });
+
+    it('runLocalQuotationIdDuplicateCheck 通過／重複 id 失敗', () => {
+        const ok = runLocalQuotationIdDuplicateCheck([{ id: 'A', name: 'x' }]);
+        expect(ok.ok).toBe(true);
+        const bad = runLocalQuotationIdDuplicateCheck([{ id: 'A' }, { id: 'A' }]);
+        expect(bad.ok).toBe(false);
+        expect(bad.duplicateIds).toEqual(['A']);
+    });
+
+    it('normalizeQuotationFirebaseSnapshot：舊格式僅 total_summary 可建 baseline', () => {
+        const legacy = { total_summary: { siteName: 'L' }, last_updated: 't0' };
+        const norm = normalizeQuotationFirebaseSnapshot(legacy);
+        expect(norm?.context?.items).toEqual([]);
+        const baseline = buildRemoteQuotationSyncBaseline(legacy);
+        expect(baseline.itemCount).toBe(0);
+        expect(baseline.itemsContentHash).toBeTruthy();
+    });
+
+    it('remote baseline：audit_last_updated 與 last_updated 分開比對', () => {
+        const items = [{ id: 'X', name: 'A', qty: '1', unit: '式' }];
+        const baseline = buildRemoteQuotationSyncBaseline({
+            audit_last_updated: 'audit-1',
+            last_updated: 'web-1',
+            context: { items },
+        });
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-1',
+                last_updated: 'web-2',
+                context: { items },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-2',
+                last_updated: 'web-1',
+                context: { items },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                audit_last_updated: 'audit-1',
+                last_updated: 'web-1',
+                context: { items },
+            }),
+        ).toBe(false);
+    });
+
+    it('remote baseline 內容 hash：進度／名稱／單價／筆數變動（last_updated 可相同）', () => {
+        const base = {
+            last_updated: 't1',
+            context: {
+                items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 0 }],
+            },
+        };
+        const baseline = buildRemoteQuotationSyncBaseline(base);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'B', qty: '1', unit: '式', price: '10', completion_percent: 0 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '99', completion_percent: 0 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: { items: [{ id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 50 }] },
+            }),
+        ).toBe(true);
+        expect(
+            remoteQuotationSyncBaselineChanged(baseline, {
+                last_updated: 't1',
+                context: {
+                    items: [
+                        { id: 'X', name: 'A', qty: '1', unit: '式', price: '10', completion_percent: 0 },
+                        { id: 'Y', name: 'new', qty: '1', unit: '式', price: '' },
+                    ],
+                },
+            }),
+        ).toBe(true);
+    });
+
+    it('確認文案不含「未對應已排除」（未對應為整次 blocking）', () => {
+        const diff = {
+            added: [],
+            removed: [],
+            changed: [],
+            preservedRemoteOnly: [],
+            hasChanges: false,
+            suggestCancelInflation: false,
+            legacyRemap: {
+                active: true,
+                matched: [{ legacyId: 'ITEM_1', localId: 'ITEM_0818_1', name: 'a' }],
+                unmapped: [{ legacyId: 'ITEM_9', name: '幽靈' }],
+                ambiguous: [],
+            },
+        };
+        const text = formatSyncDiffForConfirm(diff);
+        expect(text).not.toMatch(/已排除/);
+        expect(text).toMatch(/已對應新 id/);
     });
 
     it('確認視窗列出保留的雲端獨有列', () => {

@@ -1653,6 +1653,8 @@
        V2 STATE
        ============================================================ */
     let appData = null;
+    /** 載入雲端後的快照（寫回前重讀比對，FLOORPLAN-QUOTE-3） */
+    let auditorCloudWriteBaseline = null;
     let currentUser = { userId: 'unknown', displayName: '訪客' };
     let globalProjects = {};
     /** 個案 JSON 與「概覽快照」共用：超過天數不再使用快取 */
@@ -2187,16 +2189,43 @@
             if (!stillThisLoad()) return;
             const data = snap.val();
 
-            if (data?.context) {
+            const auditorSyncModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_auditor_sync.js',
+                window.location.href,
+            ).href;
+            let auditorSyncMod = null;
+            try {
+                auditorSyncMod = await import(auditorSyncModUrl);
+            } catch (e) {
+                console.warn('[Auditor] 同步模組載入失敗', e);
+            }
+            const cloudContextNode =
+                (auditorSyncMod && data
+                    ? auditorSyncMod.normalizeQuotationFirebaseSnapshot(data)
+                    : null)
+                || (data?.context ? data : null);
+            if (cloudContextNode?.context) {
                 const hubMap = await getHubProjectNameMap();
                 if (!stillThisLoad()) return;
-                const contextData = JSON.parse(JSON.stringify(data.context));
-                if (data.is_closed || contextData.is_closed) {
+                const contextData = JSON.parse(JSON.stringify(cloudContextNode.context));
+                if (cloudContextNode.is_closed || data?.is_closed || contextData.is_closed) {
                     contextData.is_closed = true;
-                    contextData.closed_at = data.closed_at || contextData.closed_at || null;
-                    contextData.closed_by = data.closed_by || contextData.closed_by || null;
+                    contextData.closed_at = cloudContextNode.closed_at || data?.closed_at || contextData.closed_at || null;
+                    contextData.closed_by = cloudContextNode.closed_by || data?.closed_by || contextData.closed_by || null;
                 }
                 loadData(contextData, hubMap);
+                try {
+                    if (auditorSyncMod?.buildAuditorCloudWriteBaselineFromFirebaseNode) {
+                        auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineFromFirebaseNode(
+                            cloudContextNode,
+                        );
+                    } else {
+                        auditorCloudWriteBaseline = null;
+                    }
+                } catch (e) {
+                    console.warn('[Auditor] 雲端 baseline 建立失敗', e);
+                    auditorCloudWriteBaseline = null;
+                }
                 const hSync = document.getElementById('h-sync');
                 if (hSync) hSync.innerText = data.last_updated || '剛剛';
                 saveToCache({ cloudUpdatedAt: data.last_updated || null });
@@ -2257,14 +2286,60 @@
             const projectNo = appData.案號 || 'UNKNOWN';
             refreshOverall();
             const nowDisplay = new Date().toLocaleString();
-            await db2.ref(`quotations/${projectNo}`).set({
+            const ref = db2.ref(`quotations/${projectNo}`);
+            const snapBefore = await ref.once('value');
+            const auditorSyncModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_auditor_sync.js',
+                window.location.href,
+            ).href;
+            let auditorSyncMod;
+            try {
+                auditorSyncMod = await import(auditorSyncModUrl);
+            } catch (importErr) {
+                console.warn('[Auditor] 寫入安全模組載入失敗', importErr);
+                if (snapBefore.exists()) {
+                    showToast(
+                        '無法載入同步安全模組，已中止寫入。請重新載入頁面後再試。',
+                        'error',
+                        7000,
+                    );
+                    return;
+                }
+                auditorSyncMod = null;
+            }
+            if (!auditorSyncMod) {
+                if (snapBefore.exists()) return;
+            } else {
+            const writeGate = auditorSyncMod.resolveAuditorFirebaseWriteGate({
+                remoteExists: snapBefore.exists(),
+                baseline: auditorCloudWriteBaseline,
+                freshVal: snapBefore.exists() ? snapBefore.val() : null,
+            });
+            if (writeGate.blocked) {
+                showToast(writeGate.message || '同步已中止。', 'error', 7000);
+                return;
+            }
+            }
+            const payload = {
                 context: JSON.parse(JSON.stringify(appData)),
                 audit_last_updated: nowDisplay,
                 sync_by: currentUser?.displayName || '本地測試員',
                 is_closed: !!appData.is_closed,
                 closed_at: appData.closed_at || null,
-                closed_by: appData.closed_by || null
-            });
+                closed_by: appData.closed_by || null,
+            };
+            const priorRemoteVal = snapBefore.exists() ? snapBefore.val() : null;
+            await ref.update(payload);
+            try {
+                if (auditorSyncMod) {
+                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineAfterPayload(
+                        payload,
+                        priorRemoteVal,
+                    );
+                }
+            } catch (e) {
+                console.warn('[Auditor] baseline 更新失敗', e);
+            }
             appData.items.forEach(it => { if (it.completion_percent === 100) it.is_ui_done = true; });
             renderList();
             document.getElementById('h-sync').innerText = nowDisplay;
