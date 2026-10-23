@@ -646,7 +646,6 @@ export function createLayoutPlanner3DViewer(options) {
                     dx: fix.widthCm * 0.52,
                     dz: -fix.depthCm * 0.42,
                 };
-                sprite.userData.lp3dLabelMirrored = !!fix.mirrored;
                 sprite.position.set(fix.centerX, topY, fix.centerZ);
                 labels.add(sprite);
             }
@@ -767,8 +766,7 @@ export function createLayoutPlanner3DViewer(options) {
             const worldH = 2 * Math.tan(vFov / 2) * d * (pxH / viewH);
             const img = sprite.material?.map?.image;
             const aspect = img?.width && img?.height ? img.width / img.height : 2.6;
-            const flip = sprite.userData?.lp3dLabelMirrored ? -1 : 1;
-            sprite.scale.set(worldH * aspect * flip, worldH, 1);
+            sprite.scale.set(worldH * aspect, worldH, 1);
         });
     }
 
@@ -1426,6 +1424,7 @@ export function createLayoutPlanner3DViewer(options) {
             setWalkPosition: (x, z) => walk?.setPosition(x, z),
             lookWalkAt: (x, z) => walk?.lookAt(x, z),
             getRoomAcceptanceSnapshot: () => computeRoomAcceptanceSnapshot(),
+            getLabelSpriteScaleX: () => labelGroup.current?.children?.map((s) => s.scale?.x ?? 0) ?? [],
             resetWalkRoomPreview: () => {
                 if (!walk || !lastDesc) return;
                 viewMode = 'walk';
