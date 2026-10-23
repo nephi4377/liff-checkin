@@ -3,10 +3,14 @@
     "test:layout-planner": "npm test --prefix modules/InteriorDesigned",
     "test:layout-planner:unit": "npm run test:unit --prefix modules/InteriorDesigned",
     "test:layout-planner:e2e": "npm run test:e2e --prefix modules/InteriorDesigned",
-    "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh"
+    "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh",
+    "test:console-e2e": "playwright test --config playwright.console.config.cjs"
   },
   "dependencies": {
     "firebase": "^12.10.0",
     "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
   }
 }
