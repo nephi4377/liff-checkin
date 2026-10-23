@@ -666,9 +666,42 @@
         }
 
         @media (max-width: 430px) {
-            body.lp-touch-mode #left-rail,
-            body.lp-touch-mode #right-rail {
-                display: none !important;
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #left-rail {
+                width: 0 !important;
+                min-width: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                overflow: visible !important;
+                pointer-events: none;
+            }
+
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #right-rail {
+                width: 0 !important;
+                min-width: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                overflow: visible !important;
+                pointer-events: none;
+            }
+
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #toolbox-window {
+                position: fixed !important;
+                left: 8px !important;
+                right: 8px !important;
+                bottom: 64px !important;
+                top: auto !important;
+                width: auto !important;
+                max-height: min(72vh, 560px);
+                z-index: 250;
+                pointer-events: auto;
+            }
+
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #info-window {
+                left: 8px !important;
+                right: 8px !important;
+                width: auto !important;
+                max-height: min(72vh, 560px);
+                z-index: 250;
             }
 
             body.lp-touch-mode #minimized-bar {

@@ -922,8 +922,7 @@ function renderVertexHandles(area) {
             draggedAreaId = area.id;
             draggedVertexIndex = index;
         };
-        handle.addEventListener('mousedown', startVertexDrag);
-        handle.addEventListener('pointerdown', startVertexDrag);
+        bindPrimaryPointerDown(handle, startVertexDrag);
         handleGroup.appendChild(handle);
     });
 }
@@ -3896,7 +3895,7 @@ function cancelDrawing(silent = false) {
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
     if (!isPrimaryPointerButton(e) || isBgEditMode || isDrawing) return;
-    e.stopPropagation();
+    if (e.pointerType !== 'touch') e.stopPropagation();
     if (e.shiftKey) {
         toggleCabinetInSelection(cab.id);
         return;
@@ -4338,8 +4337,7 @@ function initLayoutPlannerTouchUi() {
     if (!lpTouchUiMode) return;
 
     document.body.classList.add('lp-touch-mode');
-    document.body.classList.remove('lp-ui-dock-both');
-    document.body.classList.add('lp-ui-dock-tb-float-bi');
+    applyUiLayoutMode('dock-tb-float-bi');
 
     const mobileWarn = document.getElementById('mobile-warning');
     if (mobileWarn) {
@@ -4363,6 +4361,10 @@ function initLayoutPlannerTouchUi() {
             setScroll: (left, top) => {
                 wrapper.scrollLeft = left;
                 wrapper.scrollTop = top;
+            },
+        }, {
+            onPinchStart: () => {
+                if (isDraggingCab || isResizing || isDraggingVertex) endDrag();
             },
         });
     }
@@ -4415,7 +4417,6 @@ function bindGlobalPointerEndForDrag() {
 }
 
 function bindEventListeners() {
-    initLayoutPlannerTouchUi();
     initLayoutPlanner3D();
     // 全域事件（含視窗外放開，避免 undo 手勢卡住）
     bindGlobalPointerEndForDrag();
@@ -5123,6 +5124,7 @@ window.onload = () => {
     }
     bindEventListeners();
     initWorkspaceAndUiFromStorage();
+    initLayoutPlannerTouchUi();
 
     // [修改] 初始化視窗狀態：桌面預設打開工具箱和預算；觸控模式由 initLayoutPlannerTouchUi 收合
     if (!lpTouchUiMode) {

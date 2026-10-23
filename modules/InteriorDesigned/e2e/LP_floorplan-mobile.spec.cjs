@@ -9,11 +9,27 @@ test.describe('LayoutPlanner mobile / tablet', () => {
     await page.goto('/LP_LayoutPlanner.html?lpMobile=1', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#mobile-warning')).toBeHidden();
     await expect(page.locator('body')).toHaveClass(/lp-touch-mode/);
+    await expect(page.locator('body')).toHaveClass(/lp-ui-dock-tb-float-bi/);
     await expect(page.locator('#design-canvas')).toBeVisible();
     await expect(page.locator('#canvas-wrapper')).toBeVisible();
 
     await page.waitForTimeout(1500);
     expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
+  });
+
+  test('窄螢幕：可開啟工具箱與預算視窗', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html?lpMobile=1', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('#toolbox-window')).toBeHidden();
+    await page.locator('#toggle-toolbox-btn').click();
+    await expect(page.locator('#toolbox-window')).toBeVisible();
+    await page.locator('#toggle-toolbox-btn-header').click();
+    await expect(page.locator('#toolbox-window')).toBeHidden();
+
+    await expect(page.locator('#info-window')).toBeHidden();
+    await page.locator('#toggle-info-btn').click();
+    await expect(page.locator('#info-window')).toBeVisible();
+    await page.locator('#toggle-info-btn-header').click();
+    await expect(page.locator('#info-window')).toBeHidden();
   });
 
   test('觸控路徑：載入佈局後可拖曳櫃體', async ({ page }) => {

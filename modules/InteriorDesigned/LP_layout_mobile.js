@@ -11,10 +11,12 @@ export function detectLayoutPlannerTouchUi(search = '') {
     const params = new URLSearchParams(search || (typeof location !== 'undefined' ? location.search : ''));
     if (params.get('lpDesktop') === '1') return false;
     if (params.get('lpMobile') === '1') return true;
-    if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) return true;
-    const nav = typeof navigator !== 'undefined' ? navigator : { maxTouchPoints: 0, userAgent: '' };
-    if (nav.maxTouchPoints > 0) return true;
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(nav.userAgent || '');
+    if (typeof matchMedia === 'function') {
+        if (matchMedia('(pointer: coarse) and (hover: none)').matches) return true;
+    }
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(
+        (typeof navigator !== 'undefined' ? navigator.userAgent : '') || '',
+    );
 }
 
 /** @param {PointerEvent | MouseEvent} e */
@@ -59,7 +61,7 @@ export function createRafThrottle(fn) {
  * @param {HTMLElement} wrapper
  * @param {{ getScale: () => number, setScale: (n: number) => void, getScroll: () => { left: number, top: number }, setScroll: (left: number, top: number) => void }} view
  */
-export function installCanvasPinchPan(wrapper, view) {
+export function installCanvasPinchPan(wrapper, view, hooks = {}) {
     if (!wrapper || wrapper.dataset.lpPinchBound === '1') return;
     wrapper.dataset.lpPinchBound = '1';
     const pointers = new Map();
@@ -73,6 +75,7 @@ export function installCanvasPinchPan(wrapper, view) {
         }
         pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pointers.size === 2) {
+            hooks.onPinchStart?.();
             const pts = [...pointers.values()];
             pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
             pinchStartScale = view.getScale();
