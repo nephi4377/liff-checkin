@@ -5130,6 +5130,10 @@ window.onload = () => {
         ...(window.__LP_TEST_HOOKS__ || {}),
         getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
         historyBackgroundSnapshots: () => history.map((h) => h.background),
+        forceCabinetSelection: (ids) => {
+            if (!Array.isArray(ids) || ids.length === 0) return;
+            setCabinetSelection(ids, ids[ids.length - 1]);
+        },
         setCabinetPricing: (id, unitPrice, pricingType) => {
             const cab = placedCabinets.find((c) => c.id === id);
             if (!cab) return false;
