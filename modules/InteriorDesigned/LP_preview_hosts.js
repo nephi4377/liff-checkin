@@ -4,7 +4,7 @@
  */
 
 /** 與 docs/FLOORPLAN_QUOTE_2.md、PR 預覽連結同步更新（完整 40 字 commit SHA） */
-export const PINNED_GITHACK_COMMIT = '3486dd384ccfb6abcee9d4f53bdf1a3a2e54de2c';
+export const PINNED_GITHACK_COMMIT = '921fa8808297b56befa56251a4b99e39f6f53db8';
 
 export const GITHACK_REPO_BASE = 'https://raw.githack.com/nephi4377/liff-checkin';
 
