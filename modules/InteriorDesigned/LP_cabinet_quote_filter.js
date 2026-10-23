@@ -1,7 +1,11 @@
 /**
- * 報價匯出篩選：明確旗標優先；無旗標時 legacy 規則（model3dKind 開口、排除分類）。
+ * 報價匯出篩選：明確旗標優先；無旗標時 legacy 規則（匯出當下推斷，不寫佈局檔）。
  */
-import { QUOTE_EXCLUDED_GROUPS } from './LP_quote_placement_meta.js';
+import {
+    QUOTE_EXCLUDED_GROUPS,
+    inferQuoteSourceTypeForPlacement,
+    isCabinetLikeProductName,
+} from './LP_quote_placement_meta.js';
 import { resolveFixtureDisplayCategory } from './LP_3D_furniture.js';
 
 const NON_EXPORT_SOURCE_TYPES = new Set([
@@ -37,7 +41,6 @@ function readModel3dKind(cab) {
     return v ? String(v).trim() : '';
 }
 
-/** 舊佈局無 quote 旗標 */
 function legacyShouldExcludeFromQuote(cab) {
     if (!cab?.data) return true;
 
@@ -47,8 +50,14 @@ function legacyShouldExcludeFromQuote(cab) {
     const group = String(cab.data.group || '').trim();
     if (QUOTE_EXCLUDED_GROUPS.has(group)) return true;
 
+    const name = String(cab.data.name || '');
+    if (isCabinetLikeProductName(name)) return false;
+
     const displayCat = resolveFixtureDisplayCategory(cab, 'cabinet');
     if (displayCat === 'sofa' || displayCat === 'bed' || displayCat === 'appliance') return true;
+
+    const inferred = inferQuoteSourceTypeForPlacement(cab.data, cab);
+    if (NON_EXPORT_SOURCE_TYPES.has(inferred)) return true;
 
     return false;
 }

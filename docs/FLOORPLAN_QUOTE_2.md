@@ -13,7 +13,8 @@
 | `modules/InteriorDesigned/LP_quote_pricing_rules.js` | 集中計價規則（待豪哥定價） |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 報價匯出篩選（旗標優先；無旗標時 model3dKind 開口／排除分類／家具） |
-| `modules/InteriorDesigned/LP_quote_placement_meta.js` | 放置時寫入 `quoteSourceType` |
+| `modules/InteriorDesigned/LP_quote_placement_meta.js` | 匯出時推斷；存檔僅保留使用者明確旗標 |
+| `tools/quotation-item-id-migrate.js` | 僅真重複 id 補 `_2`/`_3`（與 migrate 腳本共用） |
 | `modules/InteriorDesigned/LP_budgetweb_firebase_sync.js` | 可測的雲端同步流程 |
 | `tools/budget-quote-parser-lib.js` | 解析同表重複 id → `_2`、`_3` |
 | `tools/scripts/check-quotation-duplicate-ids.mjs` | 只讀檢查重複 id |
@@ -40,6 +41,7 @@
 
 1. **LayoutPlanner**（`?lpPreview=1`）放置櫃體 → 預算 Modal → **匯出報價明細** → 下載 `layout-quote-draft-*.json`（`quoteExport:false` 或 `quoteSourceType`／`quoteCategory` 標開口／家具者排除；名稱含「門／窗」的櫃體仍可匯出）
 2. **BudgetWeb**（`?lpPreview=1`）→ Step 0b 選 JSON → **確認合併**（僅追加、同 `id` 略過）→ **正式頁**「同步至雲端」：讀取失敗即中止；`id` union＋diff 確認；`update()` 只寫 `context/items` 等子路徑（保留 `is_closed`／`closed_at` 等根節點欄位）
+3. **778 等含重複 `ITEM_*` id 的案場**：合併後、**同步至雲端前**須先 `check-quotation-duplicate-ids.mjs`，必要時 `migrate-quotation-item-ids.mjs`（**須豪哥核准**；不先 migrate 無法通過 id 驗證）
 
 ### 正式 BudgetWeb「同步至雲端」行為（非 lpPreview 閘內，本 PR 會影響正式頁）
 
@@ -47,7 +49,8 @@
 - 僅 `snapshot.exists() === false` 視為新案。
 - 同步前驗證：本地／雲端工項須有唯一 `id`；缺 `id` 或重複 `id` 中止。
 - 寫入改為 **`ref.update({ 'context/items': …, 'context/total_summary': …, … })`**，不 `set()` 整筆節點。
-- 合併驗收進度時，除 `id` 外可用 **名稱＋規格** 唯一備援對應；比對 diff 前本地空 `price` 會先補雲端值。
+- 驗收進度／verification **僅**在 `id` 完全相同時帶入；名稱＋規格僅確認視窗提示。
+- 比對 diff 前本地空 `price` 會先補雲端值。
 
 ## 獨立預覽（raw.githack.com）
 

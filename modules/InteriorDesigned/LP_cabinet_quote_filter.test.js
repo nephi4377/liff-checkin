@@ -7,6 +7,7 @@ import {
     filterPlacedCabinetsForQuoteExport,
 } from './LP_cabinet_quote_filter.js';
 import { buildCabinetQuoteLineItemsFromLayout } from './LP_cabinet_quote_lines.js';
+import { serializePlacedCabinetForLayoutSave } from './LP_quote_placement_meta.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const demoFixture = JSON.parse(
@@ -45,7 +46,7 @@ describe('isQuoteExportablePlacedCabinet', () => {
         ).toBe(true);
     });
 
-    it('舊資料無旗標：model3dKind door、門窗工程、沙發床排除', () => {
+    it('舊資料無旗標：model3dKind door、門窗工程、純沙發床排除', () => {
         expect(
             isQuoteExportablePlacedCabinet({
                 id: 'd1',
@@ -70,6 +71,17 @@ describe('isQuoteExportablePlacedCabinet', () => {
                 data: { name: '6尺床', group: '家具家電' },
             }),
         ).toBe(false);
+    });
+
+    it('放置後存檔不含推斷 quote 旗標', () => {
+        const placed = {
+            id: 'cab-1',
+            data: { name: '冰箱櫃', group: '系統櫃', width: 60, depth: 60 },
+        };
+        expect(isQuoteExportablePlacedCabinet(placed)).toBe(true);
+        const json = JSON.stringify(serializePlacedCabinetForLayoutSave(placed));
+        expect(json).not.toMatch(/quoteSourceType/);
+        expect(json).not.toMatch(/quoteExport/);
     });
 
     it('buildCabinetQuoteLineItemsFromLayout 略過門窗', () => {

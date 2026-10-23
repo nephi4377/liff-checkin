@@ -1,5 +1,5 @@
 /**
- * 平面放置時寫入報價用 metadata（與 3D 顯示分類分離）
+ * 報價用 metadata：匯出時推斷，不寫入佈局檔（除非使用者明確設定 quoteFlagsUserSet）。
  */
 import { resolveFixtureDisplayCategory } from './LP_3D_furniture.js';
 
@@ -12,8 +12,12 @@ export const QUOTE_EXCLUDED_GROUPS = new Set([
 
 const OPENING_MODEL_KINDS = new Set(['door', 'window', 'wallSegment']);
 
+export function isCabinetLikeProductName(name) {
+    return /櫃|臥榻|收納/.test(String(name || ''));
+}
+
 /**
- * @param {object} data 元件 data（來自元件表或拖放）
+ * @param {object} data
  * @param {{ model3dKind?: string }} [cabShell]
  */
 export function inferQuoteSourceTypeForPlacement(data, cabShell = {}) {
@@ -31,6 +35,9 @@ export function inferQuoteSourceTypeForPlacement(data, cabShell = {}) {
         return 'opening';
     }
 
+    const name = String(data?.name || '');
+    if (isCabinetLikeProductName(name)) return 'floorplan_cabinet';
+
     const displayCat = resolveFixtureDisplayCategory({ data }, 'cabinet');
     if (displayCat === 'sofa' || displayCat === 'bed') return 'furniture';
     if (displayCat === 'appliance') return 'appliance';
@@ -39,23 +46,19 @@ export function inferQuoteSourceTypeForPlacement(data, cabShell = {}) {
 }
 
 /**
- * @param {object} cab placedCabinets 元素（會 mutate data / 頂層欄位）
+ * 存檔用：僅保留使用者明確設定的 quote 旗標
+ * @param {object} cab
  */
-export function enrichPlacedCabinetQuoteMeta(cab) {
-    if (!cab?.data) return cab;
-    const explicit = cab.quoteSourceType ?? cab.data.quoteSourceType;
-    if (!explicit) {
-        const st = inferQuoteSourceTypeForPlacement(cab.data, cab);
-        cab.quoteSourceType = st;
-        cab.data.quoteSourceType = st;
-    }
-    if (cab.data.quoteExport === undefined && cab.quoteExport === undefined) {
-        const st = cab.quoteSourceType || cab.data.quoteSourceType;
-        const nonExport = new Set(['door', 'window', 'opening', 'furniture', 'appliance', 'wall', 'wallSegment']);
-        if (nonExport.has(st)) {
-            cab.quoteExport = false;
-            cab.data.quoteExport = false;
+export function serializePlacedCabinetForLayoutSave(cab) {
+    const out = JSON.parse(JSON.stringify(cab));
+    if (!out.quoteFlagsUserSet) {
+        delete out.quoteSourceType;
+        delete out.quoteExport;
+        if (out.data) {
+            delete out.data.quoteSourceType;
+            delete out.data.quoteExport;
         }
     }
-    return cab;
+    delete out.quoteFlagsUserSet;
+    return out;
 }

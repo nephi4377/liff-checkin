@@ -274,6 +274,14 @@ export function formatSyncDiffForConfirm(diff, nameSpecHints = []) {
         if (nameSpecHints.length > 8) lines.push(`  …另有 ${nameSpecHints.length - 8} 筆`);
         lines.push('');
     }
+    const remoteCount = (diff.preservedRemoteOnly?.length || 0) + (diff.changed?.length || 0);
+    const denom = remoteCount > 0 ? remoteCount : diff.changed.length;
+    if (denom > 0 && diff.changed.length / denom > 0.5) {
+        lines.push(
+            '【警示】變更筆數超過雲端工項一半，可能曾發生 id 位移或大量覆寫，請仔細核對後再同步。',
+        );
+        lines.push('');
+    }
     if (diff.changed.length) {
         lines.push(`【變更 ${diff.changed.length} 筆】（同 id，內容與雲端不同）`);
         diff.changed.slice(0, 10).forEach((c) => lines.push(`  ~ ${c.id} ${c.before?.name || ''}`));

@@ -75,6 +75,18 @@ describe('LP_budgetweb_cloud_sync', () => {
         expect(normalizeLocalItemForDiff(loc, remote[0]).price).toBe('100');
     });
 
+    it('變更過半時確認文案含 id 位移警示', () => {
+        const diff = {
+            added: [],
+            removed: [],
+            changed: [{ id: 'a', before: {}, after: {} }, { id: 'b', before: {}, after: {} }],
+            preservedRemoteOnly: [],
+            hasChanges: true,
+        };
+        const text = formatSyncDiffForConfirm(diff);
+        expect(text).toContain('變更筆數超過');
+    });
+
     it('確認視窗列出保留的雲端獨有列', () => {
         const diff = computeQuotationSyncDiff(
             [{ id: 'ONLY_CLOUD', name: '遠端獨有工項' }],

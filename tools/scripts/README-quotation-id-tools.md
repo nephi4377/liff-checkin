@@ -1,23 +1,27 @@
 # 報價 context 重複 id 工具（不連 Firebase）
 
+## 合併後、同步至雲端前（須豪哥核准）
+
+1. `node tools/scripts/check-quotation-duplicate-ids.mjs <context.json>`
+2. 若有重複：`node tools/scripts/migrate-quotation-item-ids.mjs <context.json>`（dry-run）
+3. 確認無誤後：`--write-out` 產出新檔，再匯入 BudgetWeb／上傳
+
+**不先 migrate** 時，778 等同表多列共用 `ITEM_表名_項次` 會讓同步永遠被 id 驗證擋下。
+
 ## 只讀檢查
 
 ```bash
 node tools/scripts/check-quotation-duplicate-ids.mjs path/to/budget_context.json
 ```
 
-## 一次性補 id（須豪哥核准後才用於正式資料）
+## 一次性補 id（僅真重複 id；第 1 筆不變，第 2 筆起 `_2`、`_3`）
 
 ```bash
-# dry-run（預設）
-node tools/scripts/migrate-quotation-item-ids.mjs path/to/budget_context.json
-
-# 產出新檔（仍不寫雲端）
+node tools/scripts/migrate-quotation-item-ids.mjs path/to/in.json
 node tools/scripts/migrate-quotation-item-ids.mjs path/to/in.json --write-out path/to/out.json
 ```
 
-### 驗收進度風險
+### 驗收進度
 
-- 若三筆工項曾共用同一個 `id`，驗收進度只會綁在 Firebase 該 id 的**一筆**上。
-- 補 `_2`、`_3` 後，**第 1 筆 id 不變**可保留進度；後續筆為新 id，進度不會自動複製。
-- 不丟進度做法：先匯出雲端 context，用名稱+規格人工對照，將 `completion_percent` / `verification` 寫入新 id 後再上傳（勿用名稱備援自動合併）。
+- **同一 id 多筆**時，雲端通常只存一筆進度；migrate 後第 1 筆 **保留原 id**，進度仍對應該列；第 2、3 筆取得 `_2`、`_3` 後各自獨立，**不會**從第 1 筆「偷」進度。
+- **不會**改動僅 id 字尾含數字、但並非重複群組的列（例如 `ITEM_1228_2` 與 `ITEM_1228_3` 若各只出現一次則完全不變）。

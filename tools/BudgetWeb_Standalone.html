@@ -836,21 +836,25 @@
         saveParserPrefs();
     };
 
+    const appendIdSeqByHash = new Map();
     window.addNewItem = () => {
         const name = document.getElementById('addName').value.trim();
         if (!name) return;
+        const hash = BudgetQuoteParser.stableItemContentHash({
+            name,
+            spec: document.getElementById('addSpec').value,
+            qty: document.getElementById('addQty').value || '1',
+            unit: document.getElementById('addUnit').value || '式',
+            zone: document.getElementById('addZone').value || '追加項',
+            sheet_source: '手動',
+        });
+        const n = (appendIdSeqByHash.get(hash) || 0) + 1;
+        appendIdSeqByHash.set(hash, n);
         processedData.items.unshift({
             type: 'item',
             raw: "手動新增",
             data: {
-                id: `APPEND_${BudgetQuoteParser.stableItemContentHash({
-                    name,
-                    spec: document.getElementById('addSpec').value,
-                    qty: document.getElementById('addQty').value || '1',
-                    unit: document.getElementById('addUnit').value || '式',
-                    zone: document.getElementById('addZone').value || '追加項',
-                    sheet_source: '手動',
-                })}`,
+                id: `APPEND_${hash}_${n}`,
                 zone: document.getElementById('addZone').value || "追加項",
                 name: name,
                 spec: document.getElementById('addSpec').value,

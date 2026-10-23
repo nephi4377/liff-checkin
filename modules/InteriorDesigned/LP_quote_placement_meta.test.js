@@ -1,20 +1,55 @@
 import { describe, it, expect } from 'vitest';
-import { inferQuoteSourceTypeForPlacement, enrichPlacedCabinetQuoteMeta } from './LP_quote_placement_meta.js';
+import {
+    inferQuoteSourceTypeForPlacement,
+    serializePlacedCabinetForLayoutSave,
+    isCabinetLikeProductName,
+} from './LP_quote_placement_meta.js';
+import { isQuoteExportablePlacedCabinet } from './LP_cabinet_quote_filter.js';
 
 describe('LP_quote_placement_meta', () => {
-    it('放置時寫入 quoteSourceType', () => {
-        const cab = {
-            id: 'c1',
-            data: { name: '三人沙發', group: '系統櫃', width: 120, depth: 60 },
-        };
-        enrichPlacedCabinetQuoteMeta(cab);
-        expect(cab.quoteSourceType).toBe('furniture');
-        expect(cab.data.quoteExport).toBe(false);
+    it('櫃體名稱優先於沙發／床／家電字樣', () => {
+        const names = [
+            '沙發背櫃',
+            '沙發側半腰櫃',
+            '床邊櫃',
+            '床頭吊櫃',
+            '床頭收納櫃',
+            '掀床收納櫃',
+            '冰箱櫃',
+            '冰箱高櫃',
+            '冰箱上櫃',
+            '洗衣機櫃',
+            '洗碗機下櫃',
+            '微波爐電器櫃',
+        ];
+        names.forEach((name) => {
+            expect(isCabinetLikeProductName(name)).toBe(true);
+            expect(inferQuoteSourceTypeForPlacement({ name, group: '系統櫃' })).toBe('floorplan_cabinet');
+            expect(isQuoteExportablePlacedCabinet({ id: 'x', data: { name, group: '系統櫃' } })).toBe(true);
+        });
     });
 
-    it('系統櫃矮櫃為 floorplan_cabinet', () => {
-        expect(
-            inferQuoteSourceTypeForPlacement({ name: '矮櫃', group: '系統櫃', width: 80, depth: 55 }),
-        ).toBe('floorplan_cabinet');
+    it('serializePlacedCabinetForLayoutSave 不寫入推斷旗標', () => {
+        const cab = {
+            id: 'c1',
+            quoteSourceType: 'furniture',
+            quoteExport: false,
+            data: { name: '三人沙發', group: '系統櫃', quoteExport: false },
+        };
+        const saved = serializePlacedCabinetForLayoutSave(cab);
+        expect(saved.quoteSourceType).toBeUndefined();
+        expect(saved.quoteExport).toBeUndefined();
+        expect(saved.data.quoteExport).toBeUndefined();
+    });
+
+    it('使用者明確旗標可存檔', () => {
+        const cab = {
+            id: 'c2',
+            quoteFlagsUserSet: true,
+            quoteExport: false,
+            data: { name: '房門', group: '門窗工程' },
+        };
+        const saved = serializePlacedCabinetForLayoutSave(cab);
+        expect(saved.quoteExport).toBe(false);
     });
 });

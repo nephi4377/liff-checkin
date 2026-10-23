@@ -31,7 +31,7 @@ import {
     PENDING_PRICE_LABEL,
 } from './LP_quote_pricing_rules.js';
 import { buildBudgetWebPreviewUrl } from './LP_preview_hosts.js';
-import { enrichPlacedCabinetQuoteMeta } from './LP_quote_placement_meta.js';
+import { serializePlacedCabinetForLayoutSave } from './LP_quote_placement_meta.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -604,7 +604,6 @@ function addCabinet(data, x, y) {
         customAddons: [] // [新增] 初始化自訂副屬性
     };
     if (checkCollision(cab)) return showGlobalNotification("位置重疊，請更換位置", 3000, 'error');
-    enrichPlacedCabinetQuoteMeta(cab);
     placedCabinets.push(cab);
     renderAllCabinets();
     selectCabinet(cab.id); // 選取新元件
@@ -2561,7 +2560,7 @@ function saveLayout() {
     const layoutData = {
         version: '2.0',
         timestamp: new Date().toISOString(),
-        placedCabinets: placedCabinets,
+        placedCabinets: placedCabinets.map(serializePlacedCabinetForLayoutSave),
         drawnAreas: drawnAreas,
         placedAnnotations: placedAnnotations, // [修正] 加入標註資料
         workspaceSize: getWorkspaceCanvasPx(),
@@ -4666,7 +4665,7 @@ function autoSave(silent = false) {
             version: '2.0',
             timestamp: new Date().getTime(), // 使用 timestamp 方便比較
             prettyTime: new Date().toLocaleString(), // 易讀的時間格式
-            placedCabinets: placedCabinets,
+            placedCabinets: placedCabinets.map(serializePlacedCabinetForLayoutSave),
             drawnAreas: drawnAreas,
             placedAnnotations: placedAnnotations, // [新增]
             workspaceSize: getWorkspaceCanvasPx(),
@@ -4774,14 +4773,12 @@ async function openLayoutPlanner3DForPreview(viewMode) {
 
 // 抽取原本 loadLayout 的核心邏輯，以便重用
 function loadLayoutFromData(layoutData, options = {}) {
-    const rawCabs = layoutData.placedCabinets || [];
+    const rawCabs = JSON.parse(JSON.stringify(layoutData.placedCabinets || []));
     placedCabinets = rawCabs.map((cab) => {
-        let c = cab;
         if (cab.data && cab.data.img && typeof cab.data.img === 'string' && cab.data.img.trim().startsWith('<svg')) {
-            c = { ...cab, data: { ...cab.data, img: normalizeSheetSvg(cab.data.img) } };
+            return { ...cab, data: { ...cab.data, img: normalizeSheetSvg(cab.data.img) } };
         }
-        if (!c.quoteSourceType && !c.data?.quoteSourceType) enrichPlacedCabinetQuoteMeta(c);
-        return c;
+        return cab;
     });
     drawnAreas = (layoutData.drawnAreas || []).map(normalizeDrawnAreaForImport);
     placedAnnotations = layoutData.placedAnnotations || []; // [新增]
@@ -4868,7 +4865,7 @@ async function downloadDesignFilesAsZip() {
         const layoutData = {
             version: '2.0',
             timestamp: new Date().toISOString(),
-            placedCabinets: placedCabinets,
+            placedCabinets: placedCabinets.map(serializePlacedCabinetForLayoutSave),
             drawnAreas: drawnAreas,
             placedAnnotations: placedAnnotations, // [新增]
             workspaceSize: getWorkspaceCanvasPx(),
