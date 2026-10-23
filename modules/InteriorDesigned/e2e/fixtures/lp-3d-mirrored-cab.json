@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "workspaceSize": 2000,
+  "placedCabinets": [
+    {
+      "id": "cab-demo-1",
+      "x": 400,
+      "y": 600,
+      "rotation": 0,
+      "mirrored": true,
+      "currentW": 120,
+      "currentH": 60,
+      "data": { "name": "範例矮櫃", "group": "系統櫃", "width": 120, "depth": 60 }
+    },
+    {
+      "id": "door-demo-1",
+      "x": 500,
+      "y": 285,
+      "rotation": 0,
+      "currentW": 90,
+      "currentH": 15,
+      "data": { "name": "房門", "group": "門窗工程", "width": 90, "depth": 15 }
+    },
+    {
+      "id": "win-demo-1",
+      "x": 700,
+      "y": 285,
+      "rotation": 0,
+      "currentW": 150,
+      "currentH": 15,
+      "data": { "name": "落地窗", "group": "門窗工程", "width": 150, "depth": 15 }
+    }
+  ],
+  "drawnAreas": [
+    {
+      "id": "area-demo-wall",
+      "type": "wall",
+      "thickness": 15,
+      "points": [
+        { "x": 300, "y": 300 },
+        { "x": 900, "y": 300 },
+        { "x": 900, "y": 800 },
+        { "x": 300, "y": 800 }
+      ]
+    }
+  ]
+}
