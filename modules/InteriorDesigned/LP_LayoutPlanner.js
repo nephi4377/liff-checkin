@@ -4720,13 +4720,14 @@ async function openLayoutPlanner3DForPreview(viewMode) {
             toggleBtn.textContent = '📐 2D 平面';
             toggleBtn.title = '返回 2D 平面編輯';
         }
-        viewer.open();
-        viewer.rebuild();
     }
-    const btn = viewMode === 'walk'
-        ? document.getElementById('lp-3d-btn-walk')
-        : document.getElementById('lp-3d-btn-orbit');
-    btn?.click();
+    viewer.setViewMode(viewMode);
+    viewer.open();
+    viewer.rebuild();
+    const btnOrbit = document.getElementById('lp-3d-btn-orbit');
+    const btnWalk = document.getElementById('lp-3d-btn-walk');
+    btnOrbit?.classList.toggle('lp-3d-active', viewMode === 'orbit');
+    btnWalk?.classList.toggle('lp-3d-active', viewMode === 'walk');
 }
 
 // 抽取原本 loadLayout 的核心邏輯，以便重用

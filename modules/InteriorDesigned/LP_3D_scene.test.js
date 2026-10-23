@@ -11,6 +11,8 @@ import {
     pointInPolygonXZ,
     axisAlignedBoundsXZ,
     boundsXZMatch,
+    boundsXZDelta,
+    expandFloorRingToInnerFace,
     computeWalkRoomPreviewPose,
 } from './LP_3D_scene.js';
 
@@ -264,6 +266,21 @@ describe('computeWalkRoomPreviewPose', () => {
         expect(pose.lookX).toBe(-72);
         expect(pose.lookZ).toBe(-90);
         expect(pose.pitch).toBeLessThan(0);
+    });
+});
+
+describe('expandFloorRingToInnerFace', () => {
+    it('略外擴仍落在 2cm 容差內', () => {
+        const ring = [
+            { x: -100, z: -100 },
+            { x: 100, z: -100 },
+            { x: 100, z: 100 },
+            { x: -100, z: 100 },
+        ];
+        const expanded = expandFloorRingToInnerFace(ring, 1.2);
+        const a = axisAlignedBoundsXZ(ring);
+        const b = axisAlignedBoundsXZ(expanded);
+        expect(boundsXZDelta(a, b).maxEdge).toBeLessThanOrEqual(2);
     });
 });
 

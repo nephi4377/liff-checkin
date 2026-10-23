@@ -95,6 +95,31 @@ export function computeWalkRoomPreviewPose(ring, standoffCm = 150) {
     };
 }
 
+/** 地板略向外擴以貼齊牆內圈（Extrude 與 offset 誤差補償，cm） */
+export function expandFloorRingToInnerFace(ring, epsilonCm = 1.2) {
+    if (!ring?.length) return ring;
+    const pts = ring.map((p) => ({ x: p.x, y: p.z }));
+    const signed = signedPolygonArea(pts);
+    const dist = signed < 0 ? -epsilonCm : epsilonCm;
+    const out = offsetPolygon(pts, dist);
+    return out.map((p) => ({ x: p.x, z: p.y }));
+}
+
+export function boundsXZDelta(a, b) {
+    return {
+        minX: Math.abs(a.minX - b.minX),
+        maxX: Math.abs(a.maxX - b.maxX),
+        minZ: Math.abs(a.minZ - b.minZ),
+        maxZ: Math.abs(a.maxZ - b.maxZ),
+        maxEdge: Math.max(
+            Math.abs(a.minX - b.minX),
+            Math.abs(a.maxX - b.maxX),
+            Math.abs(a.minZ - b.minZ),
+            Math.abs(a.maxZ - b.maxZ),
+        ),
+    };
+}
+
 export function boundsXZMatch(a, b, toleranceCm = 2) {
     const t = toleranceCm;
     return Math.abs(a.minX - b.minX) <= t

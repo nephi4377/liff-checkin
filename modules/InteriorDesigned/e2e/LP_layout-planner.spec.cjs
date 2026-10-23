@@ -438,8 +438,10 @@ test.describe('LayoutPlanner E2E', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/LP_LayoutPlanner_3d_room_preview.html', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/lp3d=orbit/, { timeout: 15000 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit',
+      { waitUntil: 'load' },
+    );
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
     await expect(page.locator('#lp-3d-btn-orbit')).toHaveClass(/lp-3d-active/);
     await expect(page.locator('#lp-3d-ceiling-toggle')).not.toBeChecked();
@@ -451,6 +453,7 @@ test.describe('LayoutPlanner E2E', () => {
     expect(snapshot?.wallsHiddenTopDown, '俯視應隱藏牆體立面').toBe(true);
     expect(snapshot?.wallCapsVisibleTopDown, '俯視應顯示牆頂描邊').toBe(true);
     expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈（≤2cm）').toBe(true);
+    expect(snapshot?.floorInnerBoundsDelta?.maxEdge ?? 99).toBeLessThanOrEqual(2);
     expect(snapshot?.doorLeafMeshCount, '每扇門僅一塊門片 mesh').toBe(1);
     const cabPixel = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
     expect(cabPixel?.differsFromFloor, '俯視櫃體中心像素應與地板色不同').toBe(true);

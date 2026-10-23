@@ -208,16 +208,14 @@ export function buildFixtureMeshGroup(THREE, fix) {
     }
 
     const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.cabinet;
-    const body = mat(THREE, color);
-    body.emissive = new THREE.Color(color);
-    body.emissiveIntensity = 0.32;
+    const body = new THREE.MeshBasicMaterial({ color });
     const mesh = addBox(group, THREE, w, h, d, body, base);
     mesh.renderOrder = 3;
-    const topMat = mat(THREE, color);
-    topMat.emissive = new THREE.Color(color);
-    topMat.emissiveIntensity = 0.4;
-    const topCap = new THREE.Mesh(new THREE.BoxGeometry(w, 4, d), topMat);
-    topCap.position.set(0, base + h - 2, 0);
+    const topCap = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 6, d),
+        new THREE.MeshBasicMaterial({ color }),
+    );
+    topCap.position.set(0, base + h - 3, 0);
     topCap.renderOrder = 5;
     group.add(topCap);
     const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));

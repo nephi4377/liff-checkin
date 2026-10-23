@@ -12,6 +12,8 @@ import {
     pointInWallBand,
     axisAlignedBoundsXZ,
     boundsXZMatch,
+    boundsXZDelta,
+    expandFloorRingToInnerFace,
     computeWalkRoomPreviewPose,
 } from './LP_3D_scene.js';
 import {
@@ -185,6 +187,8 @@ export function createLayoutPlanner3DViewer(options) {
     const ORBIT_OBLIQUE_WALL_OPACITY = 0.35;
     const WALL_TOP_CAP_THICKNESS_CM = 4;
     const FLOOR_SAMPLE_RGB = { r: 245, g: 240, b: 232 };
+    const SCENE_BG_SAMPLE_RGB = { r: 226, g: 232, b: 240 };
+    const WALL_SAMPLE_RGB = { r: 148, g: 163, b: 184 };
 
     const hintEl = overlayEl?.querySelector('#lp-3d-hint');
     const btnOrbit = overlayEl?.querySelector('#lp-3d-btn-orbit');
@@ -213,14 +217,34 @@ export function createLayoutPlanner3DViewer(options) {
             walk?.setActive(false);
             controls.enabled = true;
             setHint('鳥瞰：左鍵旋轉 · 右鍵平移 · 滾輪縮放');
+            applyOrbitWallPresentation();
         } else {
             controls.enabled = false;
             walk?.setActive(true);
             camera.up.set(0, 1, 0);
             camera.rotation.z = 0;
+            restoreSolidWallsForWalk();
             setHint('室內：WASD 移動 · 按住左鍵轉向 · 手機左半拖移動、右半轉向');
         }
         updateToolbarActive();
+    }
+
+    function restoreSolidWallsForWalk() {
+        for (const mesh of wallMeshes.current) {
+            mesh.visible = true;
+            mesh.scale.y = 1;
+            const mat = mesh.material;
+            if (!mat) continue;
+            mat.transparent = false;
+            mat.opacity = 1;
+            mat.depthWrite = true;
+            mat.side = THREE.FrontSide;
+            mat.needsUpdate = true;
+        }
+        for (const cap of wallCapMeshes.current) {
+            cap.visible = false;
+        }
+        lastOrbitWallCut = null;
     }
 
     function resetOrbitCamera(desc) {
@@ -431,7 +455,8 @@ export function createLayoutPlanner3DViewer(options) {
         floorMeshes.current = [];
         for (const ring of floorRings) {
             if (ring?.length >= 3) {
-                const slab = buildSlabMesh(ring, 0, defaults.FLOOR_THICKNESS_CM, floorMat);
+                const floorRing = expandFloorRingToInnerFace(ring, 1.2);
+                const slab = buildSlabMesh(floorRing, 0, defaults.FLOOR_THICKNESS_CM, floorMat);
                 slab.userData.lp3dFloor = true;
                 floorMeshes.current.push(slab);
                 root.add(slab);
@@ -512,9 +537,13 @@ export function createLayoutPlanner3DViewer(options) {
         contentGroup.current = root;
         labelGroup.current = labels;
 
-        if (viewMode === 'orbit') resetOrbitCamera(desc);
-        else resetWalkCamera(desc);
-        applyOrbitWallPresentation();
+        if (viewMode === 'orbit') {
+            resetOrbitCamera(desc);
+            applyOrbitWallPresentation();
+        } else {
+            resetWalkCamera(desc);
+            restoreSolidWallsForWalk();
+        }
     }
 
     function isOrbitTopDownView() {
@@ -790,6 +819,9 @@ export function createLayoutPlanner3DViewer(options) {
             floorBoundsMatchInner: Boolean(
                 innerBounds && meshBounds && boundsXZMatch(innerBounds, meshBounds, 2),
             ),
+            floorInnerBoundsDelta: (innerBounds && meshBounds)
+                ? boundsXZDelta(innerBounds, meshBounds)
+                : null,
             cabinetMeshVisible: fixtureMeshVisibleOnScreen(cabGroup),
             cabinetMeshScreen: cabGroup ? projectWorldBoxToScreen(cabGroup) : null,
             floorMeshScreen: floorMesh ? projectWorldBoxToScreen(floorMesh) : null,
@@ -879,6 +911,20 @@ export function createLayoutPlanner3DViewer(options) {
                 const cabGroup = fixtureGroups.current.get('cab-demo-1')
                     ?? fixtureGroups.current.get(cabinets[0]?.id);
                 return sampleCabinetFootprintPixel(cabGroup);
+            },
+            sampleScreenPixel: (screenX, screenY) => sampleRendererPixel(screenX, screenY),
+            sampleWalkCenterWallPixels: () => {
+                if (viewMode !== 'walk' || !renderer) return null;
+                const w = renderer.domElement.clientWidth;
+                const h = renderer.domElement.clientHeight;
+                const left = sampleRendererPixel(w * 0.22, h * 0.48);
+                const right = sampleRendererPixel(w * 0.78, h * 0.48);
+                if (!left || !right) return null;
+                const isWallish = (rgb) => (
+                    colorDistanceRgb(rgb, WALL_SAMPLE_RGB)
+                    < colorDistanceRgb(rgb, SCENE_BG_SAMPLE_RGB) - 12
+                );
+                return { left, right, leftIsWall: isWallish(left), rightIsWall: isWallish(right) };
             },
         };
         mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
