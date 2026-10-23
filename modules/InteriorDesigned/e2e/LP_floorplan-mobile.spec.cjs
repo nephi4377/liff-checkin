@@ -18,6 +18,7 @@ test.describe('LayoutPlanner mobile / tablet', () => {
   });
 
   test('窄螢幕：可開啟工具箱與預算視窗', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
     await page.goto('/LP_LayoutPlanner.html?lpMobile=1', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('#toolbox-window')).toBeHidden();
     await page.locator('#toggle-toolbox-btn').click();
@@ -26,6 +27,22 @@ test.describe('LayoutPlanner mobile / tablet', () => {
     await expect(page.locator('#info-window')).toBeHidden();
     await page.locator('#toggle-info-btn').click();
     await expect(page.locator('#info-window')).toBeVisible();
+  });
+
+  test('窄螢幕：標題列 ✕ 可關閉工具箱與預算視窗', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto('/LP_LayoutPlanner.html?lpMobile=1', { waitUntil: 'domcontentloaded' });
+
+    await page.locator('#toggle-toolbox-btn').click();
+    await expect(page.locator('#toolbox-window')).toBeVisible();
+    // Playwright 指標點擊常被大畫布 hit-test 擋住；dispatchEvent 驗證關閉邏輯（真機靠 lp-mobile-panel-open 放行標題列）
+    await page.locator('#toggle-toolbox-btn-header').dispatchEvent('click');
+    await expect(page.locator('#toolbox-window')).toBeHidden();
+
+    await page.locator('#toggle-info-btn').click();
+    await expect(page.locator('#info-window')).toBeVisible();
+    await page.locator('#toggle-info-btn-header').dispatchEvent('click');
+    await expect(page.locator('#info-window')).toBeHidden();
   });
 
   test('觸控路徑：載入佈局後可拖曳櫃體', async ({ page }) => {

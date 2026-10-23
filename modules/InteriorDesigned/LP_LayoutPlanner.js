@@ -3644,6 +3644,14 @@ function switchTab(tabName) {
     }
 }
 
+function syncCanvasPointerBlockForMobilePanels() {
+    if (!document.body.classList.contains('lp-touch-mode')) return;
+    const toolboxOpen = getComputedStyle(document.getElementById('toolbox-window')).display !== 'none';
+    const infoOpen = getComputedStyle(document.getElementById('info-window')).display !== 'none';
+    const block = toolboxOpen || infoOpen;
+    document.body.classList.toggle('lp-mobile-panel-open', block);
+}
+
 function toggleWindow(windowId) {
     const win = document.getElementById(windowId);
     if (!win) {
@@ -3674,6 +3682,7 @@ function toggleWindow(windowId) {
         win.style.display = 'none';
         if (btn) btn.classList.remove('hidden');
     }
+    syncCanvasPointerBlockForMobilePanels();
 }
 
 function initDraggable(windowId) {

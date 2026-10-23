@@ -501,6 +501,19 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            z-index: 2;
+            flex-shrink: 0;
+        }
+
+        .window-header button {
+            min-width: 44px;
+            min-height: 44px;
+            flex-shrink: 0;
+            cursor: pointer;
+            touch-action: manipulation;
+            position: relative;
+            z-index: 3;
         }
 
         .window-content {
@@ -583,6 +596,11 @@
 
         body.lp-touch-mode {
             touch-action: manipulation;
+        }
+
+        body.lp-touch-mode.lp-mobile-panel-open #design-canvas,
+        body.lp-touch-mode.lp-mobile-panel-open #canvas-wrapper {
+            pointer-events: none !important;
         }
 
         body.lp-touch-mode #canvas-wrapper {
@@ -692,16 +710,26 @@
                 top: auto !important;
                 width: auto !important;
                 max-height: min(72vh, 560px);
-                z-index: 250;
+                z-index: 5000;
                 pointer-events: auto;
             }
 
             body.lp-touch-mode.lp-ui-dock-tb-float-bi #info-window {
+                position: fixed !important;
                 left: 8px !important;
                 right: 8px !important;
+                bottom: 64px !important;
+                top: auto !important;
                 width: auto !important;
                 max-height: min(72vh, 560px);
-                z-index: 250;
+                z-index: 5000;
+                pointer-events: auto;
+            }
+
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #toolbox-window .window-header button,
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #info-window .window-header button {
+                cursor: pointer;
+                touch-action: manipulation;
             }
 
             body.lp-touch-mode #minimized-bar {
