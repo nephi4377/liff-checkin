@@ -36,6 +36,8 @@ let placedCabinets = [];
 let isBgEditMode = false;
 let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
+/** 底圖 data URL 僅保留一份；history 快照只存位置／縮放與是否顯示 */
+let layoutPlannerActiveBgDataUrl = '';
 let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
 /** @type {Set<string>} 多選櫃體（含 layout 群組成員） */
@@ -2519,7 +2521,8 @@ function handleBgUpload(event) {
         const reader = new FileReader();
         reader.onload = function (e) {
             const bgImg = document.getElementById('bg-img');
-            bgImg.src = e.target.result;
+            layoutPlannerActiveBgDataUrl = e.target.result;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
             // Reset position and scale when new image loaded
@@ -3286,13 +3289,44 @@ function getQuotationForDisplay() {
     return { lineItems, subtotals: calc.subtotals, grandTotal };
 }
 
+function getAutoQuotationFieldValue(lineKey, field) {
+    const calc = calculateFullQuotation();
+    for (const item of calc.lineItems) {
+        if (item.isHeader || item.lineKey !== lineKey) continue;
+        if (field === 'quantity') return item.quantity > 0 ? item.quantity : '';
+        if (field === 'totalPrice') return item.totalPrice > 0 ? item.totalPrice : '';
+        return item[field];
+    }
+    return undefined;
+}
+
+function budgetFieldValuesEqual(field, a, b) {
+    if (field === 'quantity' || field === 'totalPrice') {
+        const na = a === '' || a === undefined ? 0 : Number(a);
+        const nb = b === '' || b === undefined ? 0 : Number(b);
+        if (!Number.isFinite(na) && !Number.isFinite(nb)) return String(a ?? '') === String(b ?? '');
+        return na === nb;
+    }
+    return String(a ?? '') === String(b ?? '');
+}
+
 function applyBudgetFieldEdit(lineKey, field, rawValue) {
     if (!lineKey) return;
-    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
-    if (field === 'quantity' || field === 'totalPrice') {
-        quotationManualOverrides[lineKey][field] = rawValue === '' ? '' : (parseFloat(rawValue) || 0);
+    const autoVal = getAutoQuotationFieldValue(lineKey, field);
+    const normalized = (field === 'quantity' || field === 'totalPrice')
+        ? (rawValue === '' ? '' : (parseFloat(rawValue) || 0))
+        : rawValue;
+
+    if (budgetFieldValuesEqual(field, normalized, autoVal)) {
+        const o = quotationManualOverrides[lineKey];
+        if (o) {
+            delete o[field];
+            const keys = Object.keys(o).filter((k) => k !== 'hidden');
+            if (keys.length === 0 && !o.hidden) delete quotationManualOverrides[lineKey];
+        }
     } else {
-        quotationManualOverrides[lineKey][field] = rawValue;
+        if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+        quotationManualOverrides[lineKey][field] = normalized;
     }
     const quotation = getQuotationForDisplay();
     const totalEl = document.getElementById('modal-total-price');
@@ -4133,23 +4167,31 @@ function snapshotBackgroundForHistory() {
     const bgImg = document.getElementById('bg-img');
     const src = bgImg?.src || '';
     const hasDataBg = src.startsWith('data:image');
+    if (hasDataBg) layoutPlannerActiveBgDataUrl = src;
     return {
         position: { x: bgPosition.x, y: bgPosition.y },
         scale: bgScale,
-        src: hasDataBg ? src : '',
+        hasBackground: hasDataBg,
     };
+}
+
+function resolveBackgroundDataUrlFromState(bg) {
+    if (bg?.src && String(bg.src).startsWith('data:image')) return bg.src;
+    if (bg?.hasBackground && layoutPlannerActiveBgDataUrl) return layoutPlannerActiveBgDataUrl;
+    return '';
 }
 
 function applyBackgroundFromHistoryState(bg) {
     const bgImg = document.getElementById('bg-img');
     const bgControls = document.getElementById('bg-controls');
     if (!bgImg) return;
-    if (!bg || !bg.src || !String(bg.src).startsWith('data:image')) {
+    const dataUrl = resolveBackgroundDataUrlFromState(bg);
+    if (!dataUrl) {
         bgImg.style.display = 'none';
         bgImg.removeAttribute('src');
         bgControls?.classList.add('opacity-50', 'pointer-events-none');
         bgScale = bg?.scale ?? 1.0;
-        bgPosition = { x: 0, y: 0 };
+        bgPosition = bg?.position ? { x: bg.position.x, y: bg.position.y } : { x: 0, y: 0 };
         const scaleInput = document.getElementById('bg-scale');
         const scaleNum = document.getElementById('bg-scale-num');
         if (scaleInput) scaleInput.value = String(bgScale);
@@ -4157,11 +4199,12 @@ function applyBackgroundFromHistoryState(bg) {
         updateBgTransform();
         return;
     }
+    layoutPlannerActiveBgDataUrl = dataUrl;
     bgPosition = bg.position
         ? { x: bg.position.x, y: bg.position.y }
         : { x: 0, y: 0 };
     bgScale = bg.scale ?? 1.0;
-    bgImg.src = bg.src;
+    bgImg.src = dataUrl;
     bgImg.style.display = 'block';
     bgControls?.classList.remove('opacity-50', 'pointer-events-none');
     const scaleInput = document.getElementById('bg-scale');
@@ -4848,7 +4891,8 @@ function loadLayoutFromData(layoutData, options = {}) {
         bgScale = layoutData.background.scale || 1.0;
         const bgImg = document.getElementById('bg-img');
         if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
-            bgImg.src = layoutData.background.src;
+            layoutPlannerActiveBgDataUrl = layoutData.background.src;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
         }
@@ -5082,6 +5126,19 @@ window.onload = () => {
         document.documentElement.classList.add('lp-url-preview');
     }
     bindEventListeners();
+    window.__LP_TEST_HOOKS__ = {
+        ...(window.__LP_TEST_HOOKS__ || {}),
+        getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
+        historyBackgroundSnapshots: () => history.map((h) => h.background),
+        setCabinetPricing: (id, unitPrice, pricingType) => {
+            const cab = placedCabinets.find((c) => c.id === id);
+            if (!cab) return false;
+            cab.data.unitPrice = unitPrice;
+            cab.data.pricingType = pricingType;
+            updateQuotation();
+            return true;
+        },
+    };
     initWorkspaceAndUiFromStorage();
 
     // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕

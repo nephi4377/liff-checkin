@@ -204,6 +204,56 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     expect(qtyAfterResize).not.toBe(qtyBefore);
   });
 
+  test('櫃體 resize 後報價 totalPrice 變動，單次 undo 還原且堆疊未汙染', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    await page.evaluate(() => {
+      window.__LP_TEST_HOOKS__?.setCabinetPricing?.('keyguard-cab-1', 100, 'width');
+    });
+    await page.locator('#show-budget-modal-btn').click();
+    const priceInput = page.locator('.budget-edit-input[data-field="totalPrice"]').first();
+    const priceBefore = await priceInput.inputValue();
+    await page.locator('#budget-modal-close-btn').click();
+
+    await page.locator('#keyguard-cab-1').click({ force: true });
+    const wField = page.locator('#selected-width');
+    const wBefore = await wField.inputValue();
+    await wField.fill(String(Number(wBefore) + 30));
+    await wField.dispatchEvent('change');
+    await page.waitForTimeout(200);
+
+    await page.locator('#show-budget-modal-btn').click();
+    const priceAfter = await priceInput.inputValue();
+    expect(priceAfter).not.toBe(priceBefore);
+    await page.locator('#budget-modal-close-btn').click();
+
+    await expect(page.locator('#undo-btn')).toBeEnabled();
+    await page.locator('#undo-btn').click();
+
+    await page.locator('#show-budget-modal-btn').click();
+    await expect.poll(() => priceInput.inputValue()).toBe(priceBefore);
+    await page.locator('#budget-modal-close-btn').click();
+    await page.locator('#keyguard-cab-1').click({ force: true });
+    await expect(wField).toHaveValue(wBefore);
+  });
+
+  test('報價改回原自動值時移除 override（input 逐字還原）', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const nameInput = page.locator('.budget-edit-input[data-field="name"]').first();
+    const autoName = await nameInput.inputValue();
+    await nameInput.fill(`${autoName}-TMP`);
+    await nameInput.fill(autoName);
+    const overrides = await page.evaluate(() => window.__LP_TEST_HOOKS__?.getQuotationOverrides?.() ?? {});
+    const keys = Object.keys(overrides);
+    const polluted = keys.some((k) => overrides[k]?.name !== undefined && overrides[k].name !== autoName);
+    expect(polluted).toBe(false);
+  });
+
   test('復原還原施工面積欄位（history 快照一致）', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     const field = page.locator('#construction-area');
