@@ -632,7 +632,11 @@
             transform-origin: center;
             z-index: 1;
             cursor: move;
-            opacity: 0.8;
+        }
+
+        #bg-layer.bg-underlay-hidden,
+        body.lp-export-no-underlay #bg-layer {
+            visibility: hidden !important;
         }
 
         .placed-cabinet {
@@ -979,22 +983,44 @@
                 <!-- 底圖設定 -->
                 <div class="bg-blue-50 p-3 rounded border border-blue-100">
                     <h2 class="font-bold text-blue-800 text-sm mb-2">1. 平面圖設定</h2>
-                    <input type="file" id="bg-upload" accept="image/*" class="text-xs w-full mb-2" />
+                    <input type="file" id="bg-upload" accept="image/*,.pdf,application/pdf" class="text-xs w-full mb-2" />
                     <!-- [v9.13 修正] 將勾選框移出受控區域，避免取消勾選後無法再次點擊 -->
                     <label class="flex items-center gap-2 mb-2 text-xs font-bold text-red-600">
                         <input type="checkbox" id="bg-edit-mode"> 底圖調整模式
                     </label>
                     
-                    <div id="bg-controls" class="opacity-50 pointer-events-none transition-opacity duration-200">
+                    <div id="bg-controls" class="opacity-50 pointer-events-none transition-opacity duration-200 space-y-2">
                         <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-600 w-8">縮放</span>
                             <input type="range" id="bg-scale" min="0.2" max="3.0" step="0.01" value="1.0"
                                 class="flex-1 h-2">
                             <input type="number" id="bg-scale-num" min="0.2" max="3.0" step="0.01" value="1.0"
                                 class="w-16 text-xs border rounded text-center">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div class="hidden"></div>
-                                <!-- Placeholder to maintain grid but hide duplicate -->
-                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-600 w-8">透明</span>
+                            <input type="range" id="bg-opacity" min="0.1" max="1" step="0.05" value="0.75" class="flex-1 h-2">
+                            <input type="number" id="bg-opacity-num" min="0.1" max="1" step="0.05" value="0.75"
+                                class="w-16 text-xs border rounded text-center">
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-[10px] text-gray-600 w-8">旋轉</span>
+                            <input type="range" id="bg-rotation-deg" min="-180" max="180" step="0.5" value="0" class="flex-1 h-2">
+                            <input type="number" id="bg-rotation-num" min="-180" max="180" step="0.5" value="0"
+                                class="w-16 text-xs border rounded text-center">
+                        </div>
+                        <div class="flex flex-wrap gap-2 text-[10px]">
+                            <label class="flex items-center gap-1"><input type="checkbox" id="bg-lock-toggle"> 鎖定</label>
+                            <label class="flex items-center gap-1"><input type="checkbox" id="bg-hide-toggle"> 隱藏</label>
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                            <button type="button" id="bg-calibrate-scale-btn" class="px-2 py-1 bg-blue-600 text-white rounded text-[10px]">兩點校正</button>
+                            <button type="button" id="bg-rotate-align-btn" class="px-2 py-1 bg-blue-500 text-white rounded text-[10px]">旋轉對齊</button>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <input type="number" id="bg-calibrate-real-cm" min="1" step="1" placeholder="實際cm"
+                                class="w-20 text-[10px] border rounded p-1" title="兩點間實際長度 (cm)">
+                            <button type="button" id="bg-calibrate-apply-btn" class="px-2 py-1 bg-teal-600 text-white rounded text-[10px]">套用比例</button>
                         </div>
                     </div>
                 </div>
@@ -1036,6 +1062,11 @@
                     <div class="mt-2">
                         <label class="text-xs font-bold text-gray-700">牆壁厚度 (cm):</label>
                         <input type="number" id="wall-thickness-input" value="15" min="5" max="50"
+                            class="w-full text-xs border rounded p-1 mt-1">
+                    </div>
+                    <div class="mt-2">
+                        <label class="text-xs font-bold text-gray-700">下一段牆長 (cm，選填):</label>
+                        <input type="number" id="wall-segment-length-input" min="0" step="1" placeholder="0 = 自由點擊"
                             class="w-full text-xs border rounded p-1 mt-1">
                     </div>
                     <div class="space-y-1 mt-3">
