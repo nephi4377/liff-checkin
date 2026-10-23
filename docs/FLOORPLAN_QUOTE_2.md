@@ -36,14 +36,14 @@
 **勿用 jsDelivr 開 `.html`**（常回 `text/plain` + `nosniff`，瀏覽器會顯示原始碼）。  
 **路徑須含 `.html`**（無 `.html` 會 404）。
 
-釘選 commit（與 `LP_preview_hosts.js` 的 `PINNED_GITHACK_COMMIT` 同步，**完整 40 字 SHA**）：
+釘選 commit（與 `LP_preview_hosts.js` 的 `PINNED_GITHACK_COMMIT` 同步）：
 
 - LayoutPlanner：  
-  `https://raw.githack.com/nephi4377/liff-checkin/<FULL_SHA>/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1`
+  https://raw.githack.com/nephi4377/liff-checkin/aad80347992dc4771f4cd9aa7f900e2908c500b9/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1
 - 含示範 fixture：  
-  `.../LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json`
+  https://raw.githack.com/nephi4377/liff-checkin/aad80347992dc4771f4cd9aa7f900e2908c500b9/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json
 - BudgetWeb：  
-  `https://raw.githack.com/nephi4377/liff-checkin/<FULL_SHA>/tools/BudgetWeb_Standalone.html?lpPreview=1`
+  https://raw.githack.com/nephi4377/liff-checkin/aad80347992dc4771f4cd9aa7f900e2908c500b9/tools/BudgetWeb_Standalone.html?lpPreview=1
 
 主程式載入：`LP_LayoutPlanner.html` 以 `import('./LP_LayoutPlanner.js?v=<commit-prefix>')` 避免 githack 快取舊 JS。  
 從 LayoutPlanner 匯出 modal 的「開啟合併頁」會依**目前主機**推算同源 BudgetWeb URL（githack 或本機 `serve`）。
