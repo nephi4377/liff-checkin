@@ -6,7 +6,7 @@
 2. **lpPreview**：`BudgetWeb_Standalone.html?lpPreview=1` 禁用同步按鈕，且 `allowProductionSync: false` 雙重阻擋。
 3. **同步前 id 檢查**：強制 `runLocalQuotationIdDuplicateCheck`（等同 CLI check，不執行 migrate）。
 4. **舊版雲端 id `ITEM_<純數字>`**：以表名+名稱+規格+單位對應本地 `ITEM_<表>_*`；對上合併至新 id 並帶進度；對不上／一對多 **整次 blocking**；雲端獨有 >10% 自訂確認框（Enter 預設取消）。
-5. **BudgetAuditor V2**：`syncToFirebase` 改 `update()`，載入後 baseline + 寫回前重讀比對；雲端節點存在但 baseline 建不起來時 **阻擋寫回**。
+5. **BudgetAuditor V2**：`LP_budgetweb_auditor_sync.resolveAuditorFirebaseWriteGate`（內含 `shouldBlockQuotationWriteWithoutBaseline`）；`update()` + baseline 重讀。舊 RTDB **僅根層 total_summary**（無 `context`）會先 `normalizeQuotationFirebaseSnapshot` 再建 baseline，不因缺 `context` 永久擋住。
 
 ## 程式位置
 

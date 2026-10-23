@@ -21,7 +21,7 @@ module.exports = defineConfig({
             'LP_budgetweb_legacy_sync.test.js',
             'LP_budgetweb_firebase_sync.test.js',
             'LP_budgetweb_sync_confirm.test.js',
-            'LP_budgetweb_auditor_baseline.test.js',
+            'LP_budgetweb_auditor_sync.test.js',
             'LP_quote_placement_meta.test.js',
             'LP_migrate_quotation_item_ids.test.js',
             'LP_budget_quote_parser_lib.test.js',

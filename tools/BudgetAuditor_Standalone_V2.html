@@ -2189,23 +2189,39 @@
             if (!stillThisLoad()) return;
             const data = snap.val();
 
-            if (data?.context) {
+            const auditorSyncModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_auditor_sync.js',
+                window.location.href,
+            ).href;
+            let auditorSyncMod = null;
+            try {
+                auditorSyncMod = await import(auditorSyncModUrl);
+            } catch (e) {
+                console.warn('[Auditor] 同步模組載入失敗', e);
+            }
+            const cloudContextNode =
+                (auditorSyncMod && data
+                    ? auditorSyncMod.normalizeQuotationFirebaseSnapshot(data)
+                    : null)
+                || (data?.context ? data : null);
+            if (cloudContextNode?.context) {
                 const hubMap = await getHubProjectNameMap();
                 if (!stillThisLoad()) return;
-                const contextData = JSON.parse(JSON.stringify(data.context));
-                if (data.is_closed || contextData.is_closed) {
+                const contextData = JSON.parse(JSON.stringify(cloudContextNode.context));
+                if (cloudContextNode.is_closed || data?.is_closed || contextData.is_closed) {
                     contextData.is_closed = true;
-                    contextData.closed_at = data.closed_at || contextData.closed_at || null;
-                    contextData.closed_by = data.closed_by || contextData.closed_by || null;
+                    contextData.closed_at = cloudContextNode.closed_at || data?.closed_at || contextData.closed_at || null;
+                    contextData.closed_by = cloudContextNode.closed_by || data?.closed_by || contextData.closed_by || null;
                 }
                 loadData(contextData, hubMap);
                 try {
-                    const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
-                    const syncMod = await import(syncModUrl);
-                    auditorCloudWriteBaseline = syncMod.buildRemoteQuotationSyncBaseline({
-                        last_updated: data.audit_last_updated || data.last_updated,
-                        context: data.context,
-                    });
+                    if (auditorSyncMod?.buildAuditorCloudWriteBaselineFromFirebaseNode) {
+                        auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineFromFirebaseNode(
+                            cloudContextNode,
+                        );
+                    } else {
+                        auditorCloudWriteBaseline = null;
+                    }
                 } catch (e) {
                     console.warn('[Auditor] 雲端 baseline 建立失敗', e);
                     auditorCloudWriteBaseline = null;
@@ -2272,25 +2288,37 @@
             const nowDisplay = new Date().toLocaleString();
             const ref = db2.ref(`quotations/${projectNo}`);
             const snapBefore = await ref.once('value');
-            if (snapBefore.exists() && !auditorCloudWriteBaseline) {
-                showToast(
-                    '無法建立雲端安全基線（模組載入失敗或僅本地快取）。請重新從雲端載入案場後再同步。',
-                    'error',
-                    7000,
-                );
-                return;
-            }
-            if (snapBefore.exists() && auditorCloudWriteBaseline) {
-                const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
-                const { remoteQuotationSyncBaselineChanged } = await import(syncModUrl);
-                const fresh = snapBefore.val();
-                if (remoteQuotationSyncBaselineChanged(auditorCloudWriteBaseline, {
-                    last_updated: fresh.audit_last_updated || fresh.last_updated,
-                    context: fresh.context,
-                })) {
-                    showToast('雲端資料已變更（與載入時不同），同步已中止。請重新載入案場。', 'error', 6000);
+            const auditorSyncModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_auditor_sync.js',
+                window.location.href,
+            ).href;
+            let auditorSyncMod;
+            try {
+                auditorSyncMod = await import(auditorSyncModUrl);
+            } catch (importErr) {
+                console.warn('[Auditor] 寫入安全模組載入失敗', importErr);
+                if (snapBefore.exists()) {
+                    showToast(
+                        '無法載入同步安全模組，已中止寫入。請重新載入頁面後再試。',
+                        'error',
+                        7000,
+                    );
                     return;
                 }
+                auditorSyncMod = null;
+            }
+            if (!auditorSyncMod) {
+                if (snapBefore.exists()) return;
+            } else {
+            const writeGate = auditorSyncMod.resolveAuditorFirebaseWriteGate({
+                remoteExists: snapBefore.exists(),
+                baseline: auditorCloudWriteBaseline,
+                freshVal: snapBefore.exists() ? snapBefore.val() : null,
+            });
+            if (writeGate.blocked) {
+                showToast(writeGate.message || '同步已中止。', 'error', 7000);
+                return;
+            }
             }
             const payload = {
                 context: JSON.parse(JSON.stringify(appData)),
@@ -2302,12 +2330,13 @@
             };
             await ref.update(payload);
             try {
-                const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
-                const { buildRemoteQuotationSyncBaseline } = await import(syncModUrl);
-                auditorCloudWriteBaseline = buildRemoteQuotationSyncBaseline({
-                    last_updated: nowDisplay,
-                    context: payload.context,
-                });
+                if (auditorSyncMod) {
+                    auditorCloudWriteBaseline = auditorSyncMod.buildAuditorCloudWriteBaselineFromFirebaseNode({
+                        audit_last_updated: nowDisplay,
+                        last_updated: nowDisplay,
+                        context: payload.context,
+                    });
+                }
             } catch (e) {
                 console.warn('[Auditor] baseline 更新失敗', e);
             }

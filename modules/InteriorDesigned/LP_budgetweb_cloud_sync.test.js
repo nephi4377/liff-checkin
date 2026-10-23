@@ -13,6 +13,7 @@ import {
     runLocalQuotationIdDuplicateCheck,
     buildRemoteQuotationSyncBaseline,
     remoteQuotationSyncBaselineChanged,
+    normalizeQuotationFirebaseSnapshot,
 } from './LP_budgetweb_cloud_sync.js';
 
 describe('LP_budgetweb_cloud_sync', () => {
@@ -96,6 +97,15 @@ describe('LP_budgetweb_cloud_sync', () => {
         const bad = runLocalQuotationIdDuplicateCheck([{ id: 'A' }, { id: 'A' }]);
         expect(bad.ok).toBe(false);
         expect(bad.duplicateIds).toEqual(['A']);
+    });
+
+    it('normalizeQuotationFirebaseSnapshot：舊格式僅 total_summary 可建 baseline', () => {
+        const legacy = { total_summary: { siteName: 'L' }, last_updated: 't0' };
+        const norm = normalizeQuotationFirebaseSnapshot(legacy);
+        expect(norm?.context?.items).toEqual([]);
+        const baseline = buildRemoteQuotationSyncBaseline(legacy);
+        expect(baseline.itemCount).toBe(0);
+        expect(baseline.itemsContentHash).toBeTruthy();
     });
 
     it('remote baseline 內容 hash：進度／名稱／單價／筆數變動（last_updated 可相同）', () => {

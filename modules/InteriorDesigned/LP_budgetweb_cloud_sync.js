@@ -250,13 +250,61 @@ export function fingerprintRemoteItemsForSyncGuard(items) {
     return stableHashString(JSON.stringify(normalized));
 }
 
+/**
+ * 舊 RTDB 形狀：工項／摘要可能在節點根層（無 context 包裝），僅 total_summary 亦視為有效節點。
+ * @param {object|null|undefined} nodeVal quotations/{案號} 整包
+ * @returns {object|null} 標準形狀（含 context）或 null
+ */
+export function normalizeQuotationFirebaseSnapshot(nodeVal) {
+    if (!nodeVal || typeof nodeVal !== 'object') return null;
+    if (nodeVal.context && typeof nodeVal.context === 'object') {
+        return nodeVal;
+    }
+    const hasLegacyShape =
+        nodeVal.total_summary != null
+        || Array.isArray(nodeVal.items)
+        || normStr(nodeVal.案號);
+    if (!hasLegacyShape) return null;
+    const {
+        total_summary,
+        items,
+        案號,
+        is_closed,
+        closed_at,
+        closed_by,
+        audit_last_updated,
+        last_updated,
+        sync_by,
+        ...metaRest
+    } = nodeVal;
+    return {
+        ...metaRest,
+        audit_last_updated: audit_last_updated ?? last_updated ?? null,
+        last_updated: last_updated ?? audit_last_updated ?? null,
+        sync_by,
+        is_closed: is_closed ?? undefined,
+        closed_at: closed_at ?? undefined,
+        closed_by: closed_by ?? undefined,
+        context: {
+            total_summary: total_summary || {},
+            items: Array.isArray(items) ? items : [],
+            ...(normStr(案號) ? { 案號: normStr(案號) } : {}),
+            ...(is_closed != null ? { is_closed } : {}),
+            ...(closed_at != null ? { closed_at } : {}),
+            ...(closed_by != null ? { closed_by } : {}),
+        },
+    };
+}
+
 export function buildRemoteQuotationSyncBaseline(existingData) {
     const isNewQuotationNode = !existingData;
-    const remoteContext = existingData?.context || null;
+    const normalized = existingData ? normalizeQuotationFirebaseSnapshot(existingData) : null;
+    const node = normalized || existingData;
+    const remoteContext = node?.context || null;
     const remoteItems = remoteContext?.items || [];
     return {
         isNewQuotationNode,
-        lastUpdated: existingData?.last_updated ?? null,
+        lastUpdated: node?.last_updated ?? node?.audit_last_updated ?? null,
         itemCount: remoteItems.length,
         itemsContentHash: fingerprintRemoteItemsForSyncGuard(remoteItems),
     };
