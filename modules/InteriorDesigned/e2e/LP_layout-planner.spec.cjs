@@ -422,6 +422,8 @@ test.describe('LayoutPlanner E2E', () => {
     const shotDir = path.join(__dirname, '..', 'test-results', 'floorplan-2d-3-segment');
     fs.mkdirSync(shotDir, { recursive: true });
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#zoom-reset-btn').click();
+    await expect(page.locator('#zoom-level-display')).toHaveText('100%');
     await page.locator('#draw-floor-btn').click();
     const canvas = page.locator('#design-canvas');
     await canvas.click({ position: { x: 200, y: 200 } });
@@ -429,6 +431,21 @@ test.describe('LayoutPlanner E2E', () => {
     await canvas.hover({ position: { x: 350, y: 200 } });
     await expect(page.locator('#drawing-preview-segment-label')).toHaveText('150 cm', { timeout: 5000 });
     await page.screenshot({ path: path.join(shotDir, 'lp-draw-segment-after-label.png') });
+  });
+
+  test('3D 房間預覽連結：自動載入示範並鳥瞰（FLOORPLAN-3D-ROOM-1）', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/LP_LayoutPlanner_3d_room_preview.html', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/lp3d=orbit/, { timeout: 15000 });
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
+    await expect(page.locator('#lp-3d-btn-orbit')).toHaveClass(/lp-3d-active/);
+    await page.waitForTimeout(2500);
+    expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
+
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-orbit.png'), fullPage: false });
   });
 
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {

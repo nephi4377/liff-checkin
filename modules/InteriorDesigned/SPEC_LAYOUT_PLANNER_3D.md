@@ -155,4 +155,7 @@
 
 - 工具列 **儲存圖片**（僅 `?lpPreview=1` 顯示，正式版待核准）：以離屏 `WebGLRenderTarget` 單次渲染後下載 PNG；匯出最長邊 ≤ 3072、總像素 ≤ 8MP（常態不啟用 `preserveDrawingBuffer`）。
 - **俯視／正面斜角／角落斜角**：切回鳥瞰模式並套用預設相機；不影響 2D 與室內行走既有行為。
-- 測試預覽：與室內漫遊共用 `LP_LayoutPlanner_3d_walk_preview.html`（`lpPreview=1` + `e2e/fixtures/lp-3d-spec-demo.json`；`lp3d=orbit` 可驗快照／預設角度）。
+- 測試預覽（不覆蓋正式版）：
+  - **房間鳥瞰**（牆／門窗／地板／櫃體）：`LP_LayoutPlanner_3d_room_preview.html`（`lp3d=orbit`）
+  - **室內漫遊**：`LP_LayoutPlanner_3d_walk_preview.html`（`lp3d=walk`）
+  - 等價 query：`lpPreview=1` + `e2e/fixtures/lp-3d-spec-demo.json` + `lp3d=orbit|walk`
