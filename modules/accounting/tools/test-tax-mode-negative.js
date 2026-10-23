@@ -57,7 +57,13 @@ assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(pay), 'payment
 assert(!/taxDisabled\s*=\s*!isNaN\(amt\)\s*&&\s*amt\s*<\s*0/.test(rev), 'ledger_review 不再因負數禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(pay), 'payment_request 輸入時不禁用含稅');
 assert(!/setTaxControlsDisabled\(row,\s*!isNaN\(a\)\s*&&\s*a\s*<\s*0\)/.test(rev), 'ledger_review 輸入時不禁用含稅');
-assert(/accounting_tax_mode\.js\?v=10/.test(pay) && /accounting_tax_mode\.js\?v=10/.test(rev), 'cache bust v=10');
+var cacheBust = require('./test-cache-bust-helper');
+cacheBust.assertSameNumericCacheBust(
+  [pay, rev],
+  cacheBust.RE.accountingTaxMode,
+  'payment_request and ledger_review share accounting_tax_mode.js ?v=',
+  10
+);
 assert(Tax.segHtml('inclusive', 'payment').indexOf('未稅・逐筆加 5%') < 0, 'segHtml 不顯示逐筆加 5% 選項');
 assert(Tax.segHtml('per_row', 'payment').indexOf('未稅・逐筆加 5%') < 0, '即使目前為 per_row 也不顯示該按鈕');
 assert(Tax.segHtml('inclusive', 'payment').indexOf('未稅／含稅自選') >= 0, '仍顯示自選模式');
