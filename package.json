@@ -1,5 +1,6 @@
 {
   "scripts": {
+    "test:employee-todo": "npm test --prefix employee-todo-src",
     "test:layout-planner": "npm test --prefix modules/InteriorDesigned",
     "test:layout-planner:unit": "npm run test:unit --prefix modules/InteriorDesigned",
     "test:layout-planner:e2e": "npm run test:e2e --prefix modules/InteriorDesigned",
