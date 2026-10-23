@@ -75,6 +75,10 @@ test.describe('Githack quote smoke', () => {
         const draft = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
         expect(draft.schema).toBe('layout-planner-quote-draft-v1');
         expect((draft.items || []).length).toBeGreaterThan(0);
+        const itemNames = (draft.items || []).map((i) => i.name);
+        expect(itemNames.some((n) => /範例矮櫃|矮櫃/.test(n))).toBe(true);
+        expect(itemNames.some((n) => /房門|落地窗/.test(n))).toBe(false);
+        expect((draft.items || []).every((i) => !String(i.id).includes('door-demo') && !String(i.id).includes('win-demo'))).toBe(true);
 
         const bwLink = await page.locator('#quote-export-budgetweb-link').getAttribute('href');
         expect(bwLink).toContain('BudgetWeb_Standalone.html');
@@ -94,7 +98,8 @@ test.describe('Githack quote smoke', () => {
 
         await expect(page.locator('#previewArea')).toBeVisible({ timeout: 20_000 });
         const previewText = await page.locator('#previewBody').innerText();
-        expect(previewText).toMatch(/鞋櫃|櫃|LayoutPlanner/);
+        expect(previewText).toMatch(/範例矮櫃/);
+        expect(previewText).not.toMatch(/房門|落地窗/);
 
         await page.screenshot({
             path: path.join(ARTIFACTS, 'githack-budgetweb-imported-lines.png'),

@@ -12,12 +12,13 @@ const {
   getDemoGeometryClip,
   waitFor3dRenderSettle,
 } = require('./lp-visual-helpers.cjs');
+const { waitForLpBoot, loadLayoutFixture } = require('./lp-e2e-helpers.cjs');
 
 const DEMO_FIXTURE = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
 
 /** @param {import('@playwright/test').Page} page */
 async function loadDemoLayout(page) {
-  await page.locator('#layout-upload').setInputFiles(DEMO_FIXTURE);
+  await loadLayoutFixture(page, DEMO_FIXTURE);
   await expect(page.locator('.placed-cabinet')).toHaveCount(1);
   await expect(page.locator('#drawn-areas-layer polygon')).toHaveCount(1);
   await page.locator('#zoom-reset-btn').click();
@@ -44,6 +45,7 @@ test.describe('LayoutPlanner 畫面回歸', () => {
     const consoleErrors = attachStrictConsoleGuard(page);
 
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await waitForLpBoot(page);
     await installDeterministicFonts(page);
     await expect(page.locator('#mobile-warning')).toBeHidden();
     await expect(page.locator('#toolbox-window')).toBeVisible();

@@ -12,8 +12,12 @@
 | `docs/FLOORPLAN_QUOTE_2.md` | 本說明與預覽連結 |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.js` | 集中計價規則（待豪哥定價） |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.test.js` | 單元測試 |
+| `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 僅櫃體匯出（排除門／窗／牆） |
+| `modules/InteriorDesigned/LP_cabinet_quote_filter.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.js` | 櫃體清單 → 草稿列 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.test.js` | 單元測試 |
+| `modules/InteriorDesigned/LP_budgetweb_cloud_sync.js` | 雲端同步前 id union＋diff |
+| `modules/InteriorDesigned/LP_budgetweb_cloud_sync.test.js` | 單元測試（mock，無 Firebase） |
 | `modules/InteriorDesigned/LP_budgetweb_import_merge.js` | BudgetWeb 合併（僅追加） |
 | `modules/InteriorDesigned/LP_budgetweb_import_merge.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_preview_hosts.js` | githack 預覽 URL／`?v=` 釘選 |
@@ -24,12 +28,13 @@
 | `modules/InteriorDesigned/LP_vitest.config.cjs` | 新增測試檔 |
 | `modules/InteriorDesigned/e2e/LP_layout-planner.spec.cjs` | 地板段長 e2e 重置縮放 |
 | `modules/InteriorDesigned/e2e/LP_githack-quote-smoke.spec.cjs` | githack 端到端煙霧測 |
-| `tools/BudgetWeb_Standalone.html` | Step 0b 匯入 LP JSON（`lpPreview=1`） |
+| `modules/InteriorDesigned/e2e/fixtures/lp-3d-spec-demo.json` | 示範含門窗（報價匯出會排除） |
+| `tools/BudgetWeb_Standalone.html` | Step 0b 匯入 LP JSON；同步前 union＋確認 |
 
 ## 流程
 
-1. **LayoutPlanner**（`?lpPreview=1`）放置櫃體 → 預算 Modal → **匯出報價明細** → 下載 `layout-quote-draft-*.json`（或點「開啟 BudgetWeb 預覽」）
-2. **BudgetWeb**（`?lpPreview=1`）→ Step 0b 選 JSON → **確認合併**（僅追加、同 `id` 略過）→ 人工檢查後再同步雲端（既有行為，需案號）
+1. **LayoutPlanner**（`?lpPreview=1`）放置櫃體 → 預算 Modal → **匯出報價明細** → 下載 `layout-quote-draft-*.json`（**僅 `resolvePlacedCabinet3DKind === 'cabinet'`**，門／窗／牆不匯出）
+2. **BudgetWeb**（`?lpPreview=1`）→ Step 0b 選 JSON → **確認合併**（僅追加、同 `id` 略過）→ 同步雲端前 **讀雲端＋id union＋diff 確認**（`LP_budgetweb_cloud_sync.js`）
 
 ## 獨立預覽（raw.githack.com）
 
@@ -73,16 +78,14 @@
 
 程式內完整清單：`listPricingDecisionsForOwner()`（亦寫入匯出 JSON `meta.pendingPricingDecisions`）。
 
-### 待 Nephi 決定（雲端同步）
+### 雲端同步防護（已實作）
 
-BudgetWeb「同步至雲端」對 `quotations/{案號}` 使用 Firebase **`set()` 寫入整份 `context`**（含當前畫面上的 `items` 陣列），**不是**逐筆 merge。
+`tools/BudgetWeb_Standalone.html` 在 `set()` 前呼叫 `LP_budgetweb_cloud_sync.js`：
 
-| 風險 | 說明 |
-|------|------|
-| 會不會丟別台加的列？ | **會。** 若 A 裝置先從雲端載入或手動編輯後同步，其 `processedData` 未含 B 裝置稍早同步上去的工項，A 再 `set()` 會以 A 的清單**覆蓋**雲端，B 加的列會消失。 |
-| 與本 PR LP 匯入的關係 | 本 PR 僅保護 **BudgetWeb 本機**「匯入 LP 草稿」時**追加**、不刪 Excel 解析列；**不保護**同步雲端時的覆寫。 |
-
-**建議最小防護（本 PR 不實作）**：同步前 `once('value')` 讀取現有 `context.items`，以 `id`（或 `raw_line` fingerprint）做 **union 合併** → 顯示「將新增／將保留／將從雲端移除」diff → **第二次確認**後才 `set()`；若雲端 item 不在本機清單，預設**保留**雲端列除非使用者勾選覆蓋。
+1. 讀取 `quotations/{案號}` 既有 `context.items`
+2. 與本地工項以 **`id` union**（雲端獨有列**保留**；同 id 以本地欄位覆寫）
+3. 若有新增／變更／雲端獨有保留，顯示 diff 並 **confirm**；若合併結果會刪除雲端列則 **中止**
+4. 單元測試僅 mock 資料，**不寫 Firebase**
 
 ## 測試
 

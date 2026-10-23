@@ -16,6 +16,8 @@ module.exports = defineConfig({
             'LP_quotation_budgetweb_export.test.js',
             'LP_quote_pricing_rules.test.js',
             'LP_cabinet_quote_lines.test.js',
+            'LP_cabinet_quote_filter.test.js',
+            'LP_budgetweb_cloud_sync.test.js',
             'LP_budgetweb_import_merge.test.js',
             'LP_preview_hosts.test.js',
             'LP_3DViewer_lifecycle.test.js',

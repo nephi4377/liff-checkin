@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
+const { waitForLpBoot } = require('./lp-e2e-helpers.cjs');
 
 const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
 const ITERATIONS = Number(process.env.LP_3D_PERF_ITERATIONS || 20);
@@ -60,8 +61,13 @@ test.describe('LayoutPlanner 3D perf / memory', () => {
     test.skip(browserName !== 'chromium', 'performance.memory 僅 Chromium');
 
     await page.goto('/LP_LayoutPlanner?lpPreview=1', { waitUntil: 'domcontentloaded' });
+    await waitForLpBoot(page);
     await page.locator('#layout-upload').setInputFiles(LARGE_FIXTURE);
-    await page.waitForTimeout(600);
+    await page.waitForFunction(
+      () => document.querySelectorAll('.placed-cabinet').length >= 60,
+      null,
+      { timeout: 30_000 },
+    );
 
     const cabinetCount = await page.evaluate(() => document.querySelectorAll('.placed-cabinet').length);
     expect(cabinetCount).toBeGreaterThanOrEqual(60);

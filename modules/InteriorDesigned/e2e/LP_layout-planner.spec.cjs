@@ -1,8 +1,15 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
+const { waitForLpBoot, loadLayoutFixture } = require('./lp-e2e-helpers.cjs');
 
 const ARTIFACTS = process.env.LP_E2E_ARTIFACTS || '/opt/cursor/artifacts';
+
+/** @param {import('@playwright/test').Page} page */
+async function openLayoutPlanner(page, path = '/LP_LayoutPlanner.html') {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
+  await waitForLpBoot(page);
+}
 
 async function get3dCanvasCoverage(page) {
   return page.evaluate(() => {
@@ -35,7 +42,7 @@ test.describe('LayoutPlanner E2E', () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
 
     await expect(page.locator('#mobile-warning')).toBeHidden();
     await expect(page.locator('#toolbox-window')).toBeVisible();
@@ -46,12 +53,12 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('施工面積變更寫入歷史後，Ctrl+Z 可復原', async ({ page }) => {
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await expect(page.locator('#undo-btn')).toBeDisabled();
 
     const field = page.locator('#construction-area');
     await field.fill('測試_12坪');
-    await field.dispatchEvent('change');
+    await field.blur();
 
     await expect(page.locator('#undo-btn')).not.toBeDisabled();
 
@@ -64,9 +71,8 @@ test.describe('LayoutPlanner E2E', () => {
 
   test('拖曳櫃體後單次 Ctrl+Z 回到拖曳前位置', async ({ page }) => {
     const fixture = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
-    await page.locator('#layout-upload').setInputFiles(fixture);
-    await page.waitForTimeout(800);
+    await openLayoutPlanner(page);
+    await loadLayoutFixture(page, fixture);
 
     const cab = page.locator('#keyguard-cab-1');
     await expect(cab).toBeVisible();
@@ -95,11 +101,11 @@ test.describe('LayoutPlanner E2E', () => {
 
   test('視窗外放開滑鼠仍結束拖曳手勢，單次復原有效', async ({ page }) => {
     const fixture = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
-    await page.locator('#layout-upload').setInputFiles(fixture);
-    await page.waitForTimeout(800);
+    await openLayoutPlanner(page);
+    await loadLayoutFixture(page, fixture);
 
     const cab = page.locator('#keyguard-cab-1');
+    await expect(cab).toBeVisible();
     const box = await cab.boundingBox();
     expect(box).toBeTruthy();
     const startX = box.x + box.width / 2;
@@ -125,11 +131,11 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('復原後 Ctrl+Y 可重做', async ({ page }) => {
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
 
     const field = page.locator('#construction-area');
     await field.fill('重做測試');
-    await field.dispatchEvent('change');
+    await field.blur();
 
     await page.click('body');
     await page.keyboard.press('Control+z');
@@ -142,7 +148,7 @@ test.describe('LayoutPlanner E2E', () => {
   test('3D 模組載入失敗時 2D 仍可用並顯示錯誤通知', async ({ page }) => {
     await page.route(/LP_3DViewer\.js/, (route) => route.abort('failed'));
 
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await expect(page.locator('#toolbox-window')).toBeVisible();
 
     await page.locator('#toggle-3d-view-btn').click();
@@ -168,7 +174,7 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('連點 3D 按鈕只建立一個 canvas', async ({ page }) => {
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     const btn = page.locator('#toggle-3d-view-btn');
     await btn.dblclick();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
@@ -182,7 +188,7 @@ test.describe('LayoutPlanner E2E', () => {
       else route.continue();
     });
 
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     const btn = page.locator('#toggle-3d-view-btn');
     await btn.click();
     await page.waitForTimeout(500);
@@ -202,7 +208,7 @@ test.describe('LayoutPlanner E2E', () => {
     page.on('pageerror', (e) => errors.push(e.message));
 
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await page.waitForTimeout(2000);
@@ -210,8 +216,7 @@ test.describe('LayoutPlanner E2E', () => {
 
     await page.locator('#lp-3d-btn-exit-2d').click();
     await expect(page.locator('body')).not.toHaveClass(/lp-3d-mode/);
-    await page.locator('#layout-upload').setInputFiles(fixture);
-    await page.waitForTimeout(800);
+    await loadLayoutFixture(page, fixture);
 
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
@@ -223,7 +228,7 @@ test.describe('LayoutPlanner E2E', () => {
 
   test('3D 畫布全螢幕不被側欄或底列遮住（桌機）', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await page.waitForTimeout(2500);
@@ -304,8 +309,7 @@ test.describe('LayoutPlanner E2E', () => {
 
   test('3D 畫布在小視窗仍佔滿可視區（手機寬度）', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => window.__lpBooted === true, null, { timeout: 30_000 });
+    await openLayoutPlanner(page);
     await page.evaluate(() => document.getElementById('toggle-3d-view-btn')?.click());
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 30_000 });
     await page.waitForTimeout(2500);
@@ -320,9 +324,8 @@ test.describe('LayoutPlanner E2E', () => {
 
   test('3D 室內行走時 D 與方向鍵不影響 2D 櫃體', async ({ page }) => {
     const fixture = path.join(__dirname, 'fixtures', 'lp-walk-keyguard.json');
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
-    await page.locator('#layout-upload').setInputFiles(fixture);
-    await page.waitForTimeout(800);
+    await openLayoutPlanner(page);
+    await loadLayoutFixture(page, fixture);
 
     await page.locator('#keyguard-cab-1').click();
     const before = await page.evaluate(() => {
@@ -405,7 +408,7 @@ test.describe('LayoutPlanner E2E', () => {
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
     await expect(page.locator('#lp-3d-overlay')).toBeVisible();
@@ -422,7 +425,7 @@ test.describe('LayoutPlanner E2E', () => {
   test('繪製地板：移動游標顯示即時段長 (FLOORPLAN-2D-3)', async ({ page }) => {
     const shotDir = path.join(__dirname, '..', 'test-results', 'floorplan-2d-3-segment');
     fs.mkdirSync(shotDir, { recursive: true });
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#zoom-reset-btn').click();
     await page.locator('#draw-floor-btn').click();
     const canvas = page.locator('#design-canvas');
@@ -434,7 +437,7 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#show-budget-modal-btn').click();
     await expect(page.locator('#budget-modal')).toBeVisible();
     await page.locator('#budget-modal-close-btn').click();
@@ -442,7 +445,7 @@ test.describe('LayoutPlanner E2E', () => {
   });
 
   test('匯出報價明細僅 lpPreview 顯示且一般模式無法觸發', async ({ page }) => {
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await page.locator('#show-budget-modal-btn').click();
     await expect(page.locator('#budget-modal')).toBeVisible();
     await expect(page.locator('#export-quote-draft-btn')).toBeHidden();
@@ -454,14 +457,14 @@ test.describe('LayoutPlanner E2E', () => {
     });
     expect(draftOpenedInNormal).toBe(false);
 
-    await page.goto('/LP_LayoutPlanner?lpPreview=1', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page, '/LP_LayoutPlanner?lpPreview=1');
     await page.locator('#show-budget-modal-btn').click();
     await expect(page.locator('#export-quote-draft-btn')).toBeVisible();
   });
 
   test('元件表讀失敗時分類區顯示再試，不可裝成還沒載入', async ({ page }) => {
     await page.route('**/spreadsheets/**', (route) => route.abort());
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await openLayoutPlanner(page);
     await expect(page.locator('#btnRetrySheetLoadLayer')).toBeVisible({ timeout: 15000 });
     await expect(page.locator('#layer-visibility-list')).toContainText('元件表讀不到');
     await expect(page.locator('#layer-visibility-list')).not.toContainText('載入元件後顯示分類');

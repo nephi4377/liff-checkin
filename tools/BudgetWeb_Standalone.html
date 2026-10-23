@@ -869,6 +869,21 @@
         a.click();
     });
 
+    let cloudSyncHelpers = null;
+    async function loadCloudSyncHelpers() {
+        if (cloudSyncHelpers) return cloudSyncHelpers;
+        const modUrl = new URL(
+            '../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js',
+            window.location.href,
+        ).href;
+        const mod = await import(modUrl);
+        cloudSyncHelpers = {
+            prepareCloudQuotationSync: mod.prepareCloudQuotationSync,
+            formatSyncDiffForConfirm: mod.formatSyncDiffForConfirm,
+        };
+        return cloudSyncHelpers;
+    }
+
     document.getElementById('syncCloudBtn').addEventListener('click', async () => {
         const projectNo = document.getElementById('projectNoInput').value.trim();
         if (!projectNo) { alert("請填寫案號！"); return; }
@@ -876,22 +891,40 @@
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
         try {
+            const { prepareCloudQuotationSync, formatSyncDiffForConfirm } = await loadCloudSyncHelpers();
+
             let existingData = null;
             try {
                 const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
                 existingData = snapshot.val();
             } catch (e) {}
 
-            const exportItems = processedData.items.filter(r => r.type === 'item').map(r => {
-                const newItem = BudgetQuoteParser.sanitizeItemForExport(r.data);
-                if (existingData && existingData.context && existingData.context.items) {
-                    const oldMatch = existingData.context.items.find(old => old.id === newItem.id || (old.name === newItem.name && old.spec === newItem.spec));
-                    if (oldMatch) {
-                        newItem.completion_percent = oldMatch.completion_percent || 0;
-                        newItem.verification = oldMatch.verification || { is_ok: false };
-                        newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
-                        if (!newItem.price && oldMatch.price) newItem.price = oldMatch.price;
-                    }
+            const localItems = processedData.items.filter(r => r.type === 'item').map(r =>
+                BudgetQuoteParser.sanitizeItemForExport(r.data),
+            );
+
+            const remoteContext = existingData?.context || null;
+            const { mergedItems, diff } = prepareCloudQuotationSync({
+                localItems,
+                remoteContext,
+            });
+
+            if (diff.removed.length > 0) {
+                alert('合併結果將刪除雲端工項，已中止。請聯繫開發。\n' + diff.removed.map((i) => i.id).join(', '));
+                return;
+            }
+
+            if (diff.hasChanges || diff.preservedRemoteOnly.length > 0) {
+                if (!confirm(formatSyncDiffForConfirm(diff))) return;
+            }
+
+            const exportItems = mergedItems.map((newItem) => {
+                const oldMatch = remoteContext?.items?.find((old) => old.id === newItem.id);
+                if (oldMatch) {
+                    newItem.completion_percent = oldMatch.completion_percent ?? newItem.completion_percent ?? 0;
+                    newItem.verification = oldMatch.verification || newItem.verification || { is_ok: false };
+                    newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
+                    if (!newItem.price && oldMatch.price) newItem.price = oldMatch.price;
                 }
                 return newItem;
             });
@@ -900,7 +933,7 @@
                 案號: projectNo,
                 total_summary: { 
                     ...processedData.total_summary, 
-                    siteName: (existingData && existingData.context && existingData.context.total_summary) ? existingData.context.total_summary.siteName : "載入中...",
+                    siteName: remoteContext?.total_summary?.siteName || "載入中...",
                     overall_completion: Math.round(exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / exportItems.length) || 0
                 },
                 items: exportItems

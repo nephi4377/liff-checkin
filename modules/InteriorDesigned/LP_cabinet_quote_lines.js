@@ -2,6 +2,7 @@
  * 從畫布櫃體產生報價草稿列（名稱、類別、寬深高、數量、空間）
  */
 import { inferCategoryTag } from './LP_quotation_budgetweb_export.js';
+import { filterPlacedCabinetsForQuoteExport } from './LP_cabinet_quote_filter.js';
 import {
     resolveCabinetPricingRule,
     computeQuantityFromPricingRule,
@@ -43,7 +44,7 @@ function collectAddonLines(cab, groupName, parentLineKey) {
  * @returns {Array} lineItems 含 isHeader、與 buildLayoutPlannerQuoteDraft 相容
  */
 export function buildCabinetQuoteLineItemsFromLayout(placedCabinets) {
-    const cabs = Array.isArray(placedCabinets) ? placedCabinets : [];
+    const cabs = filterPlacedCabinetsForQuoteExport(Array.isArray(placedCabinets) ? placedCabinets : []);
     const byGroup = new Map();
     cabs.forEach((cab) => {
         const g = String(cab.data?.group || '未分類').trim() || '未分類';
@@ -55,8 +56,9 @@ export function buildCabinetQuoteLineItemsFromLayout(placedCabinets) {
     const lineItems = [];
 
     groupNames.forEach((groupName) => {
-        lineItems.push({ isHeader: true, lineKey: `hdr_${groupName}`, name: groupName });
         const list = byGroup.get(groupName) || [];
+        if (!list.length) return;
+        lineItems.push({ isHeader: true, lineKey: `hdr_${groupName}`, name: groupName });
         list.sort((a, b) => String(a.data?.name || '').localeCompare(String(b.data?.name || ''), 'zh-Hant'));
 
         list.forEach((cab) => {
