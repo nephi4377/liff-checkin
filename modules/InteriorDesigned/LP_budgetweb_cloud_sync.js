@@ -112,21 +112,55 @@ export function mergeQuotationItemsById(localItems, remoteItems) {
 }
 
 /**
- * 雲端對應列：先 id，再唯一的名稱+規格（備援 ITEM_* 位移）
+ * 僅完全相同 id（進度／驗收不得走名稱備援）
  * @param {object} localItem
  * @param {Array<object>} remoteItems
  */
-export function matchRemoteItemForLocal(localItem, remoteItems) {
-    const list = remoteItems || [];
+export function matchRemoteItemByExactId(localItem, remoteItems) {
     if (!localItem?.id) return null;
-    const byId = list.find((r) => r?.id && String(r.id) === String(localItem.id));
-    if (byId) return byId;
+    return (remoteItems || []).find((r) => r?.id && String(r.id) === String(localItem.id)) || null;
+}
 
-    const key = buildNameSpecKey(localItem);
-    if (!key || key === '||') return null;
-    const matches = list.filter((r) => buildNameSpecKey(r) === key);
-    if (matches.length === 1) return matches[0];
-    return null;
+/**
+ * 確認視窗用：本地 id 在雲端找不到，但名稱+規格有候選（不套用進度）
+ */
+export function findNameSpecHintsForSync(localItems, remoteItems) {
+    const remote = remoteItems || [];
+    const remoteById = new Map(remote.filter((i) => i?.id).map((i) => [String(i.id), i]));
+    const hints = [];
+
+    (localItems || []).forEach((loc) => {
+        if (!loc?.id || remoteById.has(String(loc.id))) return;
+        const key = buildNameSpecKey(loc);
+        if (!key || key === '||') return;
+        const matches = remote.filter((r) => buildNameSpecKey(r) === key);
+        if (!matches.length) return;
+        hints.push({
+            localId: String(loc.id),
+            localName: loc.name || '',
+            candidates: matches.map((m) => ({ id: m.id, name: m.name || '' })),
+        });
+    });
+    return hints;
+}
+
+/**
+ * @param {Array<object>} mergedItems
+ * @param {Array<object>} remoteItems
+ */
+export function applyRemoteProgressByExactId(mergedItems, remoteItems) {
+    const remote = remoteItems || [];
+    return (mergedItems || []).map((newItem) => {
+        const oldMatch = matchRemoteItemByExactId(newItem, remote);
+        if (!oldMatch) return { ...newItem };
+        const out = { ...newItem };
+        out.completion_percent = oldMatch.completion_percent ?? out.completion_percent ?? 0;
+        out.verification = oldMatch.verification || out.verification || { is_ok: false };
+        out.status =
+            out.completion_percent === 100 ? 'DONE' : out.completion_percent > 0 ? 'PROCESS' : 'PENDING';
+        if (!normStr(out.price) && normStr(oldMatch.price)) out.price = oldMatch.price;
+        return out;
+    });
 }
 
 /**
@@ -151,7 +185,7 @@ export function computeQuotationSyncDiff(remoteItems, localItems, mergedItems) {
     local.forEach((loc) => {
         if (!loc?.id) return;
         const id = String(loc.id);
-        const rem = remoteById.get(id) || matchRemoteItemForLocal(loc, remote);
+        const rem = remoteById.get(id);
         if (!rem) return;
         const locNorm = normalizeLocalItemForDiff(loc, rem);
         if (itemSnapshot(rem) !== itemSnapshot(locNorm)) {
@@ -218,7 +252,7 @@ export function buildQuotationFirebaseUpdatePayload(params) {
  * @param {ReturnType<typeof computeQuotationSyncDiff>} diff
  * @returns {string}
  */
-export function formatSyncDiffForConfirm(diff) {
+export function formatSyncDiffForConfirm(diff, nameSpecHints = []) {
     const lines = ['同步前請確認（合併後不會默默刪除僅存在於雲端的工項）：', ''];
     if (diff.blockingErrors?.length) {
         lines.push('【無法同步】');
@@ -231,8 +265,17 @@ export function formatSyncDiffForConfirm(diff) {
         if (diff.added.length > 15) lines.push(`  …另有 ${diff.added.length - 15} 筆`);
         lines.push('');
     }
+    if (nameSpecHints.length) {
+        lines.push(`【提示：名稱+規格相似但 id 不同 ${nameSpecHints.length} 筆】（不會自動帶入驗收進度）`);
+        nameSpecHints.slice(0, 8).forEach((h) => {
+            const cand = h.candidates.map((c) => c.id).join(', ');
+            lines.push(`  ? 本地 ${h.localId} ${h.localName} ↔ 雲端候選: ${cand}`);
+        });
+        if (nameSpecHints.length > 8) lines.push(`  …另有 ${nameSpecHints.length - 8} 筆`);
+        lines.push('');
+    }
     if (diff.changed.length) {
-        lines.push(`【變更 ${diff.changed.length} 筆】（同 id 或名稱+規格對上，內容與雲端不同）`);
+        lines.push(`【變更 ${diff.changed.length} 筆】（同 id，內容與雲端不同）`);
         diff.changed.slice(0, 10).forEach((c) => lines.push(`  ~ ${c.id} ${c.before?.name || ''}`));
         if (diff.changed.length > 10) lines.push(`  …另有 ${diff.changed.length - 10} 筆`);
         lines.push('');
@@ -248,6 +291,10 @@ export function formatSyncDiffForConfirm(diff) {
     }
     if (diff.preservedRemoteOnly.length) {
         lines.push(`【保留雲端獨有 ${diff.preservedRemoteOnly.length} 筆】（未在本地列表，仍會保留）`);
+        diff.preservedRemoteOnly.slice(0, 15).forEach((i) => lines.push(`  · ${i.id} ${i.name || ''}`));
+        if (diff.preservedRemoteOnly.length > 15) {
+            lines.push(`  …另有 ${diff.preservedRemoteOnly.length - 15} 筆`);
+        }
         lines.push('');
     }
     if (!diff.hasChanges && !diff.preservedRemoteOnly.length && !diff.blockingErrors?.length) {

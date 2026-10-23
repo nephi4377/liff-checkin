@@ -328,10 +328,32 @@
      * @param {string} sheetName
      * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
      */
+    /** 同表內重複 id：第 1 筆不變，第 2 筆起加 _2、_3… */
+    function assignUniqueItemIdForSheet(sheetItemIdCounts, baseId) {
+        const n = (sheetItemIdCounts.get(baseId) || 0) + 1;
+        sheetItemIdCounts.set(baseId, n);
+        if (n === 1) return baseId;
+        return `${baseId}_${n}`;
+    }
+
+    function stableItemContentHash(data) {
+        const parts = ['name', 'spec', 'qty', 'unit', 'zone', 'sheet_source'].map((f) =>
+            String(data && data[f] != null ? data[f] : '').trim(),
+        );
+        const s = parts.join('\x1f');
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return (h >>> 0).toString(36).padStart(7, '0').slice(0, 7);
+    }
+
     function parseSheetRows(json, sheetName, options) {
         const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
         const items = [];
+        const sheetItemIdCounts = new Map();
         if (!json || json.length < 3) {
             return { items, taxInclusiveTotal: null };
         }
@@ -400,12 +422,17 @@
 
             if (metadataBlocksItem(picked, i, startRow, metadataKeywords)) continue;
 
+            const baseItemId = picked.indexVal
+                ? `ITEM_${sheetName}_${picked.indexVal}`
+                : `ITEM_${sheetName}_R${i}`;
+            const itemId = assignUniqueItemIdForSheet(sheetItemIdCounts, baseItemId);
+
             items.push({
                 type: 'item',
                 zone: currentZone,
                 raw: rawLine,
                 data: {
-                    id: picked.indexVal ? `ITEM_${sheetName}_${picked.indexVal}` : `ITEM_${sheetName}_R${i}`,
+                    id: itemId,
                     zone: currentZone,
                     name: picked.name,
                     spec: picked.spec,
@@ -530,6 +557,8 @@
         classifyItemCounts,
         findTaxInclusiveTotal,
         sanitizeItemForExport,
-        exportPayloadContainsForbiddenKeys
+        exportPayloadContainsForbiddenKeys,
+        assignUniqueItemIdForSheet,
+        stableItemContentHash,
     };
 });

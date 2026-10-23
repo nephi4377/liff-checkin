@@ -31,6 +31,7 @@ import {
     PENDING_PRICE_LABEL,
 } from './LP_quote_pricing_rules.js';
 import { buildBudgetWebPreviewUrl } from './LP_preview_hosts.js';
+import { enrichPlacedCabinetQuoteMeta } from './LP_quote_placement_meta.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -603,6 +604,7 @@ function addCabinet(data, x, y) {
         customAddons: [] // [新增] 初始化自訂副屬性
     };
     if (checkCollision(cab)) return showGlobalNotification("位置重疊，請更換位置", 3000, 'error');
+    enrichPlacedCabinetQuoteMeta(cab);
     placedCabinets.push(cab);
     renderAllCabinets();
     selectCabinet(cab.id); // 選取新元件
@@ -4774,10 +4776,12 @@ async function openLayoutPlanner3DForPreview(viewMode) {
 function loadLayoutFromData(layoutData, options = {}) {
     const rawCabs = layoutData.placedCabinets || [];
     placedCabinets = rawCabs.map((cab) => {
+        let c = cab;
         if (cab.data && cab.data.img && typeof cab.data.img === 'string' && cab.data.img.trim().startsWith('<svg')) {
-            return { ...cab, data: { ...cab.data, img: normalizeSheetSvg(cab.data.img) } };
+            c = { ...cab, data: { ...cab.data, img: normalizeSheetSvg(cab.data.img) } };
         }
-        return cab;
+        if (!c.quoteSourceType && !c.data?.quoteSourceType) enrichPlacedCabinetQuoteMeta(c);
+        return c;
     });
     drawnAreas = (layoutData.drawnAreas || []).map(normalizeDrawnAreaForImport);
     placedAnnotations = layoutData.placedAnnotations || []; // [新增]

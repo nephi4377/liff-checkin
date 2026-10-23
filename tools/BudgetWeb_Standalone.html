@@ -813,7 +813,14 @@
             type: 'item',
             raw: row.raw,
             data: {
-                id: `MANUAL_${index}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+                id: `MANUAL_${index}_${BudgetQuoteParser.stableItemContentHash({
+                    name,
+                    spec: '',
+                    qty: String(d[nameIdx + 2] || '1').trim(),
+                    unit: String(d[nameIdx + 1] || '式').trim(),
+                    zone: row.zone || '未分類',
+                    sheet_source: row.sheet_source || '稽核手動',
+                })}`,
                 zone: row.zone || "未分類",
                 name: name,
                 spec: "", 
@@ -836,7 +843,14 @@
             type: 'item',
             raw: "手動新增",
             data: {
-                id: `APPEND_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+                id: `APPEND_${BudgetQuoteParser.stableItemContentHash({
+                    name,
+                    spec: document.getElementById('addSpec').value,
+                    qty: document.getElementById('addQty').value || '1',
+                    unit: document.getElementById('addUnit').value || '式',
+                    zone: document.getElementById('addZone').value || '追加項',
+                    sheet_source: '手動',
+                })}`,
                 zone: document.getElementById('addZone').value || "追加項",
                 name: name,
                 spec: document.getElementById('addSpec').value,
@@ -880,7 +894,6 @@
         cloudSyncHelpers = {
             prepareCloudQuotationSync: mod.prepareCloudQuotationSync,
             formatSyncDiffForConfirm: mod.formatSyncDiffForConfirm,
-            matchRemoteItemForLocal: mod.matchRemoteItemForLocal,
             buildQuotationFirebaseUpdatePayload: mod.buildQuotationFirebaseUpdatePayload,
         };
         return cloudSyncHelpers;
@@ -893,75 +906,36 @@
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
         try {
-            const {
-                prepareCloudQuotationSync,
-                formatSyncDiffForConfirm,
-                matchRemoteItemForLocal,
-                buildQuotationFirebaseUpdatePayload,
-            } = await loadCloudSyncHelpers();
-
-            let snapshot;
-            try {
-                snapshot = await db.ref(`quotations/${projectNo}`).once('value');
-            } catch (readErr) {
-                alert('無法讀取雲端報價資料，同步已中止（未寫入）。\n' + (readErr?.message || readErr));
-                return;
-            }
-
-            const isNewQuotationNode = !snapshot.exists();
-            const existingData = isNewQuotationNode ? null : snapshot.val();
+            const syncMod = await loadCloudSyncHelpers();
+            const firebaseModUrl = new URL(
+                '../modules/InteriorDesigned/LP_budgetweb_firebase_sync.js',
+                window.location.href,
+            ).href;
+            const { runBudgetWebQuotationCloudSync } = await import(firebaseModUrl);
 
             const localItems = processedData.items.filter(r => r.type === 'item').map(r =>
                 BudgetQuoteParser.sanitizeItemForExport(r.data),
             );
 
-            const remoteContext = existingData?.context || null;
-            const { mergedItems, diff, blockingErrors } = prepareCloudQuotationSync({
+            const result = await runBudgetWebQuotationCloudSync({
+                projectNo,
                 localItems,
-                remoteContext,
-            });
-
-            if (blockingErrors?.length) {
-                alert('同步已中止：\n' + blockingErrors.join('\n'));
-                return;
-            }
-
-            if (diff.removed.length > 0) {
-                alert('合併結果將刪除雲端工項，已中止。請聯繫開發。\n' + diff.removed.map((i) => i.id).join(', '));
-                return;
-            }
-
-            if (diff.hasChanges || diff.preservedRemoteOnly.length > 0) {
-                if (!confirm(formatSyncDiffForConfirm(diff))) return;
-            }
-
-            const remoteItems = remoteContext?.items || [];
-            const exportItems = mergedItems.map((newItem) => {
-                const oldMatch = matchRemoteItemForLocal(newItem, remoteItems);
-                if (oldMatch) {
-                    newItem.completion_percent = oldMatch.completion_percent ?? newItem.completion_percent ?? 0;
-                    newItem.verification = oldMatch.verification || newItem.verification || { is_ok: false };
-                    newItem.status = newItem.completion_percent === 100 ? 'DONE' : (newItem.completion_percent > 0 ? 'PROCESS' : 'PENDING');
-                    if (!newItem.price && oldMatch.price) newItem.price = oldMatch.price;
-                }
-                return newItem;
-            });
-
-            const finalExport = {
-                案號: projectNo,
-                total_summary: { 
-                    ...processedData.total_summary, 
-                    siteName: remoteContext?.total_summary?.siteName || "載入中...",
-                    overall_completion: Math.round(exportItems.reduce((acc, cur) => acc + (cur.completion_percent || 0), 0) / exportItems.length) || 0
+                totalSummary: processedData.total_summary,
+                readQuotationSnapshot: async () => {
+                    const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
+                    return {
+                        exists: () => snapshot.exists(),
+                        val: () => snapshot.val(),
+                    };
                 },
-                items: exportItems
-            };
-
-            const updatePayload = buildQuotationFirebaseUpdatePayload({
-                finalContext: finalExport,
-                isNewQuotationNode,
+                updateQuotation: async (_path, payload) => {
+                    await db.ref(`quotations/${projectNo}`).update(payload);
+                },
+                confirmFn: (msg) => confirm(msg),
+                alertFn: (msg) => alert(msg),
             });
-            await db.ref(`quotations/${projectNo}`).update(updatePayload);
+
+            if (!result.ok) return;
 
             if (confirm("☁️ 同步成功！是否啟動驗收表？")) {
                 window.open(`BudgetAuditor_Standalone_V2.html?projectNo=${projectNo}`, '_blank');

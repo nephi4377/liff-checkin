@@ -26,23 +26,11 @@ describe('isQuoteExportablePlacedCabinet', () => {
         expect(isQuoteExportablePlacedCabinet(win)).toBe(false);
     });
 
-    it('名稱含門／窗但為櫃體仍匯出（不依 3D 名稱猜測）', () => {
+    it('名稱含門／窗但為櫃體仍匯出', () => {
         expect(
             isQuoteExportablePlacedCabinet({
                 id: 'x1',
                 data: { name: '推門衣櫃', group: '系統櫃', width: 120, depth: 60 },
-            }),
-        ).toBe(true);
-        expect(
-            isQuoteExportablePlacedCabinet({
-                id: 'x2',
-                data: { name: '拉門鞋櫃', group: '系統櫃' },
-            }),
-        ).toBe(true);
-        expect(
-            isQuoteExportablePlacedCabinet({
-                id: 'x3',
-                data: { name: '窗邊臥榻', group: '木作' },
             }),
         ).toBe(true);
     });
@@ -57,37 +45,38 @@ describe('isQuoteExportablePlacedCabinet', () => {
         ).toBe(true);
     });
 
-    it('quoteCategory / quoteSourceType 排除家具與開口', () => {
+    it('舊資料無旗標：model3dKind door、門窗工程、沙發床排除', () => {
         expect(
             isQuoteExportablePlacedCabinet({
-                id: 'sofa',
-                data: { name: '三人沙發', quoteCategory: 'furniture' },
+                id: 'd1',
+                data: { name: '房門', group: '系統櫃', model3dKind: 'door' },
             }),
         ).toBe(false);
         expect(
             isQuoteExportablePlacedCabinet({
-                id: 'bed',
-                data: { name: '6尺床', quoteSourceType: 'furniture' },
+                id: 'w1',
+                data: { name: '鋁窗', group: '門窗工程', width: 100, depth: 15 },
             }),
         ).toBe(false);
         expect(
             isQuoteExportablePlacedCabinet({
-                id: 'open',
-                data: { name: '房門', quoteSourceType: 'opening' },
+                id: 's1',
+                data: { name: '三人沙發', group: '系統櫃' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'b1',
+                data: { name: '6尺床', group: '家具家電' },
             }),
         ).toBe(false);
     });
 
-    it('無 data 物件不匯出', () => {
-        expect(isQuoteExportablePlacedCabinet({ id: 'bare' })).toBe(false);
-    });
-
-    it('buildCabinetQuoteLineItemsFromLayout 略過 quoteExport:false 門窗', () => {
+    it('buildCabinetQuoteLineItemsFromLayout 略過門窗', () => {
         const lines = buildCabinetQuoteLineItemsFromLayout(demoFixture.placedCabinets);
         const names = lines.filter((r) => !r.isHeader).map((r) => r.name);
         expect(names).toContain('範例矮櫃');
         expect(names).not.toContain('房門');
-        expect(names).not.toContain('落地窗');
         expect(filterPlacedCabinetsForQuoteExport(demoFixture.placedCabinets)).toHaveLength(1);
     });
 });
