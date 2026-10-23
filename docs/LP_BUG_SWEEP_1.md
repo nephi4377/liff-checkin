@@ -31,5 +31,5 @@
 
 ## 驗證
 
-- Vitest + Playwright 全 suite（見 PR CI）。
-- githack：`LP_LayoutPlanner_3d_room_preview.html`（牆體點選與 3D 無關，2D 用本地 e2e）。
+- 本地：`npm test` → Vitest **96**、Playwright e2e **32**（含本 sweep **3** 則）。
+- githack：`modules/InteriorDesigned/LP_LayoutPlanner.html`（見 PR 說明連結）。
