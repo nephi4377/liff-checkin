@@ -315,7 +315,8 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         const thickness = area.thickness || 15;
         const signed = signedPolygonArea(area.points);
         const dist = signed < 0 ? -thickness : thickness;
-        const outer = offsetPolygon(area.points, dist);
+        // 2D SVG evenodd 與 calculateWallPath 用 dist 畫「內圈外偏」；Three.js Shape 需真正向外擴一圈。
+        const outer = offsetPolygon(area.points, -dist);
         walls.push({
             id: area.id,
             heightCm: defaults.WALL_HEIGHT_CM,

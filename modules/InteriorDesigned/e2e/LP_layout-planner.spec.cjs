@@ -442,10 +442,26 @@ test.describe('LayoutPlanner E2E', () => {
     await expect(page).toHaveURL(/lp3d=orbit/, { timeout: 15000 });
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
     await expect(page.locator('#lp-3d-btn-orbit')).toHaveClass(/lp-3d-active/);
+    await expect(page.locator('#lp-3d-ceiling-toggle')).not.toBeChecked();
     await page.waitForTimeout(2500);
     expect(errors, `頁面錯誤: ${errors.join('; ')}`).toHaveLength(0);
 
+    const snapshot = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
+    expect(snapshot?.ceilingVisible).toBe(false);
+    expect(snapshot?.labelCount).toBeGreaterThanOrEqual(1);
+    for (const hit of snapshot?.openingWallHits ?? []) {
+      expect(hit.intersectsWall, `${hit.kind} ${hit.id} 應貼齊牆體`).toBe(true);
+      expect(hit.csgCut, `${hit.kind} ${hit.id} 應在牆帶內開洞`).toBe(true);
+    }
+    for (const cab of snapshot?.cabinetsInsideFloor ?? []) {
+      expect(cab.inside, `櫃體 ${cab.id} 應在地板內`).toBe(true);
+    }
+
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-orbit.png'), fullPage: false });
+
+    await page.locator('#lp-3d-btn-preset-corner').click();
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-eye-level.png'), fullPage: false });
   });
 
   test('可開啟預算明細 Modal 並關閉', async ({ page }) => {

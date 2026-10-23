@@ -4,8 +4,11 @@ import { Brush, Evaluator, SUBTRACTION } from './vendor/three-bvh-csg/index.modu
 import {
     buildLayout3DDescriptor,
     openingCutsWall,
+    openingAssociatesWithWall,
     LP_3D_DEFAULTS,
     ringCentroidXZ,
+    fixtureFootprintSamplePointsXZ,
+    pointInPolygonXZ,
 } from './LP_3D_scene.js';
 import {
     buildFixtureMeshGroup,
@@ -26,18 +29,25 @@ import {
     resolveWalkSpawnXZ,
 } from './LP_3D_walk_collision.js';
 
+/** ExtrudeGeometry 旋轉後 shape.y 對應 world -Z，與 fixture 的 centerZ 一致 */
+function shapePointXZ(p) {
+    return { x: p.x, y: -p.z };
+}
+
 function makeShapeFromRing(outer, inner) {
     const shape = new THREE.Shape();
     outer.forEach((p, i) => {
-        if (i === 0) shape.moveTo(p.x, p.z);
-        else shape.lineTo(p.x, p.z);
+        const s = shapePointXZ(p);
+        if (i === 0) shape.moveTo(s.x, s.y);
+        else shape.lineTo(s.x, s.y);
     });
     shape.closePath();
     if (inner && inner.length >= 3) {
         const hole = new THREE.Path();
         inner.forEach((p, i) => {
-            if (i === 0) hole.moveTo(p.x, p.z);
-            else hole.lineTo(p.x, p.z);
+            const s = shapePointXZ(p);
+            if (i === 0) hole.moveTo(s.x, s.y);
+            else hole.lineTo(s.x, s.y);
         });
         hole.closePath();
         shape.holes.push(hole);
@@ -48,8 +58,9 @@ function makeShapeFromRing(outer, inner) {
 function makeShapeFromSingleRing(ring) {
     const shape = new THREE.Shape();
     ring.forEach((p, i) => {
-        if (i === 0) shape.moveTo(p.x, p.z);
-        else shape.lineTo(p.x, p.z);
+        const s = shapePointXZ(p);
+        if (i === 0) shape.moveTo(s.x, s.y);
+        else shape.lineTo(s.x, s.y);
     });
     shape.closePath();
     return shape;
@@ -118,7 +129,7 @@ export function createLayoutPlanner3DViewer(options) {
     let resizeObserver = null;
     let isOpen = false;
     let viewMode = 'orbit';
-    let showCeiling = true;
+    let showCeiling = false;
     let lastDesc = null;
     const walkCollisionCache = createWalkCollisionCache();
     let lastTick = performance.now();
@@ -168,16 +179,24 @@ export function createLayoutPlanner3DViewer(options) {
     }
 
     function resetOrbitCamera(desc) {
-        const ws = desc.workspaceSize;
-        const span = ws * 0.55;
-        const wallH = desc.walls[0]?.heightCm || LP_3D_DEFAULTS.WALL_HEIGHT_CM;
-        camera.position.set(span, span * 0.75, span);
-        controls.target.set(0, wallH * 0.45, 0);
+        applyOrbitPresetInternal(ORBIT_CAMERA_PRESETS.TOP, desc, { hideCeiling: true });
+    }
+
+    function applyOrbitPresetInternal(presetId, desc, opts = {}) {
+        if (!camera || !controls) return;
+        const { position, target } = computeOrbitPresetCamera(presetId, desc, LP_3D_DEFAULTS);
+        camera.position.set(position.x, position.y, position.z);
+        controls.target.set(target.x, target.y, target.z);
         controls.update();
         orbitBookmark = {
             pos: camera.position.clone(),
             target: controls.target.clone(),
         };
+        if (opts.hideCeiling) {
+            showCeiling = false;
+            if (ceilingToggle) ceilingToggle.checked = false;
+            if (ceilingGroup.current) ceilingGroup.current.visible = false;
+        }
     }
 
     function resetWalkCamera(desc) {
@@ -213,14 +232,7 @@ export function createLayoutPlanner3DViewer(options) {
         if (!lastDesc || !camera || !controls) return;
         viewMode = 'orbit';
         applyViewMode();
-        const { position, target } = computeOrbitPresetCamera(presetId, lastDesc, LP_3D_DEFAULTS);
-        camera.position.set(position.x, position.y, position.z);
-        controls.target.set(target.x, target.y, target.z);
-        controls.update();
-        orbitBookmark = {
-            pos: camera.position.clone(),
-            target: controls.target.clone(),
-        };
+        applyOrbitPresetInternal(presetId, lastDesc);
     }
 
     async function saveCurrentViewPng() {
@@ -422,6 +434,35 @@ export function createLayoutPlanner3DViewer(options) {
         animationId = requestAnimationFrame(tick);
     }
 
+    function computeRoomAcceptanceSnapshot() {
+        if (!lastDesc) return null;
+        const floorRing = lastDesc.walkBounds?.rings?.[0];
+        const openings = lastDesc.fixtures.filter((f) => f.kind === 'door' || f.kind === 'window');
+        const cabinets = lastDesc.fixtures.filter((f) => f.kind === 'cabinet');
+        return {
+            ceilingVisible: Boolean(ceilingGroup.current?.visible),
+            openingWallHits: openings.map((op) => {
+                const associated = lastDesc.walls.find((w) => openingAssociatesWithWall(w, op));
+                const cuts = lastDesc.walls.some((w) => openingCutsWall(w, op));
+                return {
+                    id: op.id,
+                    kind: op.kind,
+                    intersectsWall: Boolean(associated),
+                    csgCut: cuts,
+                };
+            }),
+            cabinetsInsideFloor: cabinets.map((cab) => {
+                const pts = fixtureFootprintSamplePointsXZ(cab);
+                const inside = Boolean(
+                    floorRing?.length >= 3
+                    && pts.every((p) => pointInPolygonXZ(p.x, p.z, floorRing)),
+                );
+                return { id: cab.id, inside };
+            }),
+            labelCount: labelGroup.current?.children?.length ?? 0,
+        };
+    }
+
     function publishTestHooks() {
         if (typeof window === 'undefined') return;
         if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
@@ -432,6 +473,7 @@ export function createLayoutPlanner3DViewer(options) {
             getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
             setWalkPosition: (x, z) => walk?.setPosition(x, z),
             lookWalkAt: (x, z) => walk?.lookAt(x, z),
+            getRoomAcceptanceSnapshot: () => computeRoomAcceptanceSnapshot(),
         };
         mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();
         mountEl.__lp3dRebuild = () => viewer.rebuild();

@@ -190,6 +190,63 @@ describe('clampPointToWalkRings', () => {
     });
 });
 
+describe('lp-3d-spec-demo fixture', () => {
+    it('門窗中心可對牆開洞、櫃體在內圈內', () => {
+        const layout = {
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'area-demo-wall',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [
+                {
+                    id: 'cab-demo-1',
+                    x: 400,
+                    y: 600,
+                    rotation: 0,
+                    currentW: 120,
+                    currentH: 60,
+                    data: { name: '範例矮櫃', group: '系統櫃', width: 120, depth: 60 },
+                },
+                {
+                    id: 'door-demo-1',
+                    x: 500,
+                    y: 285,
+                    rotation: 0,
+                    currentW: 90,
+                    currentH: 15,
+                    data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+                },
+                {
+                    id: 'win-demo-1',
+                    x: 700,
+                    y: 285,
+                    rotation: 0,
+                    currentW: 150,
+                    currentH: 15,
+                    data: { name: '落地窗', group: '門窗工程', width: 150, depth: 15 },
+                },
+            ],
+        };
+        const desc = buildLayout3DDescriptor(layout);
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        const window = desc.fixtures.find((f) => f.kind === 'window');
+        const cab = desc.fixtures.find((f) => f.kind === 'cabinet');
+        expect(openingCutsWall(wall, door)).toBe(true);
+        expect(openingCutsWall(wall, window)).toBe(true);
+        const ring = wall.inner;
+        expect(pointInPolygonXZ(cab.centerX, cab.centerZ, ring)).toBe(true);
+    });
+});
+
 describe('offsetPolygon', () => {
     it('正方形外擴後頂點位移', () => {
         const sq = [

@@ -219,8 +219,8 @@ export function createLabelSprite(THREE, text) {
     tex.minFilter = THREE.LinearFilter;
     const matSprite = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
     const sprite = new THREE.Sprite(matSprite);
-    const scale = 0.35;
-    sprite.scale.set(canvas.width * scale * 0.08, canvas.height * scale * 0.08, 1);
+    const scale = 0.48;
+    sprite.scale.set(canvas.width * scale * 0.1, canvas.height * scale * 0.1, 1);
     sprite.renderOrder = 999;
     return sprite;
 }
