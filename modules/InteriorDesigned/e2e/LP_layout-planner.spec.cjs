@@ -305,8 +305,9 @@ test.describe('LayoutPlanner E2E', () => {
   test('3D 畫布在小視窗仍佔滿可視區（手機寬度）', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__lpBooted === true, null, { timeout: 30_000 });
     await page.evaluate(() => document.getElementById('toggle-3d-view-btn')?.click());
-    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/);
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 30_000 });
     await page.waitForTimeout(2500);
 
     const cov = await get3dCanvasCoverage(page);

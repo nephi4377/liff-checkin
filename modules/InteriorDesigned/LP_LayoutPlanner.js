@@ -5042,6 +5042,7 @@ function bootLayoutPlannerApp() {
     setTimeout(centerView, 100);
 
     maybeInitLayoutPlannerUrlPreview();
+    window.__lpBooted = true;
 }
 
 if (document.readyState === 'loading') {
