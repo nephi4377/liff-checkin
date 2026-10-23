@@ -23,8 +23,8 @@
 
 **遠端（raw.githack.com，完整 commit SHA）** — 勿用 jsDelivr 開 `.html`（常變 `text/plain`）。首次可能出現 rawgit.hack 閘門，點 **Open the page**。
 
-- Orbit（主頁）：`https://raw.githack.com/nephi4377/liff-checkin/7c839ed15d8e08a383d4cb8493591cd31a5ae69f/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
-- Walk（主頁）：`https://raw.githack.com/nephi4377/liff-checkin/7c839ed15d8e08a383d4cb8493591cd31a5ae69f/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk`
+- Orbit（主頁）：`https://raw.githack.com/nephi4377/liff-checkin/55150ec0328903c660425c475a8c9e0aa7212bfb/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
+- Walk（主頁）：`https://raw.githack.com/nephi4377/liff-checkin/55150ec0328903c660425c475a8c9e0aa7212bfb/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk`
 - Stub 捷徑：`LP_LayoutPlanner_3d_room_preview.html` → 上列 orbit
 
 本機（repo 根目錄 `serve` 或 `modules/InteriorDesigned` `:8765`）：
