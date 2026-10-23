@@ -53,6 +53,80 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await expect(page.locator('.placed-cabinet')).toHaveCount(0);
   });
 
+  test('底圖拖曳後 Ctrl+Z 還原位置', async ({ page }) => {
+    const bgFile = path.join(__dirname, 'fixtures', 'lp-tiny-bg.png');
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#bg-upload').setInputFiles(bgFile);
+    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'), { timeout: 10000 });
+    await page.locator('#bg-edit-mode').check();
+    const canvas = page.locator('#design-canvas');
+    const box = await canvas.boundingBox();
+    expect(box).toBeTruthy();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.mouse.move(cx + 120, cy + 80);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const afterDrag = await page.evaluate(() => {
+      const t = document.getElementById('bg-img')?.style.transform || '';
+      const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+    });
+    expect(Math.abs(afterDrag.x) + Math.abs(afterDrag.y)).toBeGreaterThan(5);
+    await canvas.click();
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => page.evaluate(() => {
+      const t = document.getElementById('bg-img')?.style.transform || '';
+      const m = t.match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      const x = m ? parseFloat(m[1]) : 0;
+      const y = m ? parseFloat(m[2]) : 0;
+      return Math.abs(x) + Math.abs(y);
+    })).toBeLessThan(1);
+  });
+
+  test('復原後底圖隱藏（無 data URL 快照）', async ({ page }) => {
+    const bgFile = path.join(__dirname, 'fixtures', 'lp-tiny-bg.png');
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#bg-upload').setInputFiles(bgFile);
+    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
+    await expect(page.locator('#bg-img')).toBeVisible();
+    await page.keyboard.press('Control+z');
+    await expect.poll(async () => page.evaluate(() => {
+      const img = document.getElementById('bg-img');
+      return img?.style.display === 'none' || !img?.src?.startsWith('data:image');
+    })).toBe(true);
+  });
+
+  test('圖層顯示切換可 Ctrl+Z 復原', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    const toggle = page.locator('#layer-visibility-list .layer-vis-toggle').first();
+    const wasChecked = await toggle.isChecked();
+    await toggle.setChecked(!wasChecked);
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Control+z');
+    await expect(toggle).toBeChecked({ checked: wasChecked });
+  });
+
+  test('手動報價覆寫可 Ctrl+Z 復原', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const nameInput = page.locator('.budget-edit-input[data-field="name"]').first();
+    await expect(nameInput).toBeVisible();
+    const before = await nameInput.inputValue();
+    await nameInput.fill(`${before}-SWEEP`);
+    await nameInput.dispatchEvent('input', { bubbles: true });
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Control+z');
+    await expect(nameInput).toHaveValue(before);
+  });
+
   test('復原還原施工面積欄位（history 快照一致）', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     const field = page.locator('#construction-area');

@@ -20,6 +20,7 @@ import {
     segmentLengthCmRounded,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
+import { detachSelectedFromExistingLayoutGroups } from './LP_layout_group_logic.js';
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
@@ -704,6 +705,7 @@ function onLayerVisibilityToggle(groupName, visible) {
         }
     }
     applyLayerVisibilityRefresh();
+    saveState();
 }
 
 function setAllLayerVisibility(visible) {
@@ -1059,6 +1061,11 @@ function renderCabinet(cab) {
         el.classList.add('is-wall');
     }
     el.id = cab.id;
+    if (cab.layoutGroupId) {
+        el.dataset.layoutGroupId = cab.layoutGroupId;
+    } else {
+        delete el.dataset.layoutGroupId;
+    }
     updateCabStyle(el, cab);
 
     // [v9.0 重構] 根據 adjustable 屬性生成對應方向的拉伸控點
@@ -1865,14 +1872,8 @@ function groupSelectedCabinets() {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
     }
-    const touchedGroupIds = new Set(targets.map((c) => c.layoutGroupId).filter(Boolean));
-    if (touchedGroupIds.size) {
-        placedCabinets.forEach((cab) => {
-            if (cab.layoutGroupId && touchedGroupIds.has(cab.layoutGroupId)) {
-                delete cab.layoutGroupId;
-            }
-        });
-    }
+    const selectedIds = new Set(targets.map((c) => c.id));
+    detachSelectedFromExistingLayoutGroups(placedCabinets, selectedIds);
     const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
         cab.layoutGroupId = groupId;
@@ -2526,6 +2527,7 @@ function handleBgUpload(event) {
             bgScale = 1.0;
             updateBgScale(1.0);
             updateBgTransform();
+            saveState();
         };
         reader.readAsDataURL(file);
     }
@@ -3296,6 +3298,7 @@ function onBudgetFieldEdit(lineKey, field, rawValue) {
     const totalEl = document.getElementById('modal-total-price');
     if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
     updateQuotation();
+    saveState();
 }
 
 function hideQuotationRow(lineKey) {
@@ -4114,6 +4117,48 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+function snapshotBackgroundForHistory() {
+    const bgImg = document.getElementById('bg-img');
+    const src = bgImg?.src || '';
+    const hasDataBg = src.startsWith('data:image');
+    return {
+        position: { x: bgPosition.x, y: bgPosition.y },
+        scale: bgScale,
+        src: hasDataBg ? src : '',
+    };
+}
+
+function applyBackgroundFromHistoryState(bg) {
+    const bgImg = document.getElementById('bg-img');
+    const bgControls = document.getElementById('bg-controls');
+    if (!bgImg) return;
+    if (!bg || !bg.src || !String(bg.src).startsWith('data:image')) {
+        bgImg.style.display = 'none';
+        bgImg.removeAttribute('src');
+        bgControls?.classList.add('opacity-50', 'pointer-events-none');
+        bgScale = bg?.scale ?? 1.0;
+        bgPosition = { x: 0, y: 0 };
+        const scaleInput = document.getElementById('bg-scale');
+        const scaleNum = document.getElementById('bg-scale-num');
+        if (scaleInput) scaleInput.value = String(bgScale);
+        if (scaleNum) scaleNum.value = String(bgScale);
+        updateBgTransform();
+        return;
+    }
+    bgPosition = bg.position
+        ? { x: bg.position.x, y: bg.position.y }
+        : { x: 0, y: 0 };
+    bgScale = bg.scale ?? 1.0;
+    bgImg.src = bg.src;
+    bgImg.style.display = 'block';
+    bgControls?.classList.remove('opacity-50', 'pointer-events-none');
+    const scaleInput = document.getElementById('bg-scale');
+    const scaleNum = document.getElementById('bg-scale-num');
+    if (scaleInput) scaleInput.value = String(bgScale);
+    if (scaleNum) scaleNum.value = String(bgScale);
+    updateBgTransform();
+}
+
 function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
@@ -4127,14 +4172,10 @@ function commitSaveState() {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
         placedAnnotations: JSON.parse(JSON.stringify(placedAnnotations)), // [新增]
-        background: {
-            position: bgPosition,
-            scale: bgScale,
-            src: document.getElementById('bg-img').src
-        },
+        background: snapshotBackgroundForHistory(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides: quotationManualOverrides,
-        layerVisibility: layerVisibility
+        quotationManualOverrides: JSON.parse(JSON.stringify(quotationManualOverrides)),
+        layerVisibility: JSON.parse(JSON.stringify(layerVisibility)),
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -4170,25 +4211,7 @@ function loadState(state) {
         ? JSON.parse(JSON.stringify(state.layerVisibility))
         : {};
 
-    if (state.background) {
-        bgPosition = state.background.position || { x: 0, y: 0 };
-        bgScale = state.background.scale ?? 1.0;
-        const bgImg = document.getElementById('bg-img');
-        if (bgImg && state.background.src) {
-            if (state.background.src.startsWith('data:image')) {
-                bgImg.src = state.background.src;
-                bgImg.style.display = 'block';
-                document.getElementById('bg-controls')?.classList.remove('opacity-50', 'pointer-events-none');
-            } else if (!state.background.src || state.background.src === window.location.href) {
-                bgImg.style.display = 'none';
-                bgImg.removeAttribute('src');
-            }
-        }
-        const scaleInput = document.getElementById('bg-scale');
-        const scaleNum = document.getElementById('bg-scale-num');
-        if (scaleInput) scaleInput.value = String(bgScale);
-        if (scaleNum) scaleNum.value = String(bgScale);
-    }
+    applyBackgroundFromHistoryState(state.background);
 
     const constructionAreaEl = document.getElementById('construction-area');
     if (constructionAreaEl) {
@@ -4348,6 +4371,8 @@ function bindEventListeners() {
             // 在底圖模式下，點擊畫布任何地方都可以拖曳底圖 (更直覺)
             e.preventDefault();
             e.stopPropagation();
+            canvas.focus({ preventScroll: true });
+            historyGesture.begin();
             isDraggingBg = true;
             bgDragStart = { x: e.clientX, y: e.clientY };
             bgStartPos = { x: bgPosition.x, y: bgPosition.y };
