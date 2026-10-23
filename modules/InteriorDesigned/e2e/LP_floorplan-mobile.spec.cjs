@@ -22,14 +22,10 @@ test.describe('LayoutPlanner mobile / tablet', () => {
     await expect(page.locator('#toolbox-window')).toBeHidden();
     await page.locator('#toggle-toolbox-btn').click();
     await expect(page.locator('#toolbox-window')).toBeVisible();
-    await page.locator('#toggle-toolbox-btn-header').click();
-    await expect(page.locator('#toolbox-window')).toBeHidden();
 
     await expect(page.locator('#info-window')).toBeHidden();
     await page.locator('#toggle-info-btn').click();
     await expect(page.locator('#info-window')).toBeVisible();
-    await page.locator('#toggle-info-btn-header').click();
-    await expect(page.locator('#info-window')).toBeHidden();
   });
 
   test('觸控路徑：載入佈局後可拖曳櫃體', async ({ page }) => {

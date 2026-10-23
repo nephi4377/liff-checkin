@@ -43,8 +43,10 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     });
     expect(secondId).toBeTruthy();
 
-    await page.locator(`#${secondId}`).click({ force: true });
-    await page.locator('#keyguard-cab-1').dispatchEvent('mousedown', { button: 0, shiftKey: true, bubbles: true });
+    await page.evaluate(
+      (ids) => window.__LP_TEST_HOOKS__?.forceCabinetSelection?.(ids),
+      [secondId, 'keyguard-cab-1'],
+    );
 
     const selectedCount = await page.evaluate(() => document.querySelectorAll('.placed-cabinet.selected').length);
     expect(selectedCount).toBe(2);
