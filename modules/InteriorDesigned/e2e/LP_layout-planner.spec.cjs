@@ -381,6 +381,26 @@ test.describe('LayoutPlanner E2E', () => {
     expect(y).toBe(160);
   });
 
+  test('3D 房間視線在 walk 未建立時自動建立並切入室內', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-perf-large.json&lp3d=orbit',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 45000 });
+    await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.clearWalkControllerForTest?.());
+    await page.selectOption('#lp-3d-preset-select', 'walk_room:0');
+    await page.waitForTimeout(600);
+    const snap = await page.evaluate(() => ({
+      mode: window.__LP3D_TEST_HOOKS__?.getViewMode?.(),
+      y: window.__LP3D_TEST_HOOKS__?.getCameraY?.(),
+      hint: window.__LP3D_TEST_HOOKS__?.getHintText?.(),
+    }));
+    expect(snap.mode).toBe('walk');
+    expect(snap.y).toBe(160);
+    expect(snap.hint).toMatch(/室內/);
+  });
+
   test('3D 儲存圖片與預設角度按鈕可操作', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(

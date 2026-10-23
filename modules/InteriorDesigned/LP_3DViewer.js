@@ -365,9 +365,21 @@ export function createLayoutPlanner3DViewer(options) {
     }
 
     function applyWalkRoomEyePreset(ringIndex) {
-        if (!lastDesc || !walk) return;
+        ensureScene();
+        if (!lastDesc) {
+            setHint('尚未載入佈局，請稍候再選房間視線');
+            return false;
+        }
         const ring = lastDesc.walkBounds?.rings?.[ringIndex];
-        if (!ring?.length) return;
+        if (!ring?.length) {
+            setHint('此佈局尚無可走動的房間地板，無法使用房間視線');
+            return false;
+        }
+        ensureWalk();
+        if (!walk) {
+            setHint('無法啟動室內漫遊，請點「室內」後再試');
+            return false;
+        }
         viewMode = 'walk';
         applyViewMode();
         const pose = computeWalkRoomEyePresetPose(ring);
@@ -377,6 +389,7 @@ export function createLayoutPlanner3DViewer(options) {
             if (pose.pitch != null) walk.setPitch(pose.pitch);
             walk.resetLevelOrientation();
         }
+        return true;
     }
 
     function syncViewPresetSelectOptions(desc) {
@@ -1434,6 +1447,11 @@ export function createLayoutPlanner3DViewer(options) {
         if (new URLSearchParams(window.location.search).get('lpPreview') !== '1') return;
         window.__LP3D_TEST_HOOKS__ = {
             getViewMode: () => viewMode,
+            getHintText: () => hintEl?.textContent ?? '',
+            clearWalkControllerForTest: () => {
+                walk?.dispose();
+                walk = null;
+            },
             getEyeHeightCm: () => LP_3D_DEFAULTS.WALK_EYE_HEIGHT_CM,
             getCameraY: () => camera?.position.y ?? null,
             getCameraXZ: () => (camera ? { x: camera.position.x, z: camera.position.z } : null),
