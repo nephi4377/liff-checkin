@@ -4248,7 +4248,6 @@ function undo() {
         historyIndex--;
         loadState(history[historyIndex]);
         updateUndoRedoButtons();
-        refreshBudgetModalIfOpen();
     }
 }
 
@@ -4257,7 +4256,6 @@ function redo() {
         historyIndex++;
         loadState(history[historyIndex]);
         updateUndoRedoButtons();
-        refreshBudgetModalIfOpen();
     }
 }
 
@@ -4512,14 +4510,15 @@ function bindEventListeners() {
             if (!el.classList.contains('budget-edit-input')) return;
             applyBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
+        budgetTableBody.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            el.dataset.lpCommitBaseline = el.value;
+        });
         budgetTableBody.addEventListener('change', (e) => {
             const el = e.target;
             if (!el.classList.contains('budget-edit-input')) return;
-            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
-        });
-        budgetTableBody.addEventListener('focusout', (e) => {
-            const el = e.target;
-            if (!el.classList.contains('budget-edit-input')) return;
+            if (el.dataset.lpCommitBaseline !== undefined && el.dataset.lpCommitBaseline === el.value) return;
             commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
         budgetTableBody.addEventListener('click', (e) => {

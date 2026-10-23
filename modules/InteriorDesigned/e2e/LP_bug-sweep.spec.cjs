@@ -123,7 +123,10 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await nameInput.fill(`${before}-SWEEP`);
     await nameInput.blur();
     await expect(page.locator('#undo-btn')).toBeEnabled();
-    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await page.locator('#budget-modal-close-btn').click();
+    await page.locator('#undo-btn').click();
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
     await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
   });
 
@@ -139,10 +142,16 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await nameInput.fill(edited);
     await nameInput.blur();
     await expect(page.locator('#undo-btn')).toBeEnabled();
-    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await page.locator('#budget-modal-close-btn').click();
+    await page.locator('#undo-btn').click();
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
     await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
+    await page.locator('#budget-modal-close-btn').click();
     await expect(page.locator('#redo-btn')).toBeEnabled();
-    await page.evaluate(() => document.getElementById('redo-btn').click());
+    await page.locator('#redo-btn').click();
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
     await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(edited);
   });
 
@@ -158,8 +167,41 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await nameInput.fill(typed);
     await nameInput.blur();
     await expect(page.locator('#undo-btn')).toBeEnabled();
-    await page.evaluate(() => document.getElementById('undo-btn').click());
+    await page.locator('#budget-modal-close-btn').click();
+    await page.locator('#undo-btn').click();
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
     await expect.poll(() => page.locator('.budget-edit-input[data-field="name"]').first().inputValue()).toBe(before);
+  });
+
+  test('報價編輯：只 focus 再 blur 不產生手動覆寫、不增歷史', async ({ page }) => {
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
+    await page.waitForSelector('#keyguard-cab-1');
+
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const qtyInput = page.locator('.budget-edit-input[data-field="quantity"]').first();
+    const qtyBefore = await qtyInput.inputValue();
+    await qtyInput.focus();
+    await qtyInput.blur();
+    const priceInput = page.locator('.budget-edit-input[data-field="totalPrice"]').first();
+    await priceInput.focus();
+    await priceInput.blur();
+
+    await expect(qtyInput).toHaveValue(qtyBefore);
+
+    await page.locator('#budget-modal-close-btn').click();
+    await page.locator('#keyguard-cab-1').click({ force: true });
+    const wField = page.locator('#selected-width');
+    await expect(wField).toBeVisible();
+    const wBefore = await wField.inputValue();
+    await wField.fill(String(Number(wBefore) + 20));
+    await wField.dispatchEvent('change');
+    await page.locator('#show-budget-modal-btn').click();
+    await page.locator('#budget-edit-toggle-btn').click();
+    const qtyAfterResize = await page.locator('.budget-edit-input[data-field="quantity"]').first().inputValue();
+    expect(qtyAfterResize).not.toBe(qtyBefore);
   });
 
   test('復原還原施工面積欄位（history 快照一致）', async ({ page }) => {
