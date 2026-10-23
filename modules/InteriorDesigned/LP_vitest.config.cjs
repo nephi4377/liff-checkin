@@ -15,6 +15,7 @@ module.exports = defineConfig({
             'LP_layout_history.test.js',
             'LP_quotation_budgetweb_export.test.js',
             'LP_3DViewer_lifecycle.test.js',
+            'LP_3D_pixel_rgb.test.js',
         ],
     },
 });
