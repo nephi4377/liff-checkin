@@ -1,12 +1,21 @@
-import { ringCentroidXZ } from './LP_3D_scene.js';
+import { computeWalkRoomPreviewPose, ringCentroidXZ } from './LP_3D_scene.js';
 
-/** @typedef {'top' | 'front_iso' | 'corner_iso'} OrbitCameraPresetId */
+/** @typedef {'top' | 'front_iso' | 'corner_iso' | 'iso_north' | 'iso_south' | 'iso_east' | 'iso_west'} OrbitCameraPresetId */
 
 export const ORBIT_CAMERA_PRESETS = {
     TOP: 'top',
+    /** @deprecated 與 ISO_NORTH 相同，保留測試／舊按鈕 */
     FRONT_ISO: 'front_iso',
+    ISO_NORTH: 'iso_north',
+    ISO_SOUTH: 'iso_south',
+    ISO_EAST: 'iso_east',
+    ISO_WEST: 'iso_west',
     CORNER_ISO: 'corner_iso',
 };
+
+const ORBIT_ISO_Y_FACTOR = 0.72;
+const ORBIT_ISO_HORIZ_FACTOR = 1.05;
+const ORBIT_CORNER_Y_FACTOR = 0.75;
 
 export const PNG_EXPORT_MAX_SIDE_PX = 3072;
 export const PNG_EXPORT_MAX_PIXELS = 8_000_000;
@@ -71,16 +80,95 @@ export function computeOrbitPresetCamera(preset, desc, defaults) {
             target: { x: c.x, y: 0, z: c.z },
         };
     }
-    if (preset === ORBIT_CAMERA_PRESETS.FRONT_ISO) {
+    const isoY = span * ORBIT_ISO_Y_FACTOR;
+    const isoH = span * ORBIT_ISO_HORIZ_FACTOR;
+    if (preset === ORBIT_CAMERA_PRESETS.FRONT_ISO || preset === ORBIT_CAMERA_PRESETS.ISO_NORTH) {
         return {
-            position: { x: c.x, y: span * 0.72, z: c.z - span * 1.05 },
+            position: { x: c.x, y: isoY, z: c.z - isoH },
             target,
         };
     }
-    return {
-        position: { x: c.x + span, y: span * 0.75, z: c.z + span },
-        target,
-    };
+    if (preset === ORBIT_CAMERA_PRESETS.ISO_SOUTH) {
+        return {
+            position: { x: c.x, y: isoY, z: c.z + isoH },
+            target,
+        };
+    }
+    if (preset === ORBIT_CAMERA_PRESETS.ISO_EAST) {
+        return {
+            position: { x: c.x + isoH, y: isoY, z: c.z },
+            target,
+        };
+    }
+    if (preset === ORBIT_CAMERA_PRESETS.ISO_WEST) {
+        return {
+            position: { x: c.x - isoH, y: isoY, z: c.z },
+            target,
+        };
+    }
+    if (preset === ORBIT_CAMERA_PRESETS.CORNER_ISO) {
+        return {
+            position: { x: c.x + span, y: span * ORBIT_CORNER_Y_FACTOR, z: c.z + span },
+            target,
+        };
+    }
+    return computeOrbitPresetCamera(ORBIT_CAMERA_PRESETS.CORNER_ISO, desc, defaults);
+}
+
+/** @param {string} presetId */
+export function isOrbitCameraPresetId(presetId) {
+    return presetId === ORBIT_CAMERA_PRESETS.TOP
+        || presetId === ORBIT_CAMERA_PRESETS.FRONT_ISO
+        || presetId === ORBIT_CAMERA_PRESETS.ISO_NORTH
+        || presetId === ORBIT_CAMERA_PRESETS.ISO_SOUTH
+        || presetId === ORBIT_CAMERA_PRESETS.ISO_EAST
+        || presetId === ORBIT_CAMERA_PRESETS.ISO_WEST
+        || presetId === ORBIT_CAMERA_PRESETS.CORNER_ISO;
+}
+
+const WALK_ROOM_PRESET_PREFIX = 'walk_room:';
+
+/** @param {number} ringIndex */
+export function formatWalkRoomPresetId(ringIndex) {
+    return `${WALK_ROOM_PRESET_PREFIX}${ringIndex}`;
+}
+
+/** @param {string} value */
+export function parseWalkRoomPresetId(value) {
+    if (!value?.startsWith(WALK_ROOM_PRESET_PREFIX)) return null;
+    const idx = Number.parseInt(value.slice(WALK_ROOM_PRESET_PREFIX.length), 10);
+    return Number.isFinite(idx) && idx >= 0 ? idx : null;
+}
+
+/**
+ * 工具列「視角」下拉：鳥瞰四向等角 ＋ 各地板房間室內視線（無房間則僅 orbit）。
+ * @param {{ walkBounds?: { rings?: { x: number, z: number }[][] }, floors?: { id?: string }[] }} desc
+ */
+export function buildLayout3DViewPresetOptions(desc) {
+    const orbit = [
+        { id: ORBIT_CAMERA_PRESETS.TOP, label: '俯視' },
+        { id: ORBIT_CAMERA_PRESETS.ISO_NORTH, label: '北向斜角' },
+        { id: ORBIT_CAMERA_PRESETS.ISO_SOUTH, label: '南向斜角' },
+        { id: ORBIT_CAMERA_PRESETS.ISO_EAST, label: '東向斜角' },
+        { id: ORBIT_CAMERA_PRESETS.ISO_WEST, label: '西向斜角' },
+        { id: ORBIT_CAMERA_PRESETS.CORNER_ISO, label: '角落斜角' },
+    ];
+    const rings = desc?.walkBounds?.rings ?? [];
+    const walkRooms = rings.map((ring, i) => {
+        if (!ring?.length) return null;
+        const floorId = desc.floors?.[i]?.id;
+        const label = floorId ? `房間視線（${floorId}）` : `房間 ${i + 1} 視線`;
+        return { id: formatWalkRoomPresetId(i), label, ringIndex: i };
+    }).filter(Boolean);
+    return { orbit, walkRooms };
+}
+
+/**
+ * @param {{ x: number, z: number }[]} ring
+ * @param {number} [standoffCm]
+ */
+export function computeWalkRoomEyePresetPose(ring, standoffCm = 150) {
+    return computeWalkRoomPreviewPose(ring, standoffCm);
 }
 
 /**

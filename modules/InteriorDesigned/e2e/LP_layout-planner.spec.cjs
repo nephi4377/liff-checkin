@@ -366,6 +366,21 @@ test.describe('LayoutPlanner E2E', () => {
     expect(after.undoDisabled).toBe(before.undoDisabled);
   });
 
+  test('3D 房間視線預設可切入室內（FLOORPLAN-3D-WALK-1）', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 700 });
+    await page.goto(
+      '/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-perf-large.json&lp3d=orbit',
+      { waitUntil: 'domcontentloaded' },
+    );
+    await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 45000 });
+    await page.selectOption('#lp-3d-preset-select', 'walk_room:0');
+    await page.waitForTimeout(600);
+    const mode = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getViewMode?.());
+    expect(mode).toBe('walk');
+    const y = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getCameraY?.());
+    expect(y).toBe(160);
+  });
+
   test('3D 儲存圖片與預設角度按鈕可操作', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(

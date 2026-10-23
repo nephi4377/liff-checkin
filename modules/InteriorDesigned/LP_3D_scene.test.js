@@ -14,6 +14,8 @@ import {
     boundsXZDelta,
     expandFloorRingToInnerFace,
     computeWalkRoomPreviewPose,
+    assessLayout3DHeavyMode,
+    LP_3D_HEAVY_THRESHOLDS,
 } from './LP_3D_scene.js';
 
 describe('canvasToSceneXZ', () => {
@@ -307,5 +309,39 @@ describe('offsetPolygon', () => {
         const outer = offsetPolygon(sq, 10);
         expect(outer.length).toBe(4);
         expect(outer[0].x).not.toBe(sq[0].x);
+    });
+});
+
+describe('assessLayout3DHeavyMode', () => {
+    it('達櫃體與牆段雙門檻才啟用 heavy', () => {
+        const cabinets = Array.from({ length: LP_3D_HEAVY_THRESHOLDS.CABINETS }, (_, i) => ({
+            id: `c${i}`,
+            x: 10,
+            y: 10,
+            rotation: 0,
+            currentW: 50,
+            currentH: 40,
+            data: { name: '櫃', group: '系統櫃', width: 50, depth: 40 },
+        }));
+        const walls = Array.from({ length: LP_3D_HEAVY_THRESHOLDS.WALL_SEGMENTS }, (_, i) => ({
+            id: `w${i}`,
+            type: 'wall',
+            thickness: 12,
+            points: [
+                { x: 100 + i * 200, y: 100 },
+                { x: 200 + i * 200, y: 100 },
+                { x: 200 + i * 200, y: 200 },
+                { x: 100 + i * 200, y: 200 },
+            ],
+        }));
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 4000,
+            placedCabinets: cabinets,
+            drawnAreas: walls,
+        });
+        const heavy = assessLayout3DHeavyMode(desc);
+        expect(heavy.heavy).toBe(true);
+        expect(heavy.cabinetCount).toBeGreaterThanOrEqual(LP_3D_HEAVY_THRESHOLDS.CABINETS);
+        expect(heavy.wallSegments).toBeGreaterThanOrEqual(LP_3D_HEAVY_THRESHOLDS.WALL_SEGMENTS);
     });
 });
