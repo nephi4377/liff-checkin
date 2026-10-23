@@ -12,7 +12,12 @@
 | `docs/FLOORPLAN_QUOTE_2.md` | 本說明與預覽連結 |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.js` | 集中計價規則（待豪哥定價） |
 | `modules/InteriorDesigned/LP_quote_pricing_rules.test.js` | 單元測試 |
-| `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 報價匯出篩選（`quoteExport` / `quoteSourceType` / `quoteCategory`，與 3D 脫鉤） |
+| `modules/InteriorDesigned/LP_cabinet_quote_filter.js` | 報價匯出篩選（旗標優先；無旗標時 model3dKind 開口／排除分類／家具） |
+| `modules/InteriorDesigned/LP_quote_placement_meta.js` | 放置時寫入 `quoteSourceType` |
+| `modules/InteriorDesigned/LP_budgetweb_firebase_sync.js` | 可測的雲端同步流程 |
+| `tools/budget-quote-parser-lib.js` | 解析同表重複 id → `_2`、`_3` |
+| `tools/scripts/check-quotation-duplicate-ids.mjs` | 只讀檢查重複 id |
+| `tools/scripts/migrate-quotation-item-ids.mjs` | 一次性補 id（預設 dry-run，不連 Firebase） |
 | `modules/InteriorDesigned/LP_cabinet_quote_filter.test.js` | 單元測試 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.js` | 櫃體清單 → 草稿列 |
 | `modules/InteriorDesigned/LP_cabinet_quote_lines.test.js` | 單元測試 |
