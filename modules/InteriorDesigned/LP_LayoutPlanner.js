@@ -24,6 +24,15 @@ import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
+import { estimatePrintScaleRatioForSheet, LP_PRINT_TITLE_DEFAULTS } from './LP_2d_print.js';
+import {
+    assemblePrintSheetOptions,
+    buildPrintSheetElement,
+    exportFloorplanPrintPng,
+    get2dPrintDimensionsEnabled,
+    refreshPrintDimensions,
+    set2dPrintDimensionsEnabled,
+} from './LP_2d_print_render.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -728,6 +737,7 @@ function renderAllCabinets() {
     // 確保 placeholder 的可見性正確
     document.getElementById('canvas-placeholder').style.display = placedCabinets.length > 0 ? 'none' : 'block';
     dbgLog(`已渲染 ${placedCabinets.length} 個元件`);
+    syncPrint2dDimensions();
 }
 
 // [新增] 渲染所有已繪製的區域
@@ -770,6 +780,7 @@ function renderAllDrawnAreas() {
         }
     }
     dbgLog(`已渲染 ${drawnAreas.length} 個區域`);
+    syncPrint2dDimensions();
 }
 
 // [您的要求] 新增輔助函式，用於渲染單一區域，避免程式碼重複
@@ -4201,6 +4212,164 @@ function closeLayoutPlanner3D() {
     if (lp3dViewer) lp3dViewer.close();
 }
 
+let lastFloorplanPrintPngMeta = null;
+
+function getPrint2dDomRefs() {
+    return {
+        dimensionLayer: document.getElementById('lp-2d-dimension-layer'),
+        toggleInput: document.getElementById('lp-2d-dimensions-toggle'),
+    };
+}
+
+function syncPrint2dDimensions() {
+    const layer = document.getElementById('lp-2d-dimension-layer');
+    if (!layer) return;
+    refreshPrintDimensions(
+        { drawnAreas, placedCabinets },
+        getPrint2dDomRefs(),
+    );
+}
+
+function readPrintTitleBlockFromForm() {
+    const val = (id, fallback) => {
+        const el = document.getElementById(id);
+        return el?.value?.trim() ? el.value.trim() : fallback;
+    };
+    return {
+        projectNo: val('lp-print-field-project-no', LP_PRINT_TITLE_DEFAULTS.projectNo),
+        projectName: val('lp-print-field-project-name', LP_PRINT_TITLE_DEFAULTS.projectName),
+        date: val('lp-print-field-date', LP_PRINT_TITLE_DEFAULTS.date),
+        scale: val('lp-print-field-scale', LP_PRINT_TITLE_DEFAULTS.scale),
+        drawnBy: val('lp-print-field-drawn-by', LP_PRINT_TITLE_DEFAULTS.drawnBy),
+    };
+}
+
+function buildPlanCloneMarkupForPrint() {
+    const canvasEl = document.getElementById('design-canvas');
+    if (!canvasEl) return '';
+    const clone = canvasEl.cloneNode(true);
+    clone.querySelector('#canvas-watermark')?.remove();
+    clone.style.marginTop = '0';
+    clone.id = 'design-canvas-print-clone';
+    return clone.outerHTML;
+}
+
+async function runFloorplanPrintExport(mode) {
+    const sheetRoot = document.getElementById('lp-2d-print-sheet');
+    const portal = document.getElementById('lp-2d-print-portal');
+    if (!sheetRoot || !portal) return;
+    const sheetSelect = document.getElementById('lp-2d-print-sheet-select');
+    const sheetId = sheetSelect?.value || 'A4_LANDSCAPE';
+    const workspacePx = getWorkspaceCanvasPx();
+    const allPts = [];
+    drawnAreas.forEach((a) => {
+        if (Array.isArray(a.points)) allPts.push(...a.points);
+    });
+    const titleBlock = readPrintTitleBlockFromForm();
+    if (!document.getElementById('lp-print-field-scale')?.value?.trim()) {
+        titleBlock.scale = `比例：${estimatePrintScaleRatioForSheet(sheetId, workspacePx)}`;
+    }
+    const planHtml = buildPlanCloneMarkupForPrint();
+    buildPrintSheetElement(
+        sheetRoot,
+        assemblePrintSheetOptions({
+            sheetId,
+            workspacePx,
+            placedCabinets,
+            titleBlock,
+            scaleLabel: titleBlock.scale,
+            planCloneHtml: planHtml,
+        }),
+    );
+    portal.style.display = 'block';
+    sheetRoot.style.position = 'absolute';
+    sheetRoot.style.left = '-10000px';
+    sheetRoot.style.top = '0';
+
+    if (mode === 'png') {
+        if (typeof html2canvas !== 'function') {
+            showGlobalNotification('出圖模組未載入', 4000, 'error');
+            return;
+        }
+        showGlobalNotification('正在產生出圖 PNG…', 4000, 'info');
+        try {
+            const meta = await exportFloorplanPrintPng({
+                sheetRoot,
+                sheetId,
+                html2canvas,
+            });
+            lastFloorplanPrintPngMeta = meta;
+            if (isLayoutPlannerUrlPreview()) {
+                window.__LP_PRINT_TEST_HOOKS__ = {
+                    getLastPrintPngMeta: () => lastFloorplanPrintPngMeta,
+                };
+            }
+            showGlobalNotification('平面出圖 PNG 已下載', 3000, 'success');
+        } catch (err) {
+            console.error('[LP 2D print]', err);
+            showGlobalNotification('出圖失敗，請稍後再試', 5000, 'error');
+        }
+    } else {
+        sheetRoot.style.left = '0';
+        sheetRoot.style.position = 'static';
+        document.body.classList.add('lp-floorplan-printing');
+        window.print();
+        window.setTimeout(() => {
+            document.body.classList.remove('lp-floorplan-printing');
+            sheetRoot.style.left = '-10000px';
+            sheetRoot.style.position = 'absolute';
+        }, 800);
+    }
+}
+
+function openFloorplanPrintModal() {
+    const modal = document.getElementById('lp-2d-print-modal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function closeFloorplanPrintModal() {
+    const modal = document.getElementById('lp-2d-print-modal');
+    if (modal) modal.style.display = 'none';
+}
+
+function initLayoutPlanner2DPrint() {
+    const dimToggle = document.getElementById('lp-2d-dimensions-toggle');
+    if (dimToggle && !dimToggle.dataset.lpBound) {
+        dimToggle.dataset.lpBound = '1';
+        dimToggle.checked = get2dPrintDimensionsEnabled();
+        dimToggle.addEventListener('change', () => {
+            set2dPrintDimensionsEnabled(dimToggle.checked);
+            syncPrint2dDimensions();
+        });
+    }
+    const openBtn = document.getElementById('lp-2d-print-open-btn');
+    if (openBtn && !openBtn.dataset.lpBound) {
+        openBtn.dataset.lpBound = '1';
+        openBtn.addEventListener('click', openFloorplanPrintModal);
+    }
+    const toolbarBtn = document.getElementById('lp-2d-print-toolbar-btn');
+    if (toolbarBtn && !toolbarBtn.dataset.lpBound) {
+        toolbarBtn.dataset.lpBound = '1';
+        toolbarBtn.addEventListener('click', openFloorplanPrintModal);
+    }
+    const printModalClose = document.getElementById('lp-2d-print-modal-close');
+    if (printModalClose && !printModalClose.dataset.lpBound) {
+        printModalClose.dataset.lpBound = '1';
+        printModalClose.addEventListener('click', closeFloorplanPrintModal);
+    }
+    const printPngBtn = document.getElementById('lp-2d-print-png-btn');
+    const printPdfBtn = document.getElementById('lp-2d-print-pdf-btn');
+    if (printPngBtn && !printPngBtn.dataset.lpBound) {
+        printPngBtn.dataset.lpBound = '1';
+        printPngBtn.addEventListener('click', () => runFloorplanPrintExport('png'));
+    }
+    if (printPdfBtn && !printPdfBtn.dataset.lpBound) {
+        printPdfBtn.dataset.lpBound = '1';
+        printPdfBtn.addEventListener('click', () => runFloorplanPrintExport('pdf'));
+    }
+    syncPrint2dDimensions();
+}
+
 function initLayoutPlanner3D() {
     const toggleBtn = document.getElementById('toggle-3d-view-btn');
     if (!document.getElementById('lp-3d-viewport') || !toggleBtn) return;
@@ -4270,6 +4439,7 @@ function bindGlobalPointerEndForDrag() {
 }
 
 function bindEventListeners() {
+    initLayoutPlanner2DPrint();
     initLayoutPlanner3D();
     // 全域事件（含視窗外放開，避免 undo 手勢卡住）
     bindGlobalPointerEndForDrag();
