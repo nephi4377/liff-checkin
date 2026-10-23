@@ -141,8 +141,9 @@ export function parseWalkRoomPresetId(value) {
 }
 
 /**
- * 工具列「視角」下拉：鳥瞰四向等角 ＋ 各地板房間室內視線（無房間則僅 orbit）。
- * @param {{ walkBounds?: { rings?: { x: number, z: number }[][] }, floors?: { id?: string }[] }} desc
+ * 工具列「視角」下拉：鳥瞰四向等角 ＋ 各地板房間室內視線（無地板則僅 orbit）。
+ * 房間視線選項與 `applyWalkRoomEyePreset` 皆以 `desc.floors[i]` 為準（不用 walkBounds 牆環 fallback）。
+ * @param {{ floors?: { id?: string, ring?: { x: number, z: number }[] }[] }} desc
  */
 export function buildLayout3DViewPresetOptions(desc) {
     const orbit = [
@@ -153,10 +154,11 @@ export function buildLayout3DViewPresetOptions(desc) {
         { id: ORBIT_CAMERA_PRESETS.ISO_WEST, label: '西向斜角' },
         { id: ORBIT_CAMERA_PRESETS.CORNER_ISO, label: '角落斜角' },
     ];
-    const rings = desc?.walkBounds?.rings ?? [];
-    const walkRooms = rings.map((ring, i) => {
+    const floors = desc?.floors ?? [];
+    const walkRooms = floors.map((floor, i) => {
+        const ring = floor.ring;
         if (!ring?.length) return null;
-        const floorId = desc.floors?.[i]?.id;
+        const floorId = floor.id;
         const label = floorId ? `房間視線（${floorId}）` : `房間 ${i + 1} 視線`;
         return { id: formatWalkRoomPresetId(i), label, ringIndex: i };
     }).filter(Boolean);

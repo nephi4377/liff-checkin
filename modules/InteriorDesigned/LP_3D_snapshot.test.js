@@ -107,6 +107,60 @@ describe('buildLayout3DViewPresetOptions', () => {
         expect(isOrbitCameraPresetId(ORBIT_CAMERA_PRESETS.TOP)).toBe(true);
         expect(isOrbitCameraPresetId(formatWalkRoomPresetId(1))).toBe(false);
     });
+
+    it('房間視線僅來自 floors，牆環數與地板數不同時不多出選項', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [
+                {
+                    id: 'wall-outer',
+                    type: 'wall',
+                    thickness: 15,
+                    points: [
+                        { x: 50, y: 50 },
+                        { x: 950, y: 50 },
+                        { x: 950, y: 950 },
+                        { x: 50, y: 950 },
+                    ],
+                },
+                {
+                    id: 'floor-a',
+                    type: 'floor',
+                    points: [
+                        { x: 100, y: 100 },
+                        { x: 400, y: 100 },
+                        { x: 400, y: 400 },
+                        { x: 100, y: 400 },
+                    ],
+                },
+                {
+                    id: 'floor-b',
+                    type: 'floor',
+                    points: [
+                        { x: 500, y: 100 },
+                        { x: 800, y: 100 },
+                        { x: 800, y: 400 },
+                        { x: 500, y: 400 },
+                    ],
+                },
+            ],
+            placedCabinets: [],
+        });
+        expect(desc.floors).toHaveLength(2);
+        expect(desc.walkBounds?.rings?.length).toBe(2);
+        const { walkRooms } = buildLayout3DViewPresetOptions(desc);
+        expect(walkRooms).toHaveLength(2);
+        expect(walkRooms[0].label).toContain('floor-a');
+        expect(parseWalkRoomPresetId(walkRooms[1].id)).toBe(1);
+    });
+
+    it('僅牆體無地板時不提供房間視線選項（即使 walkBounds 有牆環）', () => {
+        const desc = buildLayout3DDescriptor(demoLayout);
+        expect(desc.floors).toHaveLength(0);
+        expect(desc.walkBounds?.rings?.length).toBe(1);
+        const { walkRooms } = buildLayout3DViewPresetOptions(desc);
+        expect(walkRooms).toHaveLength(0);
+    });
 });
 
 describe('flipRgbaRowsToTopLeft', () => {
