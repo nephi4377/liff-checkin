@@ -36,14 +36,44 @@ describe('isQuoteExportablePlacedCabinet', () => {
         ).toBe(true);
     });
 
-    it('3D 不顯示（model3dKind ignore）仍計入報價', () => {
+    it('3D 不顯示（ignore）僅影響 3D：家具／門窗仍不匯出，櫃體名稱仍匯出', () => {
         expect(
             isQuoteExportablePlacedCabinet({
-                id: 'hidden-cab',
+                id: 'sofa-hide',
                 model3dKind: 'ignore',
-                data: { name: '隱形矮櫃', group: '系統櫃' },
+                data: { name: 'L型沙發', group: '家具家電' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'door-hide',
+                model3dKind: 'ignore',
+                data: { name: '房門', group: '門窗工程' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'bed-hide',
+                model3dKind: 'ignore',
+                data: { name: '雙人床', group: '家具家電' },
+            }),
+        ).toBe(false);
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'tv-cab',
+                model3dKind: 'ignore',
+                data: { name: '電視櫃', group: '系統櫃' },
             }),
         ).toBe(true);
+    });
+
+    it('isWall 優先於名稱像櫃體（收納牆不匯出）', () => {
+        expect(
+            isQuoteExportablePlacedCabinet({
+                id: 'wall-storage',
+                data: { isWall: true, name: '收納牆', group: '系統櫃' },
+            }),
+        ).toBe(false);
     });
 
     it('isWall 與仅靠名稱／群組的門窗（model3dKind auto）不匯出', () => {
@@ -120,6 +150,36 @@ describe('isQuoteExportablePlacedCabinet', () => {
         expect(json).not.toMatch(/quoteSourceType/);
         expect(json).not.toMatch(/quoteExport/);
     });
+
+    describe.each([
+        ['(無)', false, '矮櫃', '系統櫃', true],
+        ['auto', false, '房門', '系統櫃', false],
+        ['cabinet', false, '房門', '門片', true],
+        ['ignore', false, 'L型沙發', '家具家電', false],
+        ['ignore', false, '房門', '門窗工程', false],
+        ['ignore', false, '電視櫃', '系統櫃', true],
+        ['ignore', false, '雙人床', '家具家電', false],
+        ['(無)', true, '收納牆', '系統櫃', false],
+        ['door', false, '標籤', '系統櫃', false],
+        ['window', false, '標籤', '系統櫃', false],
+        ['(無)', false, '推門衣櫃', '系統櫃', true],
+    ])(
+        '矩陣 model3dKind=%s isWall=%s name=%s group=%s → export=%s',
+        (model3dKind, isWall, name, group, expectExport) => {
+            it(`→ ${expectExport}`, () => {
+                const cab = {
+                    id: 'matrix',
+                    data: { name, group },
+                };
+                if (isWall) cab.data.isWall = true;
+                if (model3dKind !== '(無)') {
+                    cab.model3dKind = model3dKind;
+                    cab.data.model3dKind = model3dKind;
+                }
+                expect(isQuoteExportablePlacedCabinet(cab)).toBe(expectExport);
+            });
+        },
+    );
 
     it('buildCabinetQuoteLineItemsFromLayout 略過門窗', () => {
         const lines = buildCabinetQuoteLineItemsFromLayout(demoFixture.placedCabinets);

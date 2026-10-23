@@ -48,11 +48,13 @@ function legacyShouldExcludeFromQuote(cab) {
     if (!cab?.data) return true;
 
     const kind = readModel3dKind(cab);
-    if (kind === 'cabinet' || kind === 'ignore') return false;
+    if (kind === 'cabinet') return false;
     if (kind && OPENING_MODEL_KINDS.has(kind)) return true;
 
     const group = String(cab.data.group || '').trim();
     if (QUOTE_EXCLUDED_GROUPS.has(group)) return true;
+
+    if (cab.data.isWall) return true;
 
     const name = String(cab.data.name || '');
     if (isCabinetLikeProductName(name)) return false;
