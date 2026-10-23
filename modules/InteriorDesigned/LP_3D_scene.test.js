@@ -5,6 +5,7 @@ import {
     classifyPlacedCabinet3DKind,
     resolvePlacedCabinet3DKind,
     openingCutsWall,
+    openingAssociatesWithWall,
     pointInWallBand,
     offsetPolygon,
     clampPointToWalkRings,
@@ -47,7 +48,7 @@ describe('resolvePlacedCabinet3DKind', () => {
 });
 
 describe('openingCutsWall', () => {
-    it('門中心在牆帶內才切削', () => {
+    it('門貼牆才切削；遠離牆體內部不切削', () => {
         const wall = {
             outer: [
                 { x: -50, z: -50 },
@@ -64,9 +65,47 @@ describe('openingCutsWall', () => {
         };
         expect(pointInWallBand(0, -45, wall)).toBe(true);
         expect(pointInWallBand(0, 0, wall)).toBe(false);
-        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45 })).toBe(true);
-        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: 0 })).toBe(false);
+        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45, widthCm: 90, depthCm: 15 })).toBe(true);
+        expect(openingCutsWall(wall, {
+            kind: 'door',
+            centerX: 0,
+            centerZ: 0,
+            widthCm: 20,
+            depthCm: 20,
+            rotationDeg: 0,
+        })).toBe(false);
         expect(openingCutsWall(wall, { kind: 'cabinet', centerX: 0, centerZ: -45 })).toBe(false);
+    });
+
+    it('旋轉門中心在室內、角點貼牆時仍應切削（與 openingAssociatesWithWall 一致）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'w1',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [{
+                id: 'door-rot',
+                x: 500,
+                y: 312,
+                rotation: 90,
+                currentW: 90,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+            }],
+        });
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        expect(openingAssociatesWithWall(wall, door)).toBe(true);
+        expect(pointInWallBand(door.centerX, door.centerZ, wall)).toBe(false);
+        expect(openingCutsWall(wall, door)).toBe(true);
     });
 });
 

@@ -281,7 +281,7 @@ export function openingAssociatesWithWall(wall, fixture) {
 
 export function openingCutsWall(wall, fixture) {
     if (!fixture || (fixture.kind !== 'door' && fixture.kind !== 'window')) return false;
-    return pointInWallBand(fixture.centerX, fixture.centerZ, wall);
+    return openingAssociatesWithWall(wall, fixture);
 }
 
 function lineIntersection(p1, p2, p3, p4) {
