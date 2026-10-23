@@ -3,11 +3,13 @@
  */
 'use strict';
 
+var VERSION_LOOKAHEAD = '(?=["\'&\\s>)`#]|$)';
+
 var RE = {
-  accountingApi: /(?:^|["'\/])accounting_api\.js\?v=(\d+)(?=["'&])/g,
-  accountingShell: /(?:^|["'\/])accounting_shell\.js\?v=(\d+)(?=["'&])/g,
-  accountingTaxMode: /(?:^|["'\/])accounting_tax_mode\.js\?v=(\d+)(?=["'&])/g,
-  hubAppJs: /(?:^|["'\/])app\.js\?v=([\w.+-]+)(?=["'&])/g
+  accountingApi: new RegExp('(?:^|["\'\\/])accounting_api\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingShell: new RegExp('(?:^|["\'\\/])accounting_shell\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingTaxMode: new RegExp('(?:^|["\'\\/])accounting_tax_mode\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  hubAppJs: new RegExp('(?:^|["\'\\/])app\\.js\\?v=([\\w.+-]+)' + VERSION_LOOKAHEAD, 'g')
 };
 
 var HUB_APP_JS_MIN_TOKEN = '26.10.13.1';
@@ -169,6 +171,33 @@ function runSelfTests() {
   if (multi.length !== 2 || multi[0] !== '50' || multi[1] !== '60') {
     throw new Error('self-test: expected two anchored accounting_api matches');
   }
+
+  var endingCases = [
+    { html: '<script src="accounting_api.js?v=108>', expect: '108', label: 'unquoted >' },
+    { html: "import(`./accounting_api.js?v=109`)", expect: '109', label: 'backtick import()' },
+    { html: 'href="accounting_api.js?v=110#ledger"', expect: '110', label: '# fragment' },
+    { html: 'accounting_api.js?v=111 ', expect: '111', label: 'trailing whitespace' },
+    { html: 'accounting_api.js?v=112', expect: '112', label: 'end of string' }
+  ];
+  endingCases.forEach(function (c) {
+    var got = extractAllCacheBustVers(c.html, RE.accountingApi);
+    if (got.length !== 1 || got[0] !== c.expect) {
+      throw new Error(
+        'self-test lookahead (' + c.label + '): expected [' + c.expect + '], got ' + JSON.stringify(got)
+      );
+    }
+  });
+
+  threw = false;
+  try {
+    assertNumericCacheBust('accounting_api.js?v=1>', RE.accountingApi, 'self ending > stale', 102);
+  } catch (e) {
+    threw = true;
+    if (e.message.indexOf('v=1') < 0) {
+      throw new Error('self-test ending > stale: unexpected message: ' + e.message);
+    }
+  }
+  if (!threw) throw new Error('self-test: accounting_api.js?v=1> should fail minVer 102');
 }
 
 module.exports = {
