@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=110"></script>
+  <script src="../../shared/js/accounting_api.js?v=111"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
   <script src="../../shared/js/accounting_nav.js?v=3"></script>
@@ -94,7 +94,7 @@
         <span class="card-body">
           <h3>歷史記帳紀錄</h3>
           <p>查已入帳的收支登錄列（非請款送出站）；點一筆可看案號、圖片集等詳情。</p>
-          <span class="tag admin">主管 ≥3</span>
+          <span class="tag staff">≥1 看自己 · ≥5 全部</span>
         </span>
       </a>
 
@@ -254,8 +254,9 @@
           document.getElementById('linkCustomerFinance').classList.remove('hidden');
         }
 
-        // 歷史記帳：主管 ≥3（送出紀錄改由請款／收支／歷史記帳頁內導覽進入，hub 不顯示卡）
-        if (perm < supervisorMin || isVendor) {
+        // 歷史記帳：≥1 看自己（送出紀錄改由請款／收支／歷史記帳頁內導覽進入，hub 不顯示卡）
+        var ledgerMin = AccountingApi.LEDGER_MIN_VIEW_PERMISSION;
+        if (perm < ledgerMin || isVendor) {
           document.getElementById('linkLedgerHistory').classList.add('hidden');
         } else {
           document.getElementById('linkLedgerHistory').classList.remove('hidden');

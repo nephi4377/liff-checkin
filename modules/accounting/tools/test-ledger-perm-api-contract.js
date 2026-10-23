@@ -51,7 +51,14 @@ assert.strictEqual(voidBody.reason, '重複登錄');
 
 var detailVoided = fixtures.examples.ledger_detail_voided.item;
 assert(LedgerEntryMap.isVoided(detailVoided), 'detail voided still returned');
-assert.strictEqual(detailVoided.voided_by, 'U_BOSS');
+assert.strictEqual(detailVoided.voided_by_name, '李主管');
+assert.strictEqual(LedgerEntryMap.voidedByDisplay(detailVoided), '李主管');
+assert.strictEqual(LedgerEntryMap.recorderDisplay(detailVoided), '王小明');
+assert.strictEqual(
+  LedgerEntryMap.voidedByDisplay({ voided_by: 'U' + 'a'.repeat(32) }),
+  '—',
+  'no raw UID'
+);
 assert.strictEqual(detailVoided.void_reason, '重複登錄');
 assert(!LedgerEntryMap.showEditButton(detailVoided), 'no edit on voided');
 assert(!LedgerEntryMap.showVoidButton(detailVoided), 'no void again');
@@ -59,7 +66,8 @@ assert(!LedgerEntryMap.showVoidButton(detailVoided), 'no void again');
 var voidSuccess = fixtures.examples.ledger_void_success;
 assert.strictEqual(voidSuccess.voided, true);
 assert(voidSuccess.voided_at);
-assert.strictEqual(voidSuccess.voided_by, 'U_OWNER_DEMO');
+assert.strictEqual(voidSuccess.voided_by_name, '王小明');
+assert.strictEqual(LedgerEntryMap.voidedByDisplay(voidSuccess), '王小明');
 assert.strictEqual(voidSuccess.void_reason, '重複登錄');
 assert(LedgerEntryMap.isVoided(voidSuccess.item), 'voided item in response');
 

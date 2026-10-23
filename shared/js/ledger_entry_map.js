@@ -18,9 +18,44 @@ var LedgerEntryMap = (function () {
     LEDGER_DELETE_DISABLED: '不能刪除收支列，請使用「作廢」保留紀錄。'
   };
 
+  var LINE_UID_RE = /^U[a-f0-9]{32}$/i;
+
+  function looksLikeLineUserId(value) {
+    return LINE_UID_RE.test(String(value || '').trim());
+  }
+
   function recorderUserId(item) {
     if (!item) return '';
     return String(item.recorderUserId || item.recorder_user_id || '').trim();
+  }
+
+  function firstDisplayName(item, nameKeys) {
+    if (!item || !nameKeys || !nameKeys.length) return '';
+    for (var i = 0; i < nameKeys.length; i++) {
+      var v = String(item[nameKeys[i]] != null ? item[nameKeys[i]] : '').trim();
+      if (!v || looksLikeLineUserId(v)) continue;
+      return v;
+    }
+    return '';
+  }
+
+  /** 詳情顯示用；勿露出 LINE UID */
+  function displayPersonName(item, nameKeys) {
+    var n = firstDisplayName(item, nameKeys);
+    return n || '—';
+  }
+
+  function voidedByDisplay(item) {
+    return displayPersonName(item, ['voided_by_name', 'voided_by_display_name']);
+  }
+
+  function recorderDisplay(item) {
+    return displayPersonName(item, [
+      'recorder_name',
+      'recorder_display_name',
+      'recorded_by_name',
+      'recorded_by_display_name'
+    ]);
   }
 
   function parseDupReviewTag(text) {
@@ -179,7 +214,11 @@ var LedgerEntryMap = (function () {
     ERROR_MESSAGES: ERROR_MESSAGES,
     LEDGER_VIEW_ALL_MIN_PERMISSION: LEDGER_VIEW_ALL_MIN_PERMISSION,
     parseDupReviewTag: parseDupReviewTag,
+    looksLikeLineUserId: looksLikeLineUserId,
     recorderUserId: recorderUserId,
+    displayPersonName: displayPersonName,
+    voidedByDisplay: voidedByDisplay,
+    recorderDisplay: recorderDisplay,
     isVoided: isVoided,
     isDupReviewPending: isDupReviewPending,
     sessionUserId: sessionUserId,

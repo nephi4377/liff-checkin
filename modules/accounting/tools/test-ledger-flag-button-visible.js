@@ -9,7 +9,7 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=110') >= 0, 'cache bust');
+assert(html.indexOf('accounting_api.js?v=111') >= 0, 'cache bust');
 assert(html.indexOf('LedgerEntryMap.showEditButton') >= 0, 'edit via server flag');
 assert(html.indexOf("'btn-edit'") >= 0, 'edit button');
 assert(html.indexOf("'void-ledger'") >= 0, 'void button');
