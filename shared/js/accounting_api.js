@@ -1413,11 +1413,8 @@ var AccountingApi = (function () {
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
-      var reason = String(opts.void_reason || opts.reason || '').trim();
-      if (reason) {
-        body.void_reason = reason;
-        body.reason = reason;
-      }
+      var reason = String(opts.void_reason || '').trim();
+      if (reason) body.void_reason = reason;
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);
@@ -1431,18 +1428,13 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
     },
-    /** 疑重待審：權限 ≥5 確認或清除標記 — LEDGER-PERM-2／#218 */
-    accountingLedgerDuplicateReview: function (sessionOrToken, opts) {
+    /** 疑重待審：權限 ≥5 清除標記 — LEDGER_PERM_API */
+    accountingLedgerDupReviewClear: function (sessionOrToken, opts) {
       opts = opts || {};
-      var body = { action: 'accounting_ledger_duplicate_review' };
+      var body = { action: 'accounting_ledger_dup_review_clear' };
       if (opts.sheet) body.sheet = opts.sheet;
       if (opts.row != null && opts.row !== '') body.row = opts.row;
       if (opts.ingest_id) body.ingest_id = opts.ingest_id;
-      var decision = String(opts.review_decision || opts.decision || '').trim().toLowerCase();
-      if (decision) {
-        body.review_decision = decision;
-        body.decision = decision;
-      }
       if (sessionOrToken && typeof resolveAuth === 'function') {
         try {
           var auth = resolveAuth(sessionOrToken);

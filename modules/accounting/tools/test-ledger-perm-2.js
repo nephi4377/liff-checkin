@@ -35,10 +35,12 @@ var voided = Object.assign({}, baseItem, { voided: true });
 assert.strictEqual(LedgerEntryMap.canEditEntry(sessionOwner, voided, 3), false, 'voided not editable');
 assert.strictEqual(LedgerEntryMap.canVoidEntry(sessionOwner, voided, 3), false, 'voided not voidable again');
 
-var dupItem = Object.assign({}, baseItem, { duplicate_review_pending: true });
-assert.strictEqual(LedgerEntryMap.isDupReviewPending(dupItem), true, 'dup pending');
-assert.strictEqual(LedgerEntryMap.canDupReviewControl(4), false, 'perm4 no dup control');
-assert.strictEqual(LedgerEntryMap.canDupReviewControl(5), true, 'perm5 dup control');
+var dupItem = Object.assign({}, baseItem, {
+  note: '測試 [dup_review:ing-demo-001 pending]'
+});
+assert.strictEqual(LedgerEntryMap.isDupReviewPending(dupItem), true, 'dup pending tag');
+assert.strictEqual(LedgerEntryMap.canDupReviewClear(4), false, 'perm4 no dup clear');
+assert.strictEqual(LedgerEntryMap.canDupReviewClear(5), true, 'perm5 dup clear');
 
 var totals = LedgerEntryMap.computeTotals([
   { type: '收入', amount: 5000 },
@@ -50,19 +52,29 @@ assert.strictEqual(totals.expense, 1000, 'expense excludes voided');
 assert.strictEqual(totals.net, 4000, 'net');
 
 assert.strictEqual(
-  LedgerEntryMap.isEntryOwner(sessionOwner, { recorder_user_id: 'U_OWNER' }),
+  LedgerEntryMap.isEntryOwner(sessionOwner, { recorderUserId: 'U_OWNER' }),
   true,
-  'recorder_user_id fallback'
+  'recorderUserId only'
+);
+assert.strictEqual(
+  LedgerEntryMap.isEntryOwner(sessionOwner, { recorder_user_id: 'U_OWNER' }),
+  false,
+  'no recorder_user_id alias'
 );
 
-assert(LedgerEntryMap.saveIndicatesDupReviewPending({ saved_as_pending_review: true }), 'save pending flag');
+assert(
+  LedgerEntryMap.saveIndicatesDupReviewPending({
+    item: { note: 'x [dup_review:id pending]' }
+  }),
+  'save pending via note tag'
+);
 
-assert(html.indexOf('ledger_entry_map.js?v=1') >= 0, 'ledger map script');
-assert(html.indexOf('accounting_api.js?v=108') >= 0, 'api cache bust');
+assert(html.indexOf('ledger_entry_map.js?v=2') >= 0, 'ledger map script');
+assert(html.indexOf('accounting_api.js?v=109') >= 0, 'api cache bust');
 assert(html.indexOf('HISTORY_READ_ONLY') < 0, 'no read-only gate');
 assert(html.indexOf('void-ledger') >= 0, 'void button role');
 assert(html.indexOf('btn-edit') >= 0, 'edit button role');
-assert(html.indexOf('dup-review-confirm') >= 0, 'dup confirm role');
+assert(html.indexOf('dup-review-confirm') < 0, 'no dup confirm (clear only)');
 assert(html.indexOf('renderHistoryTotals') >= 0, 'totals renderer');
 assert(html.indexOf('作廢') >= 0, 'void copy');
 assert(html.indexOf('刪除錯誤帳') < 0, 'no legacy delete label');
@@ -73,10 +85,10 @@ assert(html.indexOf('LedgerEntryMap.canEditEntry') >= 0, 'uses map for edit');
 assert(api.indexOf('LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'api exports view-all threshold');
 assert(api.indexOf('authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'recent mine_only at 5');
 assert(api.indexOf("action: 'accounting_ledger_void'") >= 0, 'void action');
-assert(api.indexOf("action: 'accounting_ledger_duplicate_review'") >= 0, 'dup review action');
+assert(api.indexOf("action: 'accounting_ledger_dup_review_clear'") >= 0, 'dup clear action');
 
 var sr = fs.readFileSync(path.join(root, 'submit_records.html'), 'utf8');
-assert(sr.indexOf('accounting_api.js?v=108') >= 0, 'submit_records api v=108');
+assert(sr.indexOf('accounting_api.js?v=109') >= 0, 'submit_records api v=109');
 assert(sr.indexOf('readSubmitMineOnlyFlag') >= 0, 'submit_records mine_only gate');
 
 console.log('OK test-ledger-perm-2');

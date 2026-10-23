@@ -1,51 +1,54 @@
 /**
- * LEDGER-PERM-2：收支列欄位與後端契約對照（Backend_GAS #218）。
- * 若 #218 定稿欄位名不同，只改此檔即可對齊。
- *
- * API 假設（待與 #218 核對）：
- * - 作廢：action accounting_ledger_void；可選 void_reason／reason
- * - 疑重待審：列上 duplicate_review_pending（或 dup_review_pending／pending_duplicate_review）
- * - 疑重審核：action accounting_ledger_duplicate_review；review_decision = confirm | clear
- * - 記帳人：recorderUserId（備援 recorder_user_id／recorded_by_user_id）
- * - 作廢狀態：voided／is_voided／status=void／voided_at
- * - 查全部人：session.auth.permission ≥ 5（LEDGER_VIEW_ALL_MIN_PERMISSION）
+ * LEDGER-PERM API 前端對照（契約：Backend_GAS
+ * `accounting-gas/SPEC/LEDGER_PERM_API.md` @ cursor/acct-sec-11-ledger-history-own-ba72）
  */
 var LedgerEntryMap = (function () {
   var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
 
   var API = {
     voidAction: 'accounting_ledger_void',
-    dupReviewAction: 'accounting_ledger_duplicate_review',
-    voidReasonKeys: ['void_reason', 'reason'],
-    dupReviewDecisionKey: 'review_decision'
+    dupReviewClearAction: 'accounting_ledger_dup_review_clear'
+  };
+
+  /** § dup_review tag in 備註／note：`[dup_review:<payload> pending]` */
+  var DUP_REVIEW_TAG_RE = /\[dup_review:([^\]]+)\s+pending\]/;
+
+  var ERROR_MESSAGES = {
+    LEDGER_DELETE_DISABLED: '不能刪除收支列，請使用「作廢」保留紀錄。',
+    LEDGER_VOID_DENIED: '沒有權限作廢這筆記帳。',
+    LEDGER_VOID_ALREADY: '這筆已經作廢。',
+    LEDGER_ALREADY_VOIDED: '這筆已經作廢。',
+    LEDGER_EDIT_DENIED: '沒有權限修改這筆記帳。',
+    LEDGER_DUP_REVIEW_CLEAR_DENIED: '僅權限 5 可清除疑重待審標記。',
+    LEDGER_NOT_FOUND: '找不到這筆記帳。',
+    LEDGER_VIEW_DENIED: '沒有權限查看這筆記帳。',
+    LEDGER_PERM_DENIED: '權限不足，無法執行此操作。'
   };
 
   function recorderUserId(item) {
     if (!item) return '';
-    return String(
-      item.recorderUserId ||
-      item.recorder_user_id ||
-      item.recorded_by_user_id ||
-      ''
-    ).trim();
+    return String(item.recorderUserId || '').trim();
+  }
+
+  function parseDupReviewTag(text) {
+    var s = String(text || '');
+    var m = s.match(DUP_REVIEW_TAG_RE);
+    if (!m) return { pending: false, payload: null, raw: null };
+    return { pending: true, payload: String(m[1] || '').trim(), raw: m[0] };
+  }
+
+  function noteText(item) {
+    if (!item) return '';
+    return String(item.note != null ? item.note : '');
   }
 
   function isVoided(item) {
     if (!item) return false;
-    if (item.voided === true || item.is_voided === true) return true;
-    var st = String(item.status || item.ledger_status || '').trim().toLowerCase();
-    if (st === 'void' || st === 'voided' || st === '作廢') return true;
-    if (item.voided_at) return true;
-    return false;
+    return item.voided === true;
   }
 
   function isDupReviewPending(item) {
-    if (!item) return false;
-    if (item.duplicate_review_pending === true) return true;
-    if (item.dup_review_pending === true) return true;
-    if (item.pending_duplicate_review === true) return true;
-    var st = String(item.duplicate_review_status || item.dup_review_status || '').trim().toLowerCase();
-    return st === 'pending' || st === '待審';
+    return parseDupReviewTag(noteText(item)).pending;
   }
 
   function sessionUserId(session) {
@@ -91,7 +94,7 @@ var LedgerEntryMap = (function () {
     return isEntryOwner(session, item);
   }
 
-  function canDupReviewControl(authPermVal) {
+  function canDupReviewClear(authPermVal) {
     return isBossPerm(authPermVal);
   }
 
@@ -116,13 +119,21 @@ var LedgerEntryMap = (function () {
 
   function saveIndicatesDupReviewPending(data) {
     if (!data) return false;
-    if (data.duplicate_review_pending === true) return true;
-    if (data.dup_review_pending === true) return true;
-    if (data.pending_duplicate_review === true) return true;
-    if (data.saved_as_pending_review === true) return true;
     var item = data.item;
     if (item && isDupReviewPending(item)) return true;
     return false;
+  }
+
+  function errorCodeFromResponse(data) {
+    if (!data) return '';
+    return String(data.error_code || data.code || '').trim();
+  }
+
+  function friendlyLedgerError(data, fallback) {
+    var code = errorCodeFromResponse(data);
+    if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+    if (data && data.message) return String(data.message);
+    return fallback || '操作失敗';
   }
 
   function normalizeItem(item) {
@@ -130,6 +141,8 @@ var LedgerEntryMap = (function () {
     var out = Object.assign({}, item);
     var rid = recorderUserId(item);
     if (rid) out.recorderUserId = rid;
+    var dup = parseDupReviewTag(noteText(out));
+    if (dup.pending) out._dupReviewPayload = dup.payload;
     return out;
   }
 
@@ -146,7 +159,10 @@ var LedgerEntryMap = (function () {
 
   var exported = {
     API: API,
+    DUP_REVIEW_TAG_RE: DUP_REVIEW_TAG_RE,
+    ERROR_MESSAGES: ERROR_MESSAGES,
     LEDGER_VIEW_ALL_MIN_PERMISSION: LEDGER_VIEW_ALL_MIN_PERMISSION,
+    parseDupReviewTag: parseDupReviewTag,
     recorderUserId: recorderUserId,
     isVoided: isVoided,
     isDupReviewPending: isDupReviewPending,
@@ -156,9 +172,11 @@ var LedgerEntryMap = (function () {
     canViewAllLedger: canViewAllLedger,
     canEditEntry: canEditEntry,
     canVoidEntry: canVoidEntry,
-    canDupReviewControl: canDupReviewControl,
+    canDupReviewClear: canDupReviewClear,
     computeTotals: computeTotals,
     saveIndicatesDupReviewPending: saveIndicatesDupReviewPending,
+    errorCodeFromResponse: errorCodeFromResponse,
+    friendlyLedgerError: friendlyLedgerError,
     normalizeItem: normalizeItem,
     locBodyFromItem: locBodyFromItem
   };

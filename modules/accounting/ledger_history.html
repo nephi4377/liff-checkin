@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/ledger_entry_map.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=108"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=2"></script>
+  <script src="../../shared/js/accounting_api.js?v=109"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
@@ -573,8 +573,8 @@
             voidLabel += ' ' + String(detail.voided_at).replace('T', ' ').slice(0, 16);
           }
           rows.splice(1, 0, ['狀態', voidLabel]);
-          if (detail.void_reason || detail.voided_reason) {
-            rows.splice(2, 0, ['作廢原因', detail.void_reason || detail.voided_reason]);
+          if (detail.void_reason) {
+            rows.splice(2, 0, ['作廢原因', detail.void_reason]);
           }
         } else if (typeof LedgerEntryMap !== 'undefined' && LedgerEntryMap.isDupReviewPending(detail)) {
           rows.splice(1, 0, ['疑重', '待審']);
@@ -703,11 +703,11 @@
         return LedgerEntryMap.canVoidEntry(sessionRef, detail, sessionAuthPermForLedger());
       }
 
-      function sessionCanDupReviewDetail(detail) {
+      function sessionCanDupReviewClear(detail) {
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
         if (!LedgerEntryMap.isDupReviewPending(detail)) return false;
-        return LedgerEntryMap.canDupReviewControl(sessionAuthPermForLedger());
+        return LedgerEntryMap.canDupReviewClear(sessionAuthPermForLedger());
       }
 
       /** 作廢原因（可留空）；勿用原生 prompt */
@@ -801,7 +801,7 @@
         var merged = LedgerEntryMap.normalizeItem(Object.assign({}, summaryItem || {}, detail || {}));
         var canEdit = sessionCanEditDetail(merged);
         var canVoid = sessionCanVoidDetail(merged);
-        var canDup = sessionCanDupReviewDetail(merged);
+        var canDup = sessionCanDupReviewClear(merged);
         if (!canEdit && !canVoid && !canDup) return;
 
         var actions = document.createElement('div');
@@ -825,39 +825,6 @@
           dupHint.className = 'hist-dup-badge';
           dupHint.textContent = '疑重待審';
           actions.appendChild(dupHint);
-          var dupConfirmBtn = document.createElement('button');
-          dupConfirmBtn.type = 'button';
-          dupConfirmBtn.className = 'btn-flag-warn';
-          dupConfirmBtn.setAttribute('data-role', 'dup-review-confirm');
-          dupConfirmBtn.textContent = '確認非重複';
-          dupConfirmBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            if (!sessionRef || typeof AccountingApi.accountingLedgerDuplicateReview !== 'function') {
-              setModMsg('審核功能尚未就緒', false);
-              return;
-            }
-            if (!window.confirm('確認這筆不是重複登錄？')) return;
-            dupConfirmBtn.disabled = true;
-            setModMsg('處理中…', true);
-            AccountingApi.accountingLedgerDuplicateReview(sessionRef, Object.assign(locOpts(), {
-              review_decision: 'confirm'
-            })).then(function (data) {
-              dupConfirmBtn.disabled = false;
-              if (!data || !data.success) {
-                setModMsg((data && data.message) || '審核失敗', false);
-                return;
-              }
-              setModMsg(data.message || '已確認', true);
-              var updated = data.item || Object.assign({}, merged, { duplicate_review_pending: false });
-              applyModerationItemPatch(summaryItem, updated);
-              fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
-              try { loadLedgerHistory(); } catch (eReload) {}
-            }).catch(function (err) {
-              dupConfirmBtn.disabled = false;
-              setModMsg((err && err.message) || '審核失敗', false);
-            });
-          });
-          actions.appendChild(dupConfirmBtn);
           var dupClearBtn = document.createElement('button');
           dupClearBtn.type = 'button';
           dupClearBtn.className = 'btn-ghost';
@@ -865,22 +832,21 @@
           dupClearBtn.textContent = '清除待審標記';
           dupClearBtn.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (!sessionRef || typeof AccountingApi.accountingLedgerDuplicateReview !== 'function') {
-              setModMsg('審核功能尚未就緒', false);
+            if (!sessionRef || typeof AccountingApi.accountingLedgerDupReviewClear !== 'function') {
+              setModMsg('清除功能尚未就緒', false);
               return;
             }
+            if (!window.confirm('清除這筆的疑重待審標記？')) return;
             dupClearBtn.disabled = true;
             setModMsg('處理中…', true);
-            AccountingApi.accountingLedgerDuplicateReview(sessionRef, Object.assign(locOpts(), {
-              review_decision: 'clear'
-            })).then(function (data) {
+            AccountingApi.accountingLedgerDupReviewClear(sessionRef, locOpts()).then(function (data) {
               dupClearBtn.disabled = false;
               if (!data || !data.success) {
-                setModMsg((data && data.message) || '清除失敗', false);
+                setModMsg(LedgerEntryMap.friendlyLedgerError(data, '清除失敗'), false);
                 return;
               }
               setModMsg(data.message || '已清除待審', true);
-              var updated = data.item || Object.assign({}, merged, { duplicate_review_pending: false });
+              var updated = data.item || Object.assign({}, merged);
               applyModerationItemPatch(summaryItem, updated);
               fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
               try { loadLedgerHistory(); } catch (eReload) {}
@@ -916,14 +882,14 @@
               })).then(function (data) {
                 voidBtn.disabled = false;
                 if (!data || !data.success) {
-                  setModMsg((data && data.message) || '作廢失敗', false);
+                  setModMsg(LedgerEntryMap.friendlyLedgerError(data, '作廢失敗'), false);
                   return;
                 }
                 setModMsg(data.message || '已作廢', true);
                 var updated = data.item || Object.assign({}, merged, {
                   voided: true,
-                  void_reason: reason,
-                  voided_at: data.voided_at || new Date().toISOString()
+                  void_reason: reason || (data.item && data.item.void_reason) || '',
+                  voided_at: (data.item && data.item.voided_at) || data.voided_at || ''
                 });
                 applyModerationItemPatch(summaryItem, updated);
                 fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
@@ -1095,7 +1061,7 @@
         }).then(function (data) {
           if (saveBtn) saveBtn.disabled = false;
           if (!data || !data.success) {
-            setMsg((data && data.message) || '修改失敗', false);
+            setMsg(LedgerEntryMap.friendlyLedgerError(data, '修改失敗'), false);
             return;
           }
           var pendingDup = LedgerEntryMap.saveIndicatesDupReviewPending(data);
@@ -1108,8 +1074,7 @@
               ? String(data.edited_at).replace('T', ' ').slice(0, 16)
               : '',
             recorded_at: data.recorded_at || merged.recorded_at,
-            can_edit: true,
-            duplicate_review_pending: pendingDup || (data.item && LedgerEntryMap.isDupReviewPending(data.item))
+            can_edit: true
           });
           if (updated.party_name || updated.item_desc) {
             updated.desc = updated.party_name && updated.item_desc
