@@ -11,8 +11,14 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
+var cacheBust = require('./lib/read-cache-bust');
 var navJs = fs.readFileSync(path.join(shared, 'js/accounting_nav.js'), 'utf8');
 var css = fs.readFileSync(path.join(shared, 'css/accounting_layout.css'), 'utf8');
+var navVer = cacheBust.readCacheBustVersion(
+  fs.readFileSync(path.join(root, 'payment_request.html'), 'utf8'),
+  'accounting_nav.js'
+);
+assert(navVer, 'reference page has accounting_nav cache bust');
 
 assert(navJs.indexOf('querySelectorAll(\'.nav, #userLine') < 0, 'must not wholesale hide .nav');
 assert(navJs.indexOf('acct-nav-back') >= 0, 'embed chrome respects acct-nav-back');
@@ -29,8 +35,10 @@ assert(!/body\.acct-embed\s+\.nav\s*,/.test(css) && !/body\.acct-embed\s+\.nav\s
   } else {
     assert(html.indexOf('id="navSubmitRecordsLink"') >= 0, name + ' has 送出紀錄 cross-link');
   }
-  assert(/accounting_nav\.js\?v=4/.test(html), name + ' bumps accounting_nav cache');
-  assert(/accounting_layout\.css\?v=7/.test(html), name + ' bumps layout cache');
+  var navRef = cacheBust.readCacheBustVersion(html, 'accounting_nav.js');
+  assert(navRef && navVer && navRef === navVer, name + ' accounting_nav cache v=' + navRef);
+  var layoutRef = cacheBust.readCacheBustVersion(html, 'accounting_layout.css');
+  assert(layoutRef, name + ' has accounting_layout cache bust');
 });
 
 var pay = fs.readFileSync(path.join(root, 'payment_request.html'), 'utf8');
