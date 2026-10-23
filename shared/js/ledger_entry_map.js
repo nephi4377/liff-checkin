@@ -1,6 +1,5 @@
 /**
- * LEDGER-PERM API 前端對照（契約：Backend_GAS
- * `accounting-gas/SPEC/LEDGER_PERM_API.md` @ cursor/acct-sec-11-ledger-history-own-ba72）
+ * LEDGER-PERM API 前端對照（Backend_GAS accounting-gas/SPEC/LEDGER_PERM_API.md）
  */
 var LedgerEntryMap = (function () {
   var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
@@ -10,24 +9,18 @@ var LedgerEntryMap = (function () {
     dupReviewClearAction: 'accounting_ledger_dup_review_clear'
   };
 
-  /** § dup_review tag in 備註／note：`[dup_review:<payload> pending]` */
-  var DUP_REVIEW_TAG_RE = /\[dup_review:([^\]]+)\s+pending\]/;
+  /** Fallback only when API omits duplicate_review_* */
+  var DUP_REVIEW_TAG_RE = /\[dup_review:([^\]]+)\s+pending\]/i;
 
   var ERROR_MESSAGES = {
-    LEDGER_DELETE_DISABLED: '不能刪除收支列，請使用「作廢」保留紀錄。',
-    LEDGER_VOID_DENIED: '沒有權限作廢這筆記帳。',
-    LEDGER_VOID_ALREADY: '這筆已經作廢。',
-    LEDGER_ALREADY_VOIDED: '這筆已經作廢。',
-    LEDGER_EDIT_DENIED: '沒有權限修改這筆記帳。',
-    LEDGER_DUP_REVIEW_CLEAR_DENIED: '僅權限 5 可清除疑重待審標記。',
-    LEDGER_NOT_FOUND: '找不到這筆記帳。',
-    LEDGER_VIEW_DENIED: '沒有權限查看這筆記帳。',
-    LEDGER_PERM_DENIED: '權限不足，無法執行此操作。'
+    LEDGER_PERM_DENIED: '權限不足，無法執行此操作。',
+    LEDGER_UNKNOWN_OWNER: '無法確認這筆記帳的記帳人，請聯絡工程師。',
+    LEDGER_DELETE_DISABLED: '不能刪除收支列，請使用「作廢」保留紀錄。'
   };
 
   function recorderUserId(item) {
     if (!item) return '';
-    return String(item.recorderUserId || '').trim();
+    return String(item.recorderUserId || item.recorder_user_id || '').trim();
   }
 
   function parseDupReviewTag(text) {
@@ -48,6 +41,13 @@ var LedgerEntryMap = (function () {
   }
 
   function isDupReviewPending(item) {
+    if (!item) return false;
+    if (item.duplicate_review_pending === true) return true;
+    var st = String(item.duplicate_review_status || '').trim().toLowerCase();
+    if (st === 'pending') return true;
+    if (st === 'cleared' || st === '') {
+      if (item.duplicate_review_pending === false) return false;
+    }
     return parseDupReviewTag(noteText(item)).pending;
   }
 
@@ -78,24 +78,21 @@ var LedgerEntryMap = (function () {
     return isBossPerm(authPermVal);
   }
 
-  function canEditEntry(session, item, authPermVal) {
+  /** 依伺服器 can_edit（已含 owner／≥5 與非作廢／非 error_flag 規則） */
+  function showEditButton(item) {
     if (!item || isVoided(item)) return false;
-    if (isBossPerm(authPermVal)) return true;
-    if (item.can_edit === true) return true;
-    if (item.can_edit === false) return false;
-    return isEntryOwner(session, item);
+    if (item.error_flagged) return false;
+    return item.can_edit === true;
   }
 
-  function canVoidEntry(session, item, authPermVal) {
+  function showVoidButton(item) {
     if (!item || isVoided(item)) return false;
-    if (item.can_void === false) return false;
-    if (isBossPerm(authPermVal)) return true;
-    if (item.can_void === true) return true;
-    return isEntryOwner(session, item);
+    return item.can_void === true;
   }
 
-  function canDupReviewClear(authPermVal) {
-    return isBossPerm(authPermVal);
+  function showDupClearButton(item) {
+    if (!item || isVoided(item)) return false;
+    return item.can_clear_duplicate_review === true;
   }
 
   function amountForTotal(item) {
@@ -119,7 +116,9 @@ var LedgerEntryMap = (function () {
 
   function saveIndicatesDupReviewPending(data) {
     if (!data) return false;
+    if (data.duplicate_review_pending === true) return true;
     var item = data.item;
+    if (item && item.duplicate_review_pending === true) return true;
     if (item && isDupReviewPending(item)) return true;
     return false;
   }
@@ -131,7 +130,13 @@ var LedgerEntryMap = (function () {
 
   function friendlyLedgerError(data, fallback) {
     var code = errorCodeFromResponse(data);
-    if (code && ERROR_MESSAGES[code]) return ERROR_MESSAGES[code];
+    if (code && ERROR_MESSAGES[code]) {
+      var msg = ERROR_MESSAGES[code];
+      if (code === 'LEDGER_DELETE_DISABLED' && data && data.use_void === true) {
+        return msg;
+      }
+      return msg;
+    }
     if (data && data.message) return String(data.message);
     return fallback || '操作失敗';
   }
@@ -140,9 +145,10 @@ var LedgerEntryMap = (function () {
     if (!item || typeof item !== 'object') return item;
     var out = Object.assign({}, item);
     var rid = recorderUserId(item);
-    if (rid) out.recorderUserId = rid;
-    var dup = parseDupReviewTag(noteText(out));
-    if (dup.pending) out._dupReviewPayload = dup.payload;
+    if (rid) {
+      out.recorderUserId = rid;
+      out.recorder_user_id = item.recorder_user_id != null ? item.recorder_user_id : rid;
+    }
     return out;
   }
 
@@ -155,6 +161,16 @@ var LedgerEntryMap = (function () {
     var rowVal = item && item.row;
     if (rowVal != null && rowVal !== '' && Number(rowVal) > 0) o.row = rowVal;
     return o;
+  }
+
+  function voidRequestBody(item, voidReason) {
+    var body = locBodyFromItem(item);
+    var reason = String(voidReason || '').trim();
+    if (reason) {
+      body.void_reason = reason;
+      body.reason = reason;
+    }
+    return body;
   }
 
   var exported = {
@@ -170,15 +186,16 @@ var LedgerEntryMap = (function () {
     isEntryOwner: isEntryOwner,
     authPerm: authPerm,
     canViewAllLedger: canViewAllLedger,
-    canEditEntry: canEditEntry,
-    canVoidEntry: canVoidEntry,
-    canDupReviewClear: canDupReviewClear,
+    showEditButton: showEditButton,
+    showVoidButton: showVoidButton,
+    showDupClearButton: showDupClearButton,
     computeTotals: computeTotals,
     saveIndicatesDupReviewPending: saveIndicatesDupReviewPending,
     errorCodeFromResponse: errorCodeFromResponse,
     friendlyLedgerError: friendlyLedgerError,
     normalizeItem: normalizeItem,
-    locBodyFromItem: locBodyFromItem
+    locBodyFromItem: locBodyFromItem,
+    voidRequestBody: voidRequestBody
   };
 
   if (typeof module !== 'undefined' && module.exports) {

@@ -9,12 +9,12 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=109') >= 0, 'cache bust');
+assert(html.indexOf('accounting_api.js?v=110') >= 0, 'cache bust');
+assert(html.indexOf('LedgerEntryMap.showEditButton') >= 0, 'edit via server flag');
 assert(html.indexOf("'btn-edit'") >= 0, 'edit button');
 assert(html.indexOf("'void-ledger'") >= 0, 'void button');
 assert(html.indexOf('sessionCanEditDetail') >= 0, 'edit gate');
 assert(html.indexOf('sessionCanVoidDetail') >= 0, 'void gate');
-assert(html.indexOf('LedgerEntryMap.canEditEntry') >= 0, 'ownership via map');
 assert(api.indexOf('accountingLedgerVoid') >= 0, 'void api');
 assert(html.indexOf('錯誤記帳標示') < 0, 'legacy flag CTA removed from page');
 

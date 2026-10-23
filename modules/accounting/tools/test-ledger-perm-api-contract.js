@@ -34,18 +34,50 @@ assert(recent.success && recent.mine_only === true, 'recent mine_only example');
 assert.strictEqual(recent.view_all_min_perm, 5, 'recent view_all_min_perm');
 var row = recent.items[0];
 assert.strictEqual(LedgerEntryMap.recorderUserId(row), 'U_OWNER_DEMO', 'recorderUserId');
-assert(LedgerEntryMap.isDupReviewPending(row), 'dup tag in note');
-assert.strictEqual(LedgerEntryMap.parseDupReviewTag(row.note).payload, 'ing-demo-001', 'dup payload');
+assert.strictEqual(row.recorder_user_id, 'U_OWNER_DEMO', 'recorder_user_id on row');
+assert.strictEqual(row.can_delete, false, 'can_delete always false');
+assert(LedgerEntryMap.isDupReviewPending(row), 'dup pending from API fields');
+assert.strictEqual(row.duplicate_review_status, 'pending', 'dup status pending');
+assert(LedgerEntryMap.showEditButton(row), 'can_edit drives edit');
+assert(LedgerEntryMap.showVoidButton(row), 'can_void');
+assert(LedgerEntryMap.showDupClearButton(row), 'can_clear_duplicate_review');
 
-var voided = fixtures.examples.ledger_void_success.item;
-assert(LedgerEntryMap.isVoided(voided), 'voided item');
+var voidBody = LedgerEntryMap.voidRequestBody(row, '重複登錄');
+assert.strictEqual(voidBody.sheet, '2026-01');
+assert.strictEqual(voidBody.row, 42);
+assert.strictEqual(voidBody.ingest_id, 'ing-demo-001');
+assert.strictEqual(voidBody.void_reason, '重複登錄');
+assert.strictEqual(voidBody.reason, '重複登錄');
+
+var detailVoided = fixtures.examples.ledger_detail_voided.item;
+assert(LedgerEntryMap.isVoided(detailVoided), 'detail voided still returned');
+assert.strictEqual(detailVoided.voided_by, 'U_BOSS');
+assert.strictEqual(detailVoided.void_reason, '重複登錄');
+assert(!LedgerEntryMap.showEditButton(detailVoided), 'no edit on voided');
+assert(!LedgerEntryMap.showVoidButton(detailVoided), 'no void again');
+
+var voidSuccess = fixtures.examples.ledger_void_success;
+assert.strictEqual(voidSuccess.voided, true);
+assert(voidSuccess.voided_at);
+assert.strictEqual(voidSuccess.voided_by, 'U_OWNER_DEMO');
+assert.strictEqual(voidSuccess.void_reason, '重複登錄');
+assert(LedgerEntryMap.isVoided(voidSuccess.item), 'voided item in response');
+
 assert(!LedgerEntryMap.isVoided({ recorderUserId: 'x', voided: false }), 'not voided');
 
-var tagged = fixtures.examples.ledger_update_dup_tagged;
-assert(LedgerEntryMap.saveIndicatesDupReviewPending(tagged), 'save adds dup tag');
+var tagged = fixtures.examples.ledger_update_dup_flagged;
+assert(LedgerEntryMap.saveIndicatesDupReviewPending(tagged), 'update duplicate_review_pending');
 
 var cleared = fixtures.examples.dup_review_clear_success.item;
-assert(!LedgerEntryMap.isDupReviewPending(cleared), 'cleared note');
+assert.strictEqual(cleared.duplicate_review_status, 'cleared');
+assert(!LedgerEntryMap.isDupReviewPending(cleared), 'cleared dup');
+
+var tagFallback = {
+  note: 'x [dup_review:ing-demo-001 pending]',
+  duplicate_review_status: ''
+};
+assert(LedgerEntryMap.isDupReviewPending(tagFallback), 'note tag fallback');
+assert.strictEqual(LedgerEntryMap.parseDupReviewTag(tagFallback.note).payload, 'ing-demo-001');
 
 Object.keys(fixtures.error_examples).forEach(function (code) {
   var ex = fixtures.error_examples[code];
@@ -56,7 +88,7 @@ Object.keys(fixtures.error_examples).forEach(function (code) {
 });
 
 assert(
-  LedgerEntryMap.friendlyLedgerError({ error_code: 'LEDGER_DELETE_DISABLED' }, 'x').indexOf('作廢') >= 0,
+  LedgerEntryMap.friendlyLedgerError({ error_code: 'LEDGER_DELETE_DISABLED', use_void: true }, 'x').indexOf('作廢') >= 0,
   'delete disabled hints void'
 );
 
