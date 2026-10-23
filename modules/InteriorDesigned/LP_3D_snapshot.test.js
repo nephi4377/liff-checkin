@@ -108,7 +108,7 @@ describe('buildLayout3DViewPresetOptions', () => {
         expect(isOrbitCameraPresetId(formatWalkRoomPresetId(1))).toBe(false);
     });
 
-    it('房間視線僅來自 floors，牆環數與地板數不同時不多出選項', () => {
+    it('有地板時 walk 環僅來自 floors；外圈牆存在時房間視線仍與地板數一致', () => {
         const desc = buildLayout3DDescriptor({
             workspaceSize: 2000,
             drawnAreas: [
@@ -146,10 +146,11 @@ describe('buildLayout3DViewPresetOptions', () => {
             ],
             placedCabinets: [],
         });
+        expect(desc.walls).toHaveLength(1);
         expect(desc.floors).toHaveLength(2);
         expect(desc.walkBounds?.rings?.length).toBe(2);
         const { walkRooms } = buildLayout3DViewPresetOptions(desc);
-        expect(walkRooms).toHaveLength(2);
+        expect(walkRooms).toHaveLength(desc.floors.length);
         expect(walkRooms[0].label).toContain('floor-a');
         expect(parseWalkRoomPresetId(walkRooms[1].id)).toBe(1);
     });
