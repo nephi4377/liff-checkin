@@ -101,10 +101,18 @@ export function buildFixtureMeshGroup(THREE, fix) {
     const base = fix.baseYCm;
 
     if (cat === 'door') {
-        const frame = mat(THREE, 0x57534e);
         const leaf = mat(THREE, LP_3D_CATEGORY_COLORS.door);
-        addBox(group, THREE, w, h, Math.min(d, 4), frame, base, 0);
-        addBox(group, THREE, w * 0.92, h * 0.96, Math.max(d * 0.35, 2), leaf, base, 0);
+        const leafMesh = addBox(
+            group,
+            THREE,
+            w * 0.94,
+            h * 0.98,
+            Math.max(d * 0.55, 3),
+            leaf,
+            base,
+            0,
+        );
+        leafMesh.userData.lp3dDoorLeaf = true;
         return group;
     }
 
@@ -202,9 +210,23 @@ export function buildFixtureMeshGroup(THREE, fix) {
     const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.cabinet;
     const body = mat(THREE, color);
     body.emissive = new THREE.Color(color);
-    body.emissiveIntensity = 0.12;
+    body.emissiveIntensity = 0.32;
     const mesh = addBox(group, THREE, w, h, d, body, base);
-    mesh.renderOrder = 2;
+    mesh.renderOrder = 3;
+    const topMat = mat(THREE, color);
+    topMat.emissive = new THREE.Color(color);
+    topMat.emissiveIntensity = 0.4;
+    const topCap = new THREE.Mesh(new THREE.BoxGeometry(w, 4, d), topMat);
+    topCap.position.set(0, base + h - 2, 0);
+    topCap.renderOrder = 5;
+    group.add(topCap);
+    const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x3f1f08 });
+    const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+    edges.position.set(0, base + h / 2, 0);
+    edges.renderOrder = 6;
+    group.add(edges);
+    mesh.userData.lp3dCabinetBody = true;
     return group;
 }
 

@@ -141,6 +141,16 @@ function buildSlabMesh(ring, yCm, thicknessCm, material) {
     return mesh;
 }
 
+function buildWallTopCapMesh(wall, material, capThicknessCm) {
+    const shape = makeShapeFromRing(wall.outer, wall.inner);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: capThicknessCm, bevelEnabled: false });
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.y = wall.heightCm - capThicknessCm;
+    mesh.userData.lp3dWallTopCap = true;
+    return mesh;
+}
+
 /**
  * @param {{ mountEl: HTMLElement, getData: () => { workspaceSize: number, placedCabinets: unknown[], drawnAreas: unknown[] }, onRequestClose?: () => void }} options
  */
@@ -169,9 +179,12 @@ export function createLayoutPlanner3DViewer(options) {
     const ceilingGroup = { current: null };
     const labelGroup = { current: null };
     const wallMeshes = { current: [] };
+    const wallCapMeshes = { current: [] };
     const floorMeshes = { current: [] };
     const fixtureGroups = { current: new Map() };
-    const ORBIT_WALL_CUT_HEIGHT_CM = 100;
+    const ORBIT_OBLIQUE_WALL_OPACITY = 0.35;
+    const WALL_TOP_CAP_THICKNESS_CM = 4;
+    const FLOOR_SAMPLE_RGB = { r: 245, g: 240, b: 232 };
 
     const hintEl = overlayEl?.querySelector('#lp-3d-hint');
     const btnOrbit = overlayEl?.querySelector('#lp-3d-btn-orbit');
@@ -203,8 +216,8 @@ export function createLayoutPlanner3DViewer(options) {
         } else {
             controls.enabled = false;
             walk?.setActive(true);
-            camera.rotation.order = 'YXZ';
-            walk.syncFromCamera();
+            camera.up.set(0, 1, 0);
+            camera.rotation.z = 0;
             setHint('室內：WASD 移動 · 按住左鍵轉向 · 手機左半拖移動、右半轉向');
         }
         updateToolbarActive();
@@ -239,6 +252,7 @@ export function createLayoutPlanner3DViewer(options) {
             walk.setPosition(pose.x, pose.z);
             walk.lookAt(pose.lookX, pose.lookZ);
             if (pose.pitch != null) walk.setPitch(pose.pitch);
+            walk.resetLevelOrientation();
             return;
         }
         const c = ring?.length ? ringCentroidXZ(ring) : { x: 0, z: 0 };
@@ -295,7 +309,12 @@ export function createLayoutPlanner3DViewer(options) {
         camera = new THREE.PerspectiveCamera(50, aspect, 10, 50000);
         camera.position.set(800, 600, 800);
 
-        renderer = new THREE.WebGLRenderer({ antialias: true });
+        const lpPreview = typeof window !== 'undefined'
+            && new URLSearchParams(window.location.search).get('lpPreview') === '1';
+        renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            preserveDrawingBuffer: lpPreview,
+        });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
         mountEl.appendChild(renderer.domElement);
@@ -448,11 +467,21 @@ export function createLayoutPlanner3DViewer(options) {
             metalness: 0.04,
         });
         wallMeshes.current = [];
+        wallCapMeshes.current = [];
+        const capMat = new THREE.MeshStandardMaterial({
+            color: 0x334155,
+            roughness: 0.92,
+            metalness: 0.02,
+        });
         for (const wall of desc.walls) {
             const brush = buildWallBrush(wall, wallMat, openings, defaults);
             brush.userData.lp3dWall = true;
             wallMeshes.current.push(brush);
             root.add(brush);
+            const cap = buildWallTopCapMesh(wall, capMat, WALL_TOP_CAP_THICKNESS_CM);
+            cap.visible = false;
+            wallCapMeshes.current.push(cap);
+            root.add(cap);
         }
 
         fixtureGroups.current = new Map();
@@ -502,33 +531,28 @@ export function createLayoutPlanner3DViewer(options) {
 
     function applyOrbitWallPresentation() {
         if (!camera || viewMode !== 'orbit' || !wallMeshes.current.length) return;
-        const wallH = lastDesc?.walls?.[0]?.heightCm ?? LP_3D_DEFAULTS.WALL_HEIGHT_CM;
         const topDown = isOrbitTopDownView();
-        const cut = !topDown;
-        const modeKey = topDown ? 'top' : (cut ? 'cut' : 'full');
-        if (modeKey === lastOrbitWallCut && modeKey !== 'top') return;
-        if (modeKey === lastOrbitWallCut && topDown) {
-            for (const mesh of wallMeshes.current) {
-                if (mesh.visible) {
-                    mesh.visible = false;
-                }
-            }
-            return;
-        }
+        const modeKey = topDown ? 'top' : 'oblique';
+        if (modeKey === lastOrbitWallCut) return;
         lastOrbitWallCut = modeKey;
         for (const mesh of wallMeshes.current) {
-            if (topDown) {
-                mesh.visible = false;
-                continue;
-            }
-            mesh.visible = true;
-            mesh.scale.y = cut ? ORBIT_WALL_CUT_HEIGHT_CM / wallH : 1;
+            mesh.visible = !topDown;
+            mesh.scale.y = 1;
             const mat = mesh.material;
             if (!mat) continue;
-            mat.transparent = cut;
-            mat.opacity = cut ? 0.38 : 1;
-            mat.depthWrite = !cut;
+            if (topDown) {
+                mat.transparent = false;
+                mat.opacity = 1;
+                mat.depthWrite = true;
+            } else {
+                mat.transparent = true;
+                mat.opacity = ORBIT_OBLIQUE_WALL_OPACITY;
+                mat.depthWrite = false;
+            }
             mat.needsUpdate = true;
+        }
+        for (const cap of wallCapMeshes.current) {
+            cap.visible = topDown;
         }
     }
 
@@ -550,8 +574,11 @@ export function createLayoutPlanner3DViewer(options) {
         if (!isOpen || !renderer) return;
         const delta = Math.min((now - lastTick) / 1000, 0.05);
         lastTick = now;
-        if (viewMode === 'walk') walk.update(delta);
-        else {
+        if (viewMode === 'walk') {
+            walk.update(delta);
+            camera.up.set(0, 1, 0);
+            camera.rotation.z = 0;
+        } else {
             controls.update();
             applyOrbitWallPresentation();
         }
@@ -637,6 +664,66 @@ export function createLayoutPlanner3DViewer(options) {
         };
     }
 
+    function countDoorLeafMeshes() {
+        let count = 0;
+        for (const [, group] of fixtureGroups.current) {
+            if (group.userData?.lp3dFixtureKind !== 'door') continue;
+            group.traverse((obj) => {
+                if (obj.isMesh && obj.userData?.lp3dDoorLeaf) count += 1;
+            });
+        }
+        return count;
+    }
+
+    function openingWorldMaxY(op) {
+        const group = fixtureGroups.current.get(op.id);
+        if (!group) return null;
+        const box = new THREE.Box3().setFromObject(group);
+        return box.isEmpty() ? null : box.max.y;
+    }
+
+    function colorDistanceRgb(a, b) {
+        return Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+    }
+
+    function sampleRendererPixel(screenX, screenY) {
+        if (!renderer || !camera) return null;
+        renderer.render(scene, camera);
+        const canvas = renderer.domElement;
+        const gl = renderer.getContext();
+        const dpr = renderer.getPixelRatio();
+        const x = Math.floor(screenX * dpr);
+        const y = Math.floor((canvas.clientHeight - screenY) * dpr);
+        const pixels = new Uint8Array(4);
+        gl.readPixels(x, y, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        return { r: pixels[0], g: pixels[1], b: pixels[2], a: pixels[3] };
+    }
+
+    function sampleCabinetFootprintPixel(cabGroup) {
+        if (!cabGroup || !camera || !renderer) return null;
+        const box = new THREE.Box3().setFromObject(cabGroup);
+        if (box.isEmpty()) return null;
+        const center = new THREE.Vector3(
+            (box.min.x + box.max.x) / 2,
+            box.max.y - 2,
+            (box.min.z + box.max.z) / 2,
+        );
+        const p = center.clone().project(camera);
+        const w = renderer.domElement.clientWidth;
+        const h = renderer.domElement.clientHeight;
+        const sx = (p.x * 0.5 + 0.5) * w;
+        const sy = (-p.y * 0.5 + 0.5) * h;
+        const rgb = sampleRendererPixel(sx, sy);
+        if (!rgb) return null;
+        const floorDist = colorDistanceRgb(rgb, FLOOR_SAMPLE_RGB);
+        return {
+            screenX: sx,
+            screenY: sy,
+            rgb,
+            differsFromFloor: floorDist >= 28,
+        };
+    }
+
     function openingSubMeshInWallBand(wall, op, group) {
         const centers = meshWorldCentersXZ(group);
         return centers.every((p) => {
@@ -668,11 +755,38 @@ export function createLayoutPlanner3DViewer(options) {
         }
         return {
             ceilingVisible: Boolean(ceilingGroup.current?.visible),
+            wallCapsVisibleTopDown: Boolean(
+                viewMode === 'orbit'
+                && isOrbitTopDownView()
+                && wallCapMeshes.current.length > 0
+                && wallCapMeshes.current.every((m) => m.visible),
+            ),
             wallsHiddenTopDown: Boolean(
                 viewMode === 'orbit'
                 && isOrbitTopDownView()
                 && wallMeshes.current.every((m) => !m.visible),
             ),
+            doorLeafMeshCount: countDoorLeafMeshes(),
+            walkCameraRollRad: viewMode === 'walk' ? (walk?.getRollRadians?.() ?? null) : null,
+            walkCameraUp: viewMode === 'walk' ? (walk?.getCameraUp?.() ?? null) : null,
+            obliqueOpeningTops: (() => {
+                const wallH = lastDesc.walls?.[0]?.heightCm ?? LP_3D_DEFAULTS.WALL_HEIGHT_CM;
+                const oblique = viewMode === 'orbit' && !isOrbitTopDownView();
+                if (!oblique) return null;
+                return openings.map((op) => {
+                    const maxY = openingWorldMaxY(op);
+                    return {
+                        id: op.id,
+                        kind: op.kind,
+                        maxY,
+                        wallTop: wallH,
+                        withinWallTop: maxY != null && maxY <= wallH + 1.5,
+                    };
+                });
+            })(),
+            cabinetTopDownPixel: (viewMode === 'orbit' && isOrbitTopDownView() && cabGroup)
+                ? sampleCabinetFootprintPixel(cabGroup)
+                : null,
             floorBoundsMatchInner: Boolean(
                 innerBounds && meshBounds && boundsXZMatch(innerBounds, meshBounds, 2),
             ),
@@ -756,8 +870,15 @@ export function createLayoutPlanner3DViewer(options) {
                     walk.setPosition(pose.x, pose.z);
                     walk.lookAt(pose.lookX, pose.lookZ);
                     if (pose.pitch != null) walk.setPitch(pose.pitch);
+                    walk.resetLevelOrientation();
                 }
                 updateLabelScreenSizes();
+            },
+            sampleCabinetTopDownPixel: () => {
+                const cabinets = lastDesc?.fixtures?.filter((f) => f.kind === 'cabinet') ?? [];
+                const cabGroup = fixtureGroups.current.get('cab-demo-1')
+                    ?? fixtureGroups.current.get(cabinets[0]?.id);
+                return sampleCabinetFootprintPixel(cabGroup);
             },
         };
         mountEl.__lp3dGetDiagnostics = () => viewer.getDiagnostics();

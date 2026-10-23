@@ -448,8 +448,12 @@ test.describe('LayoutPlanner E2E', () => {
 
     const snapshot = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
     expect(snapshot?.ceilingVisible).toBe(false);
-    expect(snapshot?.wallsHiddenTopDown, '鳥瞰應隱藏牆體以免出現牆頂色帶').toBe(true);
+    expect(snapshot?.wallsHiddenTopDown, '俯視應隱藏牆體立面').toBe(true);
+    expect(snapshot?.wallCapsVisibleTopDown, '俯視應顯示牆頂描邊').toBe(true);
     expect(snapshot?.floorBoundsMatchInner, '地板外框應貼齊牆內圈（≤2cm）').toBe(true);
+    expect(snapshot?.doorLeafMeshCount, '每扇門僅一塊門片 mesh').toBe(1);
+    const cabPixel = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.sampleCabinetTopDownPixel?.());
+    expect(cabPixel?.differsFromFloor, '俯視櫃體中心像素應與地板色不同').toBe(true);
     expect(snapshot?.cabinetMeshVisible, '鳥瞰應看見櫃體 mesh（非僅標籤）').toBe(true);
     expect(snapshot?.cabinetMeshScreen?.pixelArea ?? 0, '櫃體螢幕投影面積應足夠').toBeGreaterThan(100);
     expect(snapshot?.labelCount).toBeGreaterThanOrEqual(1);
@@ -464,9 +468,16 @@ test.describe('LayoutPlanner E2E', () => {
     }
 
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-orbit.png'), fullPage: false });
+    await page.locator('#lp-3d-btn-preset-top').click();
+    await page.waitForTimeout(600);
+    await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-topdown.png'), fullPage: false });
 
     await page.locator('#lp-3d-btn-preset-corner').click();
     await page.waitForTimeout(800);
+    const obliqueSnap = await page.evaluate(() => window.__LP3D_TEST_HOOKS__?.getRoomAcceptanceSnapshot());
+    for (const op of obliqueSnap?.obliqueOpeningTops ?? []) {
+      expect(op.withinWallTop, `${op.kind} ${op.id} 頂部應不高出牆頂`).toBe(true);
+    }
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-oblique.png'), fullPage: false });
 
     await page.locator('#lp-3d-btn-walk').click();
@@ -484,6 +495,9 @@ test.describe('LayoutPlanner E2E', () => {
     expect(walkSnap?.floorMeshScreen?.inFrustum, '室內應看見地板').toBe(true);
     expect(walkSnap?.cabinetMeshVisible, '室內應看見櫃體').toBe(true);
     expect(walkSnap?.cabinetMeshScreen?.inFrustum, '櫃體應在視野內').toBe(true);
+    expect(Math.abs(walkSnap?.walkCameraRollRad ?? 1), '室內 horizon roll 應≈0').toBeLessThan(0.02);
+    expect(walkSnap?.walkCameraUp?.y ?? 0, 'camera.up 應為世界 Y').toBeGreaterThan(0.99);
+    expect(walkSnap?.doorLeafMeshCount).toBe(1);
     await page.screenshot({ path: path.join(ARTIFACTS, 'lp-3d-room-preview-walk.png'), fullPage: false });
   });
 

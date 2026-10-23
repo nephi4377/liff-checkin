@@ -47,9 +47,11 @@ export function createWalkController(opts) {
     }
 
     function applyCameraRotation() {
+        camera.up.set(0, 1, 0);
         camera.rotation.order = 'YXZ';
-        camera.rotation.y = yaw;
         camera.rotation.x = pitch;
+        camera.rotation.y = yaw;
+        camera.rotation.z = 0;
     }
 
     function swallowWalkKey(e) {
@@ -195,25 +197,43 @@ export function createWalkController(opts) {
         },
         isActive: () => active,
         syncFromCamera() {
+            camera.up.set(0, 1, 0);
             const e = new THREE.Euler(0, 0, 0, 'YXZ');
-            e.setFromQuaternion(camera.quaternion);
+            e.setFromQuaternion(camera.quaternion, 'YXZ');
             yaw = e.y;
             pitch = e.x;
+            applyCameraRotation();
+        },
+        resetLevelOrientation() {
+            camera.up.set(0, 1, 0);
+            applyCameraRotation();
+        },
+        getRollRadians() {
+            return camera.rotation.z;
+        },
+        getCameraUp() {
+            return { x: camera.up.x, y: camera.up.y, z: camera.up.z };
         },
         setPosition(x, z) {
             const c = clampInsideBounds(x, z);
             camera.position.set(c.x, eyeHeightCm, c.z);
+            camera.up.set(0, 1, 0);
+            applyCameraRotation();
         },
         lookAt(x, z) {
-            const dx = x - camera.position.x;
-            const dz = z - camera.position.z;
-            yaw = Math.atan2(-dx, -dz);
-            pitch = 0;
-            applyCameraRotation();
+            camera.up.set(0, 1, 0);
+            camera.lookAt(x, eyeHeightCm, z);
+            const e = new THREE.Euler(0, 0, 0, 'YXZ');
+            e.setFromQuaternion(camera.quaternion, 'YXZ');
+            yaw = e.y;
+            pitch = e.x;
+            camera.rotation.z = 0;
         },
         setPitch(rad) {
             pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, rad));
             applyCameraRotation();
+            camera.up.set(0, 1, 0);
+            camera.rotation.z = 0;
         },
         update,
         dispose() {
