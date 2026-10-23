@@ -2272,6 +2272,14 @@
             const nowDisplay = new Date().toLocaleString();
             const ref = db2.ref(`quotations/${projectNo}`);
             const snapBefore = await ref.once('value');
+            if (snapBefore.exists() && !auditorCloudWriteBaseline) {
+                showToast(
+                    '無法建立雲端安全基線（模組載入失敗或僅本地快取）。請重新從雲端載入案場後再同步。',
+                    'error',
+                    7000,
+                );
+                return;
+            }
             if (snapBefore.exists() && auditorCloudWriteBaseline) {
                 const syncModUrl = new URL('../modules/InteriorDesigned/LP_budgetweb_cloud_sync.js', window.location.href).href;
                 const { remoteQuotationSyncBaselineChanged } = await import(syncModUrl);

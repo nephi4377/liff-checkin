@@ -137,6 +137,26 @@ describe('LP_budgetweb_cloud_sync', () => {
         ).toBe(true);
     });
 
+    it('確認文案不含「未對應已排除」（未對應為整次 blocking）', () => {
+        const diff = {
+            added: [],
+            removed: [],
+            changed: [],
+            preservedRemoteOnly: [],
+            hasChanges: false,
+            suggestCancelInflation: false,
+            legacyRemap: {
+                active: true,
+                matched: [{ legacyId: 'ITEM_1', localId: 'ITEM_0818_1', name: 'a' }],
+                unmapped: [{ legacyId: 'ITEM_9', name: '幽靈' }],
+                ambiguous: [],
+            },
+        };
+        const text = formatSyncDiffForConfirm(diff);
+        expect(text).not.toMatch(/已排除/);
+        expect(text).toMatch(/已對應新 id/);
+    });
+
     it('確認視窗列出保留的雲端獨有列', () => {
         const diff = computeQuotationSyncDiff(
             [{ id: 'ONLY_CLOUD', name: '遠端獨有工項' }],

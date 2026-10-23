@@ -15,9 +15,11 @@ import {
     runLocalQuotationIdDuplicateCheck,
     planLegacyQuotationIdRemap,
 } from './LP_budgetweb_cloud_sync.js';
+import { confirmBudgetWebWriteProceed } from './LP_budgetweb_sync_confirm.js';
 
 /**
  * @param {object} opts
+ * @param {(msg: string, mode: 'normal'|'dangerous') => boolean|Promise<boolean>} [opts.confirmWriteFn]
  * @param {string} opts.projectNo
  * @param {Array<object>} opts.localItems
  * @param {(path: string) => Promise<{ exists: () => boolean, val: () => any }>} opts.readQuotationSnapshot
@@ -25,9 +27,25 @@ import {
  * @param {() => boolean} [opts.confirmFn]
  * @param {(msg: string) => void} [opts.alertFn]
  */
+export async function askBudgetWebSyncConfirm(opts, message, mode = 'normal') {
+    const dangerous = mode === 'dangerous';
+    if (opts.confirmWriteFn) {
+        return Boolean(await opts.confirmWriteFn(message, mode));
+    }
+    if (dangerous && opts.confirmInflationFn) {
+        return Boolean(opts.confirmInflationFn(message));
+    }
+    if (dangerous) {
+        return await confirmBudgetWebWriteProceed(message, { defaultProceed: false });
+    }
+    if (opts.confirmFn) {
+        return Boolean(opts.confirmFn(message));
+    }
+    return true;
+}
+
 export async function runBudgetWebQuotationCloudSync(opts) {
     const alertFn = opts.alertFn || (() => {});
-    const confirmFn = opts.confirmFn || (() => true);
     const projectNo = String(opts.projectNo || '').trim();
     if (!projectNo) {
         return { ok: false, reason: 'missing_project_no' };
@@ -83,13 +101,16 @@ export async function runBudgetWebQuotationCloudSync(opts) {
     const hints = findNameSpecHintsForSync(localItems, remoteItems);
     const confirmText = formatSyncDiffForConfirm(diff, hints);
     if (diff.hasChanges || diff.preservedRemoteOnly.length > 0 || hints.length || diff.legacyRemap?.matched?.length) {
-        if (!confirmFn(confirmText)) {
+        const firstMode = diff.suggestCancelInflation ? 'dangerous' : 'normal';
+        if (!(await askBudgetWebSyncConfirm(opts, confirmText, firstMode))) {
             return { ok: false, reason: 'user_cancelled' };
         }
         if (diff.suggestCancelInflation) {
-            const ok2 = opts.confirmInflationFn
-                ? opts.confirmInflationFn()
-                : confirmFn('【二次確認】雲端獨有比例偏高，仍要寫入雲端？（建議取消）');
+            const ok2 = await askBudgetWebSyncConfirm(
+                opts,
+                '【二次確認】雲端獨有比例偏高，仍要寫入雲端？\n請點「確定寫入」才會上傳（Enter 預設取消）。',
+                'dangerous',
+            );
             if (!ok2) {
                 return { ok: false, reason: 'inflation_warning_declined' };
             }

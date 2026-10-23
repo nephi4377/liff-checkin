@@ -136,12 +136,12 @@ export function planLegacyQuotationIdRemap(localItems, remoteItems) {
     const blockingErrors = [];
     if (ambiguous.length) {
         blockingErrors.push(
-            `舊版 id 對應衝突（一對多）共 ${ambiguous.length} 筆；例：${ambiguous[0].legacyId} ↔ ${ambiguous[0].localIds.join(', ')}`,
+            `舊版 id 對應衝突（一對多）共 ${ambiguous.length} 筆，整次同步已中止；例：${ambiguous[0].legacyId} ↔ ${ambiguous[0].localIds.join(', ')}`,
         );
     }
     if (unmapped.length) {
         blockingErrors.push(
-            `舊版 id 無法對應本地新 id 共 ${unmapped.length} 筆（不會保留以免與本地重複）；例：${unmapped[0].legacyId} ${unmapped[0].name}`,
+            `舊版 id 無法對應本地新 id 共 ${unmapped.length} 筆，整次同步已中止（不會部分寫入）；例：${unmapped[0].legacyId} ${unmapped[0].name}`,
         );
     }
 
@@ -280,6 +280,11 @@ export function remoteQuotationSyncBaselineChanged(baseline, freshExistingData) 
         || fresh.itemsContentHash !== baseline.itemsContentHash
         || fresh.itemCount !== baseline.itemCount
     );
+}
+
+/** 雲端節點已存在但無法建立寫回 baseline 時應阻擋寫入 */
+export function shouldBlockQuotationWriteWithoutBaseline(remoteNodeExists, baseline) {
+    return Boolean(remoteNodeExists) && !baseline;
 }
 
 export function formatRemoteChangedAbortMessage() {
@@ -553,17 +558,6 @@ export function formatSyncDiffForConfirm(diff, nameSpecHints = []) {
         if (diff.legacyRemap.matched.length > 12) {
             lines.push(`  …另有 ${diff.legacyRemap.matched.length - 12} 筆`);
         }
-        lines.push('');
-    }
-    if (diff.legacyRemap?.unmapped?.length) {
-        lines.push(`【舊版 id 未對應（已排除，不寫回）】${diff.legacyRemap.unmapped.length} 筆`);
-        diff.legacyRemap.unmapped.slice(0, 8).forEach((u) => {
-            lines.push(`  ! ${u.legacyId} ${u.name || ''}`);
-        });
-        lines.push('');
-    }
-    if (diff.legacyRemap?.ambiguous?.length) {
-        lines.push(`【舊版 id 一對多衝突】${diff.legacyRemap.ambiguous.length} 筆`);
         lines.push('');
     }
     if (diff.blockingErrors?.length) {

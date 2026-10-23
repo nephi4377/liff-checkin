@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runBudgetWebQuotationCloudSync } from './LP_budgetweb_firebase_sync.js';
+import {
+    runBudgetWebQuotationCloudSync,
+    askBudgetWebSyncConfirm,
+} from './LP_budgetweb_firebase_sync.js';
 import {
     buildRemoteQuotationSyncBaseline,
     remoteQuotationSyncBaselineChanged,
@@ -177,7 +180,7 @@ describe('runBudgetWebQuotationCloudSync', () => {
         expect(update).not.toHaveBeenCalled();
     });
 
-    it('雲端獨有 >10% 時第二次確認拒絕則不寫入', async () => {
+    it('雲端獨有 >10% 時第二次 dangerous 確認拒絕則不寫入', async () => {
         const update = vi.fn();
         const local = Array.from({ length: 10 }, (_, i) => ({
             id: `ITEM_0818_${i + 1}`,
@@ -197,7 +200,7 @@ describe('runBudgetWebQuotationCloudSync', () => {
             { id: 'ONLY_A', name: '雲端A', spec: 'a', unit: '式' },
             { id: 'ONLY_B', name: '雲端B', spec: 'b', unit: '式' },
         ];
-        let confirmCalls = 0;
+        let dangerousCalls = 0;
         const result = await runBudgetWebQuotationCloudSync({
             projectNo: 'P778',
             localItems: local,
@@ -211,15 +214,23 @@ describe('runBudgetWebQuotationCloudSync', () => {
                 }),
             }),
             updateQuotation: update,
-            confirmFn: () => {
-                confirmCalls += 1;
-                return confirmCalls === 1;
+            confirmWriteFn: async (_msg, mode) => {
+                if (mode === 'dangerous') {
+                    dangerousCalls += 1;
+                    return dangerousCalls < 2;
+                }
+                return true;
             },
-            confirmInflationFn: () => false,
         });
         expect(result.ok).toBe(false);
         expect(result.reason).toBe('inflation_warning_declined');
         expect(update).not.toHaveBeenCalled();
+        expect(dangerousCalls).toBe(2);
+    });
+
+    it('askBudgetWebSyncConfirm dangerous 無 callback 時預設不繼續（node 環境）', async () => {
+        const ok = await askBudgetWebSyncConfirm({}, 'x', 'dangerous');
+        expect(ok).toBe(false);
     });
 
     it('100 筆舊 id 對應後寫入 payload 仍 100 筆', async () => {

@@ -955,7 +955,16 @@
                 updateQuotation: async (_path, payload) => {
                     await db.ref(`quotations/${projectNo}`).update(payload);
                 },
-                confirmFn: (msg) => confirm(msg),
+                confirmWriteFn: async (msg, mode) => {
+                    const confirmModUrl = new URL(
+                        '../modules/InteriorDesigned/LP_budgetweb_sync_confirm.js',
+                        window.location.href,
+                    ).href;
+                    const { confirmBudgetWebWriteProceed } = await import(confirmModUrl);
+                    return confirmBudgetWebWriteProceed(msg, {
+                        defaultProceed: mode !== 'dangerous',
+                    });
+                },
                 alertFn: (msg) => alert(msg),
             });
 
