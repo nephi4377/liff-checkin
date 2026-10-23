@@ -25,6 +25,8 @@ export const LP_3D_DEFAULTS = {
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
 const WINDOW_NAME_RE = /窗|落地窗|氣窗|百葉窗/;
 const DOOR_NAME_RE = /門/;
+/** 名稱含「櫃」者優先視為櫃體（如開門高衣櫃、窗邊櫃） */
+const CABINET_NAME_GUARD_RE = /櫃/;
 const MANUAL_KINDS = new Set(['cabinet', 'door', 'window', 'wallSegment']);
 
 /**
@@ -38,8 +40,8 @@ export function classifyPlacedCabinet3DKind(cab) {
     const name = String(cab.data.name || '');
     const inDoorWindowGroup = DOOR_WINDOW_GROUPS.has(group);
 
+    if (CABINET_NAME_GUARD_RE.test(name)) return 'cabinet';
     if (WINDOW_NAME_RE.test(name)) return 'window';
-    if (DOOR_NAME_RE.test(name) && !WINDOW_NAME_RE.test(name)) return 'door';
     if (inDoorWindowGroup) {
         if (WINDOW_NAME_RE.test(name)) return 'window';
         if (DOOR_NAME_RE.test(name)) return 'door';
@@ -281,7 +283,7 @@ export function openingAssociatesWithWall(wall, fixture) {
 
 export function openingCutsWall(wall, fixture) {
     if (!fixture || (fixture.kind !== 'door' && fixture.kind !== 'window')) return false;
-    return pointInWallBand(fixture.centerX, fixture.centerZ, wall);
+    return openingAssociatesWithWall(wall, fixture);
 }
 
 function lineIntersection(p1, p2, p3, p4) {
@@ -418,6 +420,7 @@ export function buildLayout3DDescriptor(layout, options = {}) {
             centerX: center.x,
             centerZ: center.z,
             rotationDeg: cab.rotation || 0,
+            mirrored: !!cab.mirrored,
             label: cab.data?.name || '',
         });
     }
