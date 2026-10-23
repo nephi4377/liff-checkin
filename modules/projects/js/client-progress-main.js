@@ -82,40 +82,28 @@ function setSyncHint(visible) {
 }
 
 // ---------- 施工項目細項（與 tools/BudgetAuditor_Standalone 相同 RTDB 路徑；僅顯示完成度，不含單價／raw_line）----------
-const FB_AUDIT_CONFIG_KEY = 'fb_audit_config';
 const FB_DEFAULT_DB_URL =
   'https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app';
 
-function readFbAuditConfig() {
-  const base = { databaseURL: FB_DEFAULT_DB_URL, apiKey: '', authDomain: '', projectId: '' };
-  try {
-    Object.assign(base, JSON.parse(localStorage.getItem(FB_AUDIT_CONFIG_KEY) || '{}'));
-  } catch (_) {
-    /* ignore */
-  }
-  return base;
-}
-
-function firebaseAuthReady(c) {
-  return !!(String(c.apiKey || '').trim() && String(c.authDomain || '').trim() && String(c.projectId || '').trim());
-}
-
 function ensureFirebaseApp() {
   const fb = window.firebase;
-  if (!fb || typeof fb.initializeApp !== 'function') return false;
-  if (fb.apps && fb.apps.length > 0) return true;
-  const c = readFbAuditConfig();
-  const opts = { databaseURL: (c.databaseURL || FB_DEFAULT_DB_URL).trim() };
-  if (firebaseAuthReady(c)) {
-    opts.apiKey = String(c.apiKey).trim();
-    opts.authDomain = String(c.authDomain).trim();
-    opts.projectId = String(c.projectId).trim();
-  }
-  fb.initializeApp(opts);
-  if (firebaseAuthReady(c) && fb.auth) {
-    fb.auth().signInAnonymously().catch(() => {});
+  const rtdb = window.TanxinFirebaseRtdb;
+  if (!fb || !rtdb || typeof rtdb.init !== 'function') return false;
+  if (!fb.apps || !fb.apps.length) {
+    rtdb.init({ databaseURL: FB_DEFAULT_DB_URL });
   }
   return true;
+}
+
+async function ensureFirebaseAuth() {
+  if (!ensureFirebaseApp()) return false;
+  try {
+    await window.TanxinFirebaseRtdb.ensureAuth();
+    return true;
+  } catch (e) {
+    console.warn('[client-progress] Firebase 匿名登入失敗', e);
+    return false;
+  }
 }
 
 function extractQuotationContext(fbVal) {
@@ -303,7 +291,7 @@ function buildAuditPanelHtml(overview, ctx) {
   }
 
   if (!hasItems) {
-    bodyInner += `<p class="muted text-sm m-0">目前僅有表單上的摘要數字。細項清單須等雲端寫入 <code>quotations/${escapeHtml(projectId)}</code>（與公司審核工具相同）；匿名讀取時請在該工具「雲端設定」填齊 apiKey／authDomain／projectId，本頁會共用瀏覽器鍵 <code>fb_audit_config</code>。</p>`;
+    bodyInner += `<p class="muted text-sm m-0">目前僅有表單上的摘要數字。細項清單須等雲端寫入 <code>quotations/${escapeHtml(projectId)}</code>（與公司審核工具相同）；本頁會以匿名登入讀取（與 BudgetWeb／驗收表相同 Firebase 專案）。</p>`;
     return `<details class="client-audit-collapse-root">
       <summary class="client-audit-collapse-summary">
         <span class="client-audit-collapse-title">施工項目</span>
@@ -371,7 +359,7 @@ function buildAuditPanelHtml(overview, ctx) {
 
 async function fetchFirebaseQuotationContext(projectNo) {
   if (!window.firebase) return null;
-  if (!ensureFirebaseApp()) return null;
+  if (!(await ensureFirebaseAuth())) return null;
   const snap = await window.firebase.database().ref(`quotations/${String(projectNo).trim()}`).once('value');
   return extractQuotationContext(snap.val());
 }

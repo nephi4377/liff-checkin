@@ -376,7 +376,7 @@
                 <label style="font-size: 12px; display: block; margin-bottom: 4px;">GAS WebApp URL</label>
                 <input id="gas-url" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="https://script.google.com/macros/s/.../exec">
             </div>
-            <p style="font-size: 11px; color: var(--muted, #666); margin: 8px 0;">若 RTDB 規則改為需登入（<code>auth != null</code>），請填 Firebase 主控台「專案設定 → 一般 → 您的應用程式」的 Web 設定，並在 Authentication 啟用「匿名」。三欄皆填才會嘗試匿名登入。</p>
+            <p style="font-size: 11px; color: var(--muted, #666); margin: 8px 0;">預設已內建 Web 設定並匿名登入（與 BudgetWeb／V2 相同）。僅在測試其他 Firebase 專案時才需覆寫 apiKey／authDomain／projectId。</p>
             <div style="margin-bottom: 12px;">
                 <label style="font-size: 12px; display: block; margin-bottom: 4px;">apiKey（選填）</label>
                 <input id="fb-api-key" type="text" style="width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 4px;" placeholder="AIza...">
@@ -401,6 +401,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+<script src="../shared/js/firebase-rtdb-public-config.js"></script>
+<script src="../shared/js/firebase-rtdb-auth-compat.js"></script>
 
 <script>
     let appData = null;
@@ -486,46 +488,12 @@
             tabA.classList.add('active');
         }
     };
-    const FB_CONFIG_DEFAULT = {
-        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
-        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec",
-        apiKey: "",
-        authDomain: "",
-        projectId: ""
-    };
-    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
-
-    /** 與主控台 Web 設定一致；三欄齊全才會初始化 Auth 並匿名登入（規則需 auth 時使用） */
-    function firebaseAuthConfigured() {
-        const k = (fbConfig.apiKey != null ? String(fbConfig.apiKey) : '').trim();
-        const d = (fbConfig.authDomain != null ? String(fbConfig.authDomain) : '').trim();
-        const p = (fbConfig.projectId != null ? String(fbConfig.projectId) : '').trim();
-        return !!(k && d && p);
-    }
-
-    function buildFirebaseInitOptions() {
-        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
-        if (firebaseAuthConfigured()) {
-            o.apiKey = String(fbConfig.apiKey).trim();
-            o.authDomain = String(fbConfig.authDomain).trim();
-            o.projectId = String(fbConfig.projectId).trim();
-        }
-        return o;
-    }
-
-    function tryAnonymousSignIn() {
-        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
-        firebase.auth().signInAnonymously().catch(function (e) {
-            console.warn('[Auth] 匿名登入失敗:', e.message);
-        });
-    }
-
-    // 初始化 Firebase；業務身份仍以 URL/LIFF 的 currentUser 為主（與 Firebase Auth uid 無強制對應）
-    if (!firebase.apps.length) {
-        firebase.initializeApp(buildFirebaseInitOptions());
-        tryAnonymousSignIn();
-    }
-    const db = firebase.database();
+    const _tanxinFb = TanxinFirebaseRtdb.init({
+        databaseURL: 'https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app',
+        gasURL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec',
+    });
+    let fbConfig = _tanxinFb.config;
+    const db = _tanxinFb.db;
 
     // LIFF 初始化與身份識別
     async function initLiff() {
@@ -601,11 +569,7 @@
         }
 
         try {
-            // Initialize if not already
-            if (!firebase.apps.length) {
-                firebase.initializeApp(buildFirebaseInitOptions());
-                tryAnonymousSignIn();
-            }
+            await TanxinFirebaseRtdb.ensureAuth();
 
             const db = firebase.database();
             const projectNo = appData.案號 || 'UNKNOWN';
@@ -841,6 +805,7 @@
         
         // 1. 抓取 Firebase 全域 index (假設案場位於 /quotations/)
         try {
+            await TanxinFirebaseRtdb.ensureAuth();
             const snap = await db.ref('quotations').once('value');
             const projects = snap.val() || {};
             const pIds = Object.keys(projects);
@@ -997,10 +962,7 @@
         }
 
         try {
-            if (!firebase.apps.length) {
-                firebase.initializeApp(buildFirebaseInitOptions());
-                tryAnonymousSignIn();
-            }
+            await TanxinFirebaseRtdb.ensureAuth();
             const db = firebase.database();
             const snapshot = await db.ref(`quotations/${projectNo}`).once('value');
             const data = snapshot.val();
@@ -1063,6 +1025,7 @@
                         appData.total_summary.siteName = displayName;
                     }
                     try {
+                        await TanxinFirebaseRtdb.ensureAuth();
                         const refPath = `quotations/${targetNo}`;
                         const snap = await db.ref(refPath).once('value');
                         const v = snap.val();
