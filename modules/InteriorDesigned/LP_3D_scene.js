@@ -25,6 +25,8 @@ export const LP_3D_DEFAULTS = {
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
 const WINDOW_NAME_RE = /窗|落地窗|氣窗|百葉窗/;
 const DOOR_NAME_RE = /門/;
+/** 名稱含「櫃」者優先視為櫃體（如開門高衣櫃、窗邊櫃） */
+const CABINET_NAME_GUARD_RE = /櫃/;
 const MANUAL_KINDS = new Set(['cabinet', 'door', 'window', 'wallSegment']);
 
 /**
@@ -38,6 +40,7 @@ export function classifyPlacedCabinet3DKind(cab) {
     const name = String(cab.data.name || '');
     const inDoorWindowGroup = DOOR_WINDOW_GROUPS.has(group);
 
+    if (CABINET_NAME_GUARD_RE.test(name)) return 'cabinet';
     if (WINDOW_NAME_RE.test(name)) return 'window';
     if (inDoorWindowGroup) {
         if (WINDOW_NAME_RE.test(name)) return 'window';

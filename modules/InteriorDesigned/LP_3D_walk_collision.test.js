@@ -203,6 +203,17 @@ describe('buildWallInnerCollisionSegments', () => {
 });
 
 describe('fixture OBB 與隔間牆', () => {
+    it('45° 隔間牆 mesh rotation 與 OBB 軸向一致（B8）', () => {
+        const obb = partitionSegmentToObb(100, 200, 300, 400, 15);
+        const rotY = -Math.atan2(obb.sin, obb.cos);
+        const dirX = Math.cos(rotY);
+        const dirZ = Math.sin(rotY);
+        const segLen = Math.hypot(200, 200);
+        expect(dirX).toBeCloseTo(obb.cos, 5);
+        expect(dirZ).toBeCloseTo(-obb.sin, 5);
+        expect(obb.halfW).toBeCloseTo(segLen / 2, 5);
+    });
+
     it('櫃體 OBB 依寬深與旋轉阻擋（非固定 20cm 圓）', () => {
         const desc = buildLayout3DDescriptor({
             workspaceSize: 2000,
