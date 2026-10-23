@@ -20,6 +20,7 @@ import {
     segmentLengthCmRounded,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
+import { detachSelectedFromExistingLayoutGroups } from './LP_layout_group_logic.js';
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
@@ -35,6 +36,8 @@ let placedCabinets = [];
 let isBgEditMode = false;
 let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
+/** 底圖 data URL 僅保留一份；history 快照只存位置／縮放與是否顯示 */
+let layoutPlannerActiveBgDataUrl = '';
 let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
 /** @type {Set<string>} 多選櫃體（含 layout 群組成員） */
@@ -713,6 +716,7 @@ function onLayerVisibilityToggle(groupName, visible) {
         }
     }
     applyLayerVisibilityRefresh();
+    saveState();
 }
 
 function setAllLayerVisibility(visible) {
@@ -794,6 +798,10 @@ function renderAllDrawnAreas() {
 function renderSingleArea(layer, area, isSelected) {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.id = area.id;
+
+    if (area.type === 'wall' && area.points?.length >= 3 && !area.pathData) {
+        area.pathData = calculateWallPath(area.points, area.thickness || 15);
+    }
 
     // [修正] 鎖定邏輯：同時檢查「鎖定繪圖」與「鎖定牆壁」
     const lockDrawnAreas = document.getElementById('lock-drawn-areas').checked;
@@ -1064,6 +1072,11 @@ function renderCabinet(cab) {
         el.classList.add('is-wall');
     }
     el.id = cab.id;
+    if (cab.layoutGroupId) {
+        el.dataset.layoutGroupId = cab.layoutGroupId;
+    } else {
+        delete el.dataset.layoutGroupId;
+    }
     updateCabStyle(el, cab);
 
     // [v9.0 重構] 根據 adjustable 屬性生成對應方向的拉伸控點
@@ -1776,9 +1789,7 @@ function handleKeyDown(e) {
     }
     if (e.key.toLowerCase() === 'd' || e.key === 'Delete') { // [您的要求] 增加 Delete 鍵支援
         e.preventDefault();
-        const idToDelete = selectedCabId;
-        deselectAll();
-        deleteCabById(idToDelete);
+        deleteSelectedCabinets();
         return;
     }
     const step = e.shiftKey ? 10 : snapGridStepCm;
@@ -1872,6 +1883,8 @@ function groupSelectedCabinets() {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
     }
+    const selectedIds = new Set(targets.map((c) => c.id));
+    detachSelectedFromExistingLayoutGroups(placedCabinets, selectedIds);
     const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
         cab.layoutGroupId = groupId;
@@ -1971,20 +1984,33 @@ function moveSelectedCabLayer(direction) {
     }
 }
 
-function deleteCabById(id) {
-    const cab = placedCabinets.find((c) => c.id === id);
-    const idsToRemove = new Set([id]);
-    if (cab?.layoutGroupId) {
-        placedCabinets
-            .filter((c) => c.layoutGroupId === cab.layoutGroupId)
-            .forEach((c) => idsToRemove.add(c.id));
+function deleteSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length) {
+        if (selectedCabId) deleteCabById(selectedCabId);
+        return;
     }
+    const idsToRemove = new Set();
+    targets.forEach((cab) => {
+        idsToRemove.add(cab.id);
+        if (cab.layoutGroupId) {
+            placedCabinets
+                .filter((c) => c.layoutGroupId === cab.layoutGroupId)
+                .forEach((c) => idsToRemove.add(c.id));
+        }
+    });
     placedCabinets = placedCabinets.filter((c) => !idsToRemove.has(c.id));
     deselectAll();
     renderAllCabinets();
     updateQuotation();
     saveState();
     renderLayerVisibilityPanel();
+}
+
+function deleteCabById(id) {
+    if (!id) return;
+    setCabinetSelection([id], id);
+    deleteSelectedCabinets();
 }
 
 // [新增] 刪除標註
@@ -2282,8 +2308,10 @@ function handleGlobalMove(e) {
 }
 
 function endDrag() {
+    const wasDraggingBg = isDraggingBg;
     if (isDraggingCab) saveState();
     if (isResizing) saveState();
+    if (wasDraggingBg) saveState();
     if (isDraggingVertex) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
@@ -2416,12 +2444,8 @@ function selectArea(id) {
     const area = drawnAreas.find(a => a.id === id);
 
     if (area) {
-        const group = document.querySelector(`#drawn-areas-layer g[data-id="${id}"]`);
-        if (group) {
-            group.querySelector('polygon').classList.add('selected');
-            // [您的要求] 為選取的區域產生可拖曳的頂點
-            renderVertexHandles(area);
-        }
+        renderAllDrawnAreas();
+        renderVertexHandles(area);
 
         document.getElementById('selected-info').style.display = 'block';
         
@@ -2506,7 +2530,8 @@ function handleBgUpload(event) {
         const reader = new FileReader();
         reader.onload = function (e) {
             const bgImg = document.getElementById('bg-img');
-            bgImg.src = e.target.result;
+            layoutPlannerActiveBgDataUrl = e.target.result;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
             // Reset position and scale when new image loaded
@@ -2514,6 +2539,7 @@ function handleBgUpload(event) {
             bgScale = 1.0;
             updateBgScale(1.0);
             updateBgTransform();
+            saveState();
         };
         reader.readAsDataURL(file);
     }
@@ -3272,18 +3298,61 @@ function getQuotationForDisplay() {
     return { lineItems, subtotals: calc.subtotals, grandTotal };
 }
 
-function onBudgetFieldEdit(lineKey, field, rawValue) {
-    if (!lineKey) return;
-    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+function getAutoQuotationFieldValue(lineKey, field) {
+    const calc = calculateFullQuotation();
+    for (const item of calc.lineItems) {
+        if (item.isHeader || item.lineKey !== lineKey) continue;
+        if (field === 'quantity') return item.quantity > 0 ? item.quantity : '';
+        if (field === 'totalPrice') return item.totalPrice > 0 ? item.totalPrice : '';
+        return item[field];
+    }
+    return undefined;
+}
+
+function budgetFieldValuesEqual(field, a, b) {
     if (field === 'quantity' || field === 'totalPrice') {
-        quotationManualOverrides[lineKey][field] = rawValue === '' ? '' : (parseFloat(rawValue) || 0);
+        const na = a === '' || a === undefined ? 0 : Number(a);
+        const nb = b === '' || b === undefined ? 0 : Number(b);
+        if (!Number.isFinite(na) && !Number.isFinite(nb)) return String(a ?? '') === String(b ?? '');
+        return na === nb;
+    }
+    return String(a ?? '') === String(b ?? '');
+}
+
+function applyBudgetFieldEdit(lineKey, field, rawValue) {
+    if (!lineKey) return;
+    const autoVal = getAutoQuotationFieldValue(lineKey, field);
+    const normalized = (field === 'quantity' || field === 'totalPrice')
+        ? (rawValue === '' ? '' : (parseFloat(rawValue) || 0))
+        : rawValue;
+
+    if (budgetFieldValuesEqual(field, normalized, autoVal)) {
+        const o = quotationManualOverrides[lineKey];
+        if (o) {
+            delete o[field];
+            const keys = Object.keys(o).filter((k) => k !== 'hidden');
+            if (keys.length === 0 && !o.hidden) delete quotationManualOverrides[lineKey];
+        }
     } else {
-        quotationManualOverrides[lineKey][field] = rawValue;
+        if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+        quotationManualOverrides[lineKey][field] = normalized;
     }
     const quotation = getQuotationForDisplay();
     const totalEl = document.getElementById('modal-total-price');
     if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
     updateQuotation();
+}
+
+function commitBudgetFieldEdit(lineKey, field, rawValue) {
+    applyBudgetFieldEdit(lineKey, field, rawValue);
+    commitSaveState();
+}
+
+function refreshBudgetModalIfOpen() {
+    const modal = document.getElementById('budget-modal');
+    if (modal && modal.style.display === 'flex') {
+        renderBudgetTable();
+    }
 }
 
 function hideQuotationRow(lineKey) {
@@ -3292,6 +3361,7 @@ function hideQuotationRow(lineKey) {
     quotationManualOverrides[lineKey].hidden = true;
     renderBudgetTable();
     updateQuotation();
+    saveState();
 }
 
 function resetQuotationToAuto() {
@@ -4102,6 +4172,57 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+function snapshotBackgroundForHistory() {
+    const bgImg = document.getElementById('bg-img');
+    const src = bgImg?.src || '';
+    const hasDataBg = src.startsWith('data:image');
+    if (hasDataBg) layoutPlannerActiveBgDataUrl = src;
+    return {
+        position: { x: bgPosition.x, y: bgPosition.y },
+        scale: bgScale,
+        hasBackground: hasDataBg,
+    };
+}
+
+function resolveBackgroundDataUrlFromState(bg) {
+    if (bg?.src && String(bg.src).startsWith('data:image')) return bg.src;
+    if (bg?.hasBackground && layoutPlannerActiveBgDataUrl) return layoutPlannerActiveBgDataUrl;
+    return '';
+}
+
+function applyBackgroundFromHistoryState(bg) {
+    const bgImg = document.getElementById('bg-img');
+    const bgControls = document.getElementById('bg-controls');
+    if (!bgImg) return;
+    const dataUrl = resolveBackgroundDataUrlFromState(bg);
+    if (!dataUrl) {
+        bgImg.style.display = 'none';
+        bgImg.removeAttribute('src');
+        bgControls?.classList.add('opacity-50', 'pointer-events-none');
+        bgScale = bg?.scale ?? 1.0;
+        bgPosition = bg?.position ? { x: bg.position.x, y: bg.position.y } : { x: 0, y: 0 };
+        const scaleInput = document.getElementById('bg-scale');
+        const scaleNum = document.getElementById('bg-scale-num');
+        if (scaleInput) scaleInput.value = String(bgScale);
+        if (scaleNum) scaleNum.value = String(bgScale);
+        updateBgTransform();
+        return;
+    }
+    layoutPlannerActiveBgDataUrl = dataUrl;
+    bgPosition = bg.position
+        ? { x: bg.position.x, y: bg.position.y }
+        : { x: 0, y: 0 };
+    bgScale = bg.scale ?? 1.0;
+    bgImg.src = dataUrl;
+    bgImg.style.display = 'block';
+    bgControls?.classList.remove('opacity-50', 'pointer-events-none');
+    const scaleInput = document.getElementById('bg-scale');
+    const scaleNum = document.getElementById('bg-scale-num');
+    if (scaleInput) scaleInput.value = String(bgScale);
+    if (scaleNum) scaleNum.value = String(bgScale);
+    updateBgTransform();
+}
+
 function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
@@ -4115,14 +4236,10 @@ function commitSaveState() {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
         placedAnnotations: JSON.parse(JSON.stringify(placedAnnotations)), // [新增]
-        background: {
-            position: bgPosition,
-            scale: bgScale,
-            src: document.getElementById('bg-img').src
-        },
+        background: snapshotBackgroundForHistory(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides: quotationManualOverrides,
-        layerVisibility: layerVisibility
+        quotationManualOverrides: JSON.parse(JSON.stringify(quotationManualOverrides)),
+        layerVisibility: JSON.parse(JSON.stringify(layerVisibility)),
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -4151,6 +4268,14 @@ function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
+    quotationManualOverrides = state.quotationManualOverrides
+        ? JSON.parse(JSON.stringify(state.quotationManualOverrides))
+        : {};
+    layerVisibility = state.layerVisibility
+        ? JSON.parse(JSON.stringify(state.layerVisibility))
+        : {};
+
+    applyBackgroundFromHistoryState(state.background);
 
     const constructionAreaEl = document.getElementById('construction-area');
     if (constructionAreaEl) {
@@ -4160,7 +4285,11 @@ function loadState(state) {
     renderAllCabinets();
     renderAllDrawnAreas();
     renderAllAnnotations(); // [新增]
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
+    updateBgTransform();
     updateQuotation();
+    refreshBudgetModalIfOpen();
     deselectAll();
     deselectAllAreas();
     scheduleLp3dRebuild();
@@ -4313,6 +4442,8 @@ function bindEventListeners() {
             // 在底圖模式下，點擊畫布任何地方都可以拖曳底圖 (更直覺)
             e.preventDefault();
             e.stopPropagation();
+            canvas.focus({ preventScroll: true });
+            historyGesture.begin();
             isDraggingBg = true;
             bgDragStart = { x: e.clientX, y: e.clientY };
             bgStartPos = { x: bgPosition.x, y: bgPosition.y };
@@ -4435,7 +4566,18 @@ function bindEventListeners() {
         budgetTableBody.addEventListener('input', (e) => {
             const el = e.target;
             if (!el.classList.contains('budget-edit-input')) return;
-            onBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+            applyBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            el.dataset.lpCommitBaseline = el.value;
+        });
+        budgetTableBody.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            if (el.dataset.lpCommitBaseline !== undefined && el.dataset.lpCommitBaseline === el.value) return;
+            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
         budgetTableBody.addEventListener('click', (e) => {
             const btn = e.target.closest('.budget-hide-row-btn');
@@ -4764,7 +4906,8 @@ function loadLayoutFromData(layoutData, options = {}) {
         bgScale = layoutData.background.scale || 1.0;
         const bgImg = document.getElementById('bg-img');
         if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
-            bgImg.src = layoutData.background.src;
+            layoutPlannerActiveBgDataUrl = layoutData.background.src;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
         }
@@ -4998,6 +5141,19 @@ window.onload = () => {
         document.documentElement.classList.add('lp-url-preview');
     }
     bindEventListeners();
+    window.__LP_TEST_HOOKS__ = {
+        ...(window.__LP_TEST_HOOKS__ || {}),
+        getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
+        historyBackgroundSnapshots: () => history.map((h) => h.background),
+        setCabinetPricing: (id, unitPrice, pricingType) => {
+            const cab = placedCabinets.find((c) => c.id === id);
+            if (!cab) return false;
+            cab.data.unitPrice = unitPrice;
+            cab.data.pricingType = pricingType;
+            updateQuotation();
+            return true;
+        },
+    };
     initWorkspaceAndUiFromStorage();
 
     // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕
