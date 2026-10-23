@@ -2,6 +2,7 @@
 > **基準 branch**：`main` @ `045a9e7eea88`（2026-10-23）  
 > **前置文件**（不重複已定案項）：[PR #206](https://github.com/nephi4377/liff-checkin/pull/206) `docs/OLD_PR_CLOSEOUT.md`（OLD-PR-CLOSEOUT-LIFF-1）、[PR #180](https://github.com/nephi4377/liff-checkin/pull/180) `SPEC/OLD_PR_TRIAGE_2026-10-22.md`（#56–#70 等 22 支）  
 > **格式參考**：Backend_GAS [PR #230](https://github.com/nephi4377/Backend_GAS/pull/230) `docs/OLD_PR_TRIAGE_BACKEND_3.md`（本環境未掛 Backend 倉，僅對齊欄位）  
+> **修訂**：TINA 第 4 輪（#220 @4446ba5）— #191 移出即刻關閉（#198 堆疊）；即刻清單 **3 支**（#188/#190/#192）。  
 > **修訂**：TINA 02:31（#220）— 關閉清單分「等取代 PR」與「可即刻建議」；**任何關閉須豪哥 OK**。  
 > **本輪範圍**：目前 **open 91 支**（含 draft）；**未**關閉／合併／留言任何 PR。
 
@@ -81,7 +82,7 @@
 | [#188](https://github.com/nephi4377/liff-checkin/pull/188) | 是 | **B** | ci: LayoutPlanner tests on pull_request (CI-T… | main @ `045a9e7` 已有 `.github/workflows/layout-planner-tests.yml`、`scripts/test-layout-planner-ci.sh`；PR 僅歷史新增同一套 CI | compare `main...e5b9bf5` status=diverged ahead=2 behind=2 files=4 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...e5b9bf5e4e19a38b64c92da34f0b76096e3681ef)) |
 | [#189](https://github.com/nephi4377/liff-checkin/pull/189) | 是 | **C** | [巡檢P0 cherry-pick #62] 客人收款確認讀失敗不裝成沒收款 | cherry-pick #62 | compare `main...26b4fe9` status=diverged ahead=2 behind=2 files=3 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...26b4fe9f5d14ef78b9ba6284178f178c80562089)) |
 | [#190](https://github.com/nephi4377/liff-checkin/pull/190) | 是 | **A** | test(LayoutPlanner): 2D/3D 畫面回歸 (FLOORPLAN-VI… | 視覺 e2e 已進 main CI 鏈（`layout-planner-tests`／e2e 目錄）；獨立 PR 為舊基線；**可建議即刻關閉**（豪哥 OK 後）：取代內容已在 main CI／e2e 鏈 | compare `main...5019ec3` status=diverged ahead=3 behind=2 files=8 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...5019ec3cf914107f3f2ecd8245eccd56319e50b3)) |
-| [#191](https://github.com/nephi4377/liff-checkin/pull/191) | 是 | **B** | FLOORPLAN-3D-5：3D 檢視稽核（main 已具備，不重做實作） | PR 自述稽核：3D 能力已由 **#183** 等合入 main；剩文件／e2e fixture diff | compare `main...fe28866` status=diverged ahead=1 behind=2 files=4 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...fe288660a78b843a08895f264334cb37064b3beb)) |
+| [#191](https://github.com/nephi4377/liff-checkin/pull/191) | 是 | **B** | FLOORPLAN-3D-5：3D 檢視稽核（main 已具備，不重做實作） | PR 自述稽核：3D 能力已由 **#183** 等合入 main；剩文件／e2e fixture diff；**不可即刻關**：見「有條件清單」— #198 base=`cursor/floorplan-3d-5-audit-b2e9`（#191 head） | compare `main...fe28866` status=diverged ahead=1 behind=2 files=4 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...fe288660a78b843a08895f264334cb37064b3beb)) |
 | [#192](https://github.com/nephi4377/liff-checkin/pull/192) | 是 | **B** | fix(LayoutPlanner): FLOORPLAN-AREA-NAN-1 匯入舊 … | main `LP_core.js` 已有 `areaInPingFromPolygonPoints`／匯入補算；PR diff 與 main 等價 | compare `main...daa3538` status=diverged ahead=1 behind=2 files=3 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...daa3538c51368829935c6804416d1c3c4707be94)) |
 | [#193](https://github.com/nephi4377/liff-checkin/pull/193) | 是 | **C** | [巡檢P0 cherry-pick #63] 主控台班表失敗再接到畫面 | cherry-pick #63 | compare `main...f37e82c` status=diverged ahead=1 behind=2 files=4 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...f37e82cd58be80935731dfc432dd45bedcfd04f9)) |
 | [#194](https://github.com/nephi4377/liff-checkin/pull/194) | 是 | **A** | feat(LayoutPlanner): 繪圖段長標籤與區域頂點吸附 (FLOORPLAN… | 2D 繪圖段已併入後續整合分支；#217 承接出圖；**關閉時機**：等 **[#217](https://github.com/nephi4377/liff-checkin/pull/217)**／整合線合入 `main`（#217 仍 OPEN） | compare `main...0192bc5` status=diverged ahead=9 behind=2 files=9 ([連結](https://github.com/nephi4377/liff-checkin/compare/main...0192bc51c53e43e718d4b1fef3ba95ea748b1f71)) |
@@ -122,7 +123,7 @@
 | [#36](https://github.com/nephi4377/liff-checkin/pull/36) | [#189](https://github.com/nephi4377/liff-checkin/pull/189) | #189 未合併；#62 亦等 #189 |
 | [#44](https://github.com/nephi4377/liff-checkin/pull/44) | [#28](https://github.com/nephi4377/liff-checkin/pull/28) | 同題團隊總覽；#28 未吸收 |
 | [#56](https://github.com/nephi4377/liff-checkin/pull/56) | [#208](https://github.com/nephi4377/liff-checkin/pull/208) | cherry-pick #56 |
-| [#57](https://github.com/nephi4377/liff-checkin/pull/57) | [#199](https://github.com/nephi4377/liff-checkin/pull/199) | cherry-pick #57 |
+| [#57](https://github.com/nephi4377/liff-checkin/pull/57) | [#199](https://github.com/nephi4377/liff-checkin/pull/199)（**base=#185** `cursor/cherrypick-offsite-reason-61-b7c7`） | cherry-pick #57；#199 疊在 **#185** |
 | [#62](https://github.com/nephi4377/liff-checkin/pull/62) | [#189](https://github.com/nephi4377/liff-checkin/pull/189) | cherry-pick #62 |
 | [#63](https://github.com/nephi4377/liff-checkin/pull/63) | [#193](https://github.com/nephi4377/liff-checkin/pull/193) | cherry-pick #63 |
 | [#64](https://github.com/nephi4377/liff-checkin/pull/64) | [#197](https://github.com/nephi4377/liff-checkin/pull/197) | cherry-pick #64 |
@@ -137,12 +138,28 @@
 | [#200](https://github.com/nephi4377/liff-checkin/pull/200) | [#214](https://github.com/nephi4377/liff-checkin/pull/214) | 3D snap |
 | [#202](https://github.com/nephi4377/liff-checkin/pull/202) | [#214](https://github.com/nephi4377/liff-checkin/pull/214) | 3D perf／整合 |
 
+
+## PR 堆疊關係（關閉／刪分支前必讀；TINA 第 4 輪非阻擋）
+
+| 關係 | 說明 | 證據（2026-10-23 `gh pr view`） |
+|------|------|----------------------------------|
+| **#202 → #200 → #198 → #191** | `#198` 的 base 為 `#191` 的 head 分支 `cursor/floorplan-3d-5-audit-b2e9`；上游 `#200`／`#202` 再疊在其 head 分支上。直接關 **#191** 並刪該分支會使 **#198** 需關閉或改 base。 | #191 base=`main` head=`cursor/floorplan-3d-5-audit-b2e9`；#198 base=`cursor/floorplan-3d-5-audit-b2e9`；#200 base=`cursor/floorplan-3d-walk-1-3929`；#202 base=`cursor/floorplan-3d-snap-1-dba0` |
+| **#199 → #185** | `#57`「等 #199」時，#199 疊在 **#185**（`cursor/cherrypick-offsite-reason-61-b7c7`）上，非僅等 cherry-pick 單支。 | #199 base=`cursor/cherrypick-offsite-reason-61-b7c7`（#185 head） |
+| **#213 → #212** | FLOORPLAN-QUOTE-3 寫回閘疊在 QUOTE-2 分支。 | #213 base=`cursor/floorplan-quote-2-11ea` |
+| **#194 → #187** | 2D 繪圖段疊在 2D 群組／鏡像分支。 | #194 base=`cursor/floorplan-2d-group-mirror-b9b2`（#187 head） |
+
+## 有條件才可建議關閉（豪哥 OK 後；本任務不執行）
+
+| PR | 類別 | 條件 | 理由 |
+|----|------|------|------|
+| [#191](https://github.com/nephi4377/liff-checkin/pull/191) | **B** | 關閉 **#191** 前，先把 **[#198](https://github.com/nephi4377/liff-checkin/pull/198)** 的 base **retarget 到 `main`**；**勿刪**分支 `cursor/floorplan-3d-5-audit-b2e9`（#198 現以該分支為 base）。 | 內容已在 main（稽核／#183），但堆疊鏈阻擋「即刻關」；#198 亦列「等 #214」清單。 |
+
 ## 一次關閉清單（豪哥 OK 後；本任務不執行）
 
-- **A 類可即刻建議（1 支）**：#190
-- **B 類（3 支）**：#188, #191, #192
-- **合計 4 支**（原 A10+B13 經 TINA 8 支移出＋第二輪依賴掃描再移出 9 支 A）
-- **A 類總計仍 18 支**（其中 **17** 支見上表「等取代 PR」；**1** 支 #190 可即刻建議）
+- **可即刻建議關閉（3 支）**：#188（B）、#190（A）、#192（B）— 已核對實質內容在 `main`
+- **有條件清單（1 支）**：#191（B）— 見上表；須先處理 **#198** retarget，**不可**與上列 3 支混批關閉
+- **A 類總計仍 18 支**（**17** 支「等取代 PR」；**1** 支 #190 可即刻建議）
+- **B 類總計 3 支**（**2** 支可即刻 #188/#192；**1** 支有條件 #191）
 - **C 保留 62 支**；**D 待決 8 支**
 
 ### D 類待豪哥決定（各一句）
