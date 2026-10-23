@@ -2,16 +2,18 @@
 
 整合分支：`cursor/floorplan-integrate-1`（不 merge、不覆蓋 `main` / info.tanxin.space 現行版）。
 
-## 獨立測試連結（jsDelivr，指向本分支）
+## 獨立測試連結（raw.githack.com，完整 commit SHA）
 
-- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1）：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@152aff53eadf0fd4fcf0a0355d4ad02af280b8c5/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`
-- **一鍵 3D 室內漫遊預覽**（釘選 commit，與驗收 SHA 一致）：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
+勿用 `cdn.jsdelivr.net/gh/.../*.html` 預覽 LayoutPlanner：CDN 常以 `text/plain`＋`nosniff` 回傳，瀏覽器會顯示原始碼。
+
+- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1，`a6e2ee50bc0082cba230d311ed43fafe8ca9763b`）：  
+  `https://raw.githack.com/nephi4377/liff-checkin/a6e2ee50bc0082cba230d311ed43fafe8ca9763b/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`
+- **一鍵 3D 室內漫遊預覽**（`9bb08678377e041a4f767fb62366e8b9a00dd5e0`）：  
+  `https://raw.githack.com/nephi4377/liff-checkin/9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
 - **3D 鳥瞰＋快照／預設角度**（`lp3d=orbit`）：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
+  `https://raw.githack.com/nephi4377/liff-checkin/9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`
 - **完整 LayoutPlanner（2D＋3D）**：  
-  `https://cdn.jsdelivr.net/gh/nephi4377/liff-checkin@9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
+  `https://raw.githack.com/nephi4377/liff-checkin/9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner?lpPreview=1`
 
 本機：`npx --yes serve@14 -l 8080 .` 後開  
 `http://127.0.0.1:8080/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`

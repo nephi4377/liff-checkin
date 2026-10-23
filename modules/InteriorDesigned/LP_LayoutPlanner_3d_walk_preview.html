@@ -12,11 +12,12 @@
 <body>
     <p>正在開啟示範佈局與<strong>室內漫遊</strong>預覽（不覆蓋正式版 LP_LayoutPlanner）…</p>
     <script>
-        location.replace(
-            'LP_LayoutPlanner?lpPreview=1'
-            + '&lpFixture=e2e/fixtures/lp-3d-spec-demo.json'
-            + '&lp3d=walk',
-        );
+        (function () {
+            const q = 'lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk';
+            const host = location.hostname || '';
+            const planner = /githack\.com$/i.test(host) ? 'LP_LayoutPlanner.html' : 'LP_LayoutPlanner';
+            location.replace(`${planner}?${q}`);
+        })();
     </script>
 </body>
 </html>
