@@ -6,10 +6,12 @@
 
 勿用 `cdn.jsdelivr.net/gh/.../*.html` 預覽 LayoutPlanner：CDN 常以 `text/plain`＋`nosniff` 回傳，瀏覽器會顯示原始碼。
 
-- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1，`ce658285da1988c90c7489baa158f232bd5fee3d`）：  
-  `https://raw.githack.com/nephi4377/liff-checkin/ce658285da1988c90c7489baa158f232bd5fee3d/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`  
+- **一鍵 3D 房間鳥瞰預覽**（FLOORPLAN-3D-ROOM-1，`931ac2c1c4141a41b1fd7d67e64a02d2396a082a`）：  
+  `https://raw.githack.com/nephi4377/liff-checkin/931ac2c1c4141a41b1fd7d67e64a02d2396a082a/modules/InteriorDesigned/LP_LayoutPlanner_3d_room_preview.html`  
   （首次可能需點 **Open the page**；等價直連：  
-  `https://raw.githack.com/nephi4377/liff-checkin/ce658285da1988c90c7489baa158f232bd5fee3d/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`）
+  `https://raw.githack.com/nephi4377/liff-checkin/931ac2c1c4141a41b1fd7d67e64a02d2396a082a/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=orbit`）
+- **室內漫遊（同 SHA，`lp3d=walk`）**：  
+  `https://raw.githack.com/nephi4377/liff-checkin/931ac2c1c4141a41b1fd7d67e64a02d2396a082a/modules/InteriorDesigned/LP_LayoutPlanner.html?lpPreview=1&lpFixture=e2e/fixtures/lp-3d-spec-demo.json&lp3d=walk`
 - **一鍵 3D 室內漫遊預覽**（`9bb08678377e041a4f767fb62366e8b9a00dd5e0`）：  
   `https://raw.githack.com/nephi4377/liff-checkin/9bb08678377e041a4f767fb62366e8b9a00dd5e0/modules/InteriorDesigned/LP_LayoutPlanner_3d_walk_preview.html`
 - **3D 鳥瞰＋快照／預設角度**（`lp3d=orbit`）：  
