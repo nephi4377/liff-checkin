@@ -12,12 +12,15 @@ test.describe('LP-BUG-SWEEP-2 3D', () => {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#layout-upload').setInputFiles(DEMO_FIXTURE);
-    await page.waitForTimeout(800);
+    await page.waitForFunction(() => document.querySelectorAll('.placed-cabinet').length > 0, { timeout: 15000 });
     await page.locator('#toggle-3d-view-btn').click();
     await expect(page.locator('body')).toHaveClass(/lp-3d-mode/, { timeout: 15000 });
     const canvas = page.locator('#lp-3d-viewport canvas');
     await expect(canvas).toBeVisible({ timeout: 20000 });
-    await page.waitForTimeout(1500);
+    await page.waitForFunction(() => {
+      const c = document.querySelector('#lp-3d-viewport canvas');
+      return c && c.clientWidth > 100 && c.clientHeight > 100;
+    });
     const size = await canvas.evaluate((el) => ({
       w: el.clientWidth,
       h: el.clientHeight,
