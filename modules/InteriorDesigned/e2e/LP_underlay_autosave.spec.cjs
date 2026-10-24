@@ -19,6 +19,36 @@ test.describe('FLOORPLAN-UNDERLAY autosave', () => {
     expect(blobId).toBeTruthy();
   });
 
+  test('還原 srcOmitted 備份時提示重新匯入底圖', async ({ page }) => {
+    page.on('dialog', (d) => d.dismiss());
+    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => {
+      window.__LP_TEST_HOOKS__.loadLayoutFromData({
+        version: '2.0',
+        timestamp: Date.now(),
+        placedCabinets: [],
+        drawnAreas: [],
+        placedAnnotations: [],
+        background: {
+          src: '',
+          srcOmitted: true,
+          position: { x: 0, y: 0 },
+          scale: 1,
+          rotationDeg: 0,
+          opacity: 0.75,
+          locked: false,
+          hidden: false,
+        },
+      }, { successMessage: false });
+    });
+    await page.waitForTimeout(400);
+    const toast = await page.locator('#global-notification-container').textContent().catch(() => '');
+    expect(toast).toMatch(/底圖未備份|重新匯入/);
+    await expect.poll(async () =>
+      page.evaluate(() => document.getElementById('bg-img')?.src?.startsWith('data:image')),
+    ).toBe(false);
+  });
+
   test('底圖透明度 undo 後仍保留底圖', async ({ page }) => {
     page.on('dialog', (d) => d.dismiss());
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });

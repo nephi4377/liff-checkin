@@ -13,6 +13,7 @@ module.exports = defineConfig({
             'LP_3D_walk_collision.test.js',
             'LP_LayoutPlanner_3d_lazy.test.js',
             'LP_layout_history.test.js',
+            'LP_layout_group_logic.test.js',
             'LP_quotation_budgetweb_export.test.js',
             'LP_3DViewer_lifecycle.test.js',
             'LP_3D_pixel_rgb.test.js',
