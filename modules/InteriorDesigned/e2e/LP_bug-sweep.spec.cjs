@@ -96,7 +96,13 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
     const srcA = await page.evaluate(() => document.getElementById('bg-img')?.src || '');
     await page.locator('#bg-upload').setInputFiles(bgB);
-    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
+    await page.waitForFunction(
+      (prev) => {
+        const s = document.getElementById('bg-img')?.src || '';
+        return s.startsWith('data:image') && s !== prev;
+      },
+      srcA,
+    );
     const srcB = await page.evaluate(() => document.getElementById('bg-img')?.src || '');
     expect(srcA).not.toBe(srcB);
     await page.keyboard.press('Control+z');
