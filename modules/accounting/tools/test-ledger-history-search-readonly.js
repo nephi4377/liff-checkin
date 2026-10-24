@@ -1,5 +1,5 @@
 /**
- * Smoke: 歷史記帳唯讀查詢＋金額／廠商搜尋；無錯誤記帳標示操作
+ * Smoke: 歷史記帳查詢＋LEDGER-PERM-2（列表依 API、作廢／改帳／合計）
  */
 var fs = require('fs');
 var path = require('path');
@@ -9,28 +9,21 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=106') >= 0, 'cache bust v=106');
-assert(html.indexOf('HISTORY_READ_ONLY = true') >= 0, 'read-only flag');
+assert(html.indexOf('accounting_api.js?v=111') >= 0, 'cache bust v=111');
+assert(html.indexOf('ledger_entry_map.js?v=5') >= 0, 'ledger map');
 assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
-assert(html.indexOf('廠商名／金額') >= 0 || html.indexOf('廠商／金額') >= 0, 'vendor/amount copy');
-assert(html.indexOf('本頁不做標記') >= 0 || html.indexOf('不做標記') >= 0, 'no mark copy');
-assert(html.indexOf('點開看詳情與圖片') >= 0, 'detail+image hint');
-assert(html.indexOf('只看我記的') < 0, 'no mine-only toggle copy');
-assert(html.indexOf('historyMineToggle') < 0, 'no mine toggle');
-assert(html.indexOf('mine_only: false') >= 0, 'always all users');
+assert(html.indexOf('id="histScope"') >= 0, 'scope select for boss');
+assert(html.indexOf('>全部</option>') >= 0, 'all scope option');
+assert(html.indexOf('canViewAllLedgerHistory') >= 0, 'scope gated by permission');
+assert(html.indexOf('authSessionPerm()') >= 0, 'all-scope uses auth permission only');
+assert(html.indexOf('權限更新中，請重新整理') >= 0, 'hub-ahead refresh hint');
+assert(html.indexOf('readHistoryMineOnlyFlag') >= 0, 'mine_only from scope');
+assert(html.indexOf('LedgerEntryMap.canViewAllLedger') >= 0, 'view-all via map');
+assert(api.indexOf('authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'api mine_only below 5');
+assert(html.indexOf('historyTotals') >= 0, 'totals element');
 assert(html.indexOf('attRef.payment_request_id') >= 0 ||
   html.indexOf('payment_request_id = pid') >= 0, 'payment attachments via payment_request_id');
 assert(html.indexOf('renderHistoryAttachments(panel, merged)') >= 0, 'payment detail shows attachments');
-
-// 唯讀：sessionCan* 先擋 HISTORY_READ_ONLY
-var canFlagFn = html.slice(html.indexOf('function sessionCanFlagDetail'));
-canFlagFn = canFlagFn.slice(0, canFlagFn.indexOf('function sessionCanDeleteDetail'));
-assert(canFlagFn.indexOf('HISTORY_READ_ONLY') >= 0, 'flag gated by read-only');
-
-// 列表不再渲染／綁定 list-flag 按鈕
-assert(html.indexOf('data-role="list-flag"') < 0, 'no list-flag selector');
-assert(html.indexOf('每一列可按「錯誤記帳標示」') < 0, 'no flag status copy');
-assert(html.indexOf('listFlagBtn') < 0, 'no list flag handler');
 
 assert(api.indexOf('body.amount = amtBody') >= 0 || api.indexOf('body.amount = amtBody') >= 0,
   'api normalizes amount');

@@ -14,6 +14,7 @@ function assert(cond, msg) {
 }
 
 var root = path.resolve(__dirname, '../../..');
+var cacheBust = require('./lib/read-cache-bust');
 var api = fs.readFileSync(path.join(root, 'shared/js/accounting_api.js'), 'utf8');
 var html = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
 var ui = fs.readFileSync(path.join(root, 'shared/js/accounting_ui.js'), 'utf8');
@@ -22,7 +23,9 @@ assert(/ledger_review_bundle:\s*'讀取審核包'/.test(ui), 'UI maps action to 
 assert(/action === 'ledger_review_bundle'[\s\S]*90000/.test(api) ||
   /ledger_review_bundle'\)[\s\S]{0,80}ms = 90000/.test(api),
   'ledger_review_bundle timeout 90s');
-assert(/accounting_api\.js\?v=102/.test(html), 'api cache bust v=102');
+var apiVer = cacheBust.readCacheBustVersion(html, 'accounting_api.js');
+assert(apiVer, 'api cache bust present');
+assert(parseInt(apiVer, 10) >= 102, 'api cache bust >= v102 (got v=' + apiVer + ')');
 assert(/ledgerReviewBundle/.test(html) && /ledger_review_bundle/.test(api),
   'page loads via ledgerReviewBundle');
 

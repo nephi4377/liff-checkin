@@ -30,7 +30,11 @@ assert(html.indexOf('vendorPaymentUpdate') >= 0, 'edit via vendorPaymentUpdate')
 assert(html.indexOf('已匯款') >= 0 && html.indexOf('鎖定') >= 0, 'paid lock copy');
 assert(html.indexOf('submitted_by') >= 0, 'shows submitted_by');
 assert(html.indexOf('include_allocations') >= 0, 'loads allocations');
-assert(html.indexOf('accounting_api.js?v=106') >= 0, 'api cache bust');
+assert(html.indexOf('accounting_api.js?v=111') >= 0, 'api cache bust v=111');
+assert(html.indexOf('ledger_entry_map.js?v=5') >= 0, 'ledger map script');
+assert(html.indexOf('canViewAllSubmitRecords') >= 0, 'view-all gated at boss perm');
+assert(html.indexOf('readSubmitMineOnlyFlag') >= 0, 'mine_only respects permission');
+assert(html.indexOf('data.mine_only !== undefined') >= 0, 'status label follows api mine_only');
 
 assert(index.indexOf('linkSubmitRecords') < 0, 'hub card removed');
 assert(index.indexOf('>送出紀錄<') < 0, 'hub has no 送出紀錄 label');

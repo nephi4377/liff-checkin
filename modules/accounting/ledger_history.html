@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/accounting_api.js?v=106"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=5"></script>
+  <script src="../../shared/js/accounting_api.js?v=111"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
@@ -264,6 +265,30 @@
       border-radius: 6px; background: #fef7e0; color: #b06000; margin-left: 6px;
     }
     .hist-item.is-flagged { border-color: #f9ab00; background: #fffbf0; }
+    .hist-item.is-voided {
+      opacity: .88;
+      border-color: #dadce0;
+      background: #f1f3f4;
+    }
+    .hist-item.is-voided .hist-amt,
+    .hist-item.is-voided .hist-meta,
+    .hist-item.is-voided .hist-type {
+      text-decoration: line-through;
+      color: #80868b;
+    }
+    .hist-dup-badge {
+      display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 7px;
+      border-radius: 6px; background: #fce8e6; color: #c5221f; margin-left: 4px;
+    }
+    .hist-void-badge {
+      display: inline-block; font-size: 11px; font-weight: 800; padding: 2px 7px;
+      border-radius: 6px; background: #e8eaed; color: #5f6368; margin-left: 4px;
+    }
+    #historyTotals {
+      font-size: 13px; color: #333; margin: 0 0 10px; padding: 8px 10px;
+      background: #f8fafc; border-radius: 8px; border: 1px solid #e8eaed; line-height: 1.45;
+    }
+    #historyTotals.is-muted { color: #777; }
     .hist-mod-msg { font-size: 13px; margin: 8px 0 0; }
     .hist-mod-msg.is-ok { color: #137333; }
     .hist-mod-msg.is-err { color: #c5221f; }
@@ -308,7 +333,7 @@
     <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥3 可<strong>查詢</strong>區間內<strong>收支登錄</strong>（唯讀）。可用廠商名／金額篩選；點列看詳情與<strong>圖片集</strong>。預設近 30 天；列表只依新增時間新→舊。本頁不做標記／改帳；已送出請款請用「送出紀錄」。</p>
+    <p class="sub" id="pageModeHint">權限 ≥1 可查<strong>自己記的收支登錄</strong>（列表依伺服器回傳）。權限 5 可看全部並審核疑重。本人或權限 5 可改帳／作廢；作廢列仍可看、不計入合計。預設近 30 天。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -318,6 +343,13 @@
       <div id="historyFilters">
         <p class="hint" style="margin:0 0 8px;grid-column:1/-1">本頁只查<strong>收支登錄</strong>（已收／已付記帳）。已送出請款請到「<a href="submit_records.html">送出紀錄</a>」。</p>
         <input type="hidden" id="histRecordKind" value="ledger" />
+        <div class="full hidden" id="histScopeRow">
+          <label for="histScope">記帳範圍</label>
+          <select id="histScope">
+            <option value="all">全部</option>
+            <option value="mine">只看我記的</option>
+          </select>
+        </div>
         <div>
           <label for="histDateFrom">記帳時間起</label>
           <input id="histDateFrom" type="date" />
@@ -360,6 +392,7 @@
           <span class="hist-loc" style="font-weight:600;color:#174ea6">依新增時間</span>
         </div>
         <p id="historyStatus" class="is-ok">載入中…</p>
+        <p id="historyTotals" class="hidden is-muted" aria-live="polite"></p>
         <div id="historyFlagPin" class="hist-flag-pin hidden" aria-live="polite"></div>
         <div id="historyList"></div>
       </div>
@@ -371,15 +404,15 @@
     </div>
   </div>
 
-  <div id="histFlagReasonMask" class="hist-flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="histFlagReasonTitle">
+  <div id="histVoidReasonMask" class="hist-flag-reason-mask hidden" role="dialog" aria-modal="true" aria-labelledby="histVoidReasonTitle">
     <div class="hist-flag-reason-sheet">
-      <h3 id="histFlagReasonTitle">錯誤記帳標示</h3>
-      <p>請填寫錯誤記帳原因（必填）。待付款請款與收支登錄皆可標示；標示後權限 ≥4 才能刪除已標示的收支帳。</p>
-      <label for="histFlagReasonInput" class="hidden">錯誤記帳原因</label>
-      <textarea id="histFlagReasonInput" maxlength="120" placeholder="例：金額打錯、對象選錯" autocomplete="off"></textarea>
+      <h3 id="histVoidReasonTitle">作廢這筆記帳</h3>
+      <p>作廢後仍可在列表查看（會標示作廢），但不會計入下方合計。原因可留空。</p>
+      <label for="histVoidReasonInput" class="hidden">作廢原因</label>
+      <textarea id="histVoidReasonInput" maxlength="200" placeholder="例：重複登錄、金額錯誤（可留空）" autocomplete="off"></textarea>
       <div class="hist-flag-reason-actions">
-        <button type="button" class="btn-flag-warn" id="histFlagReasonOk">確認標示</button>
-        <button type="button" class="btn-ghost" id="histFlagReasonCancel">取消</button>
+        <button type="button" class="btn-delete-danger" id="histVoidReasonOk">確認作廢</button>
+        <button type="button" class="btn-ghost" id="histVoidReasonCancel">取消</button>
       </div>
     </div>
   </div>
@@ -534,6 +567,19 @@
         if (detail.edited_at_display || detail.edited_at) {
           rows.splice(isPay ? 4 : 3, 0, ['上次修改', detail.edited_at_display || detail.edited_at]);
         }
+        if (typeof LedgerEntryMap !== 'undefined' && LedgerEntryMap.isVoided(detail)) {
+          var voidLabel = '作廢';
+          if (detail.voided_at) {
+            voidLabel += ' ' + String(detail.voided_at).replace('T', ' ').slice(0, 16);
+          }
+          rows.splice(1, 0, ['狀態', voidLabel]);
+          rows.splice(2, 0, ['作廢人', LedgerEntryMap.voidedByDisplay(detail)]);
+          if (detail.void_reason) {
+            rows.splice(3, 0, ['作廢原因', detail.void_reason]);
+          }
+        } else if (typeof LedgerEntryMap !== 'undefined' && LedgerEntryMap.isDupReviewPending(detail)) {
+          rows.splice(1, 0, ['疑重', '待審']);
+        }
         if (detail.error_flagged) {
           var flagLabel = '已標註錯誤';
           if (detail.error_flagged_by) flagLabel += '（' + detail.error_flagged_by + '）';
@@ -544,6 +590,9 @@
           if (detail.error_flag_reason) {
             rows.splice(2, 0, ['錯誤原因', detail.error_flag_reason]);
           }
+        }
+        if (!isPay && typeof LedgerEntryMap !== 'undefined') {
+          rows.push(['記帳人', LedgerEntryMap.recorderDisplay(detail)]);
         }
         if (detail.stores && detail.stores.length) {
           rows.push(['店別', detail.stores.map(function (s) {
@@ -568,8 +617,11 @@
         return dl;
       }
 
-      function sessionPerm() {
-        var authPerm = Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      function authSessionPerm() {
+        return Number((sessionRef && sessionRef.auth && sessionRef.auth.permission) || 0);
+      }
+
+      function hubSessionPerm() {
         var hubPerm = 0;
         try {
           if (typeof OperatorContext !== 'undefined') {
@@ -583,52 +635,87 @@
             }
           }
         } catch (eHub) {}
-        // 與會計選單一致：取 HUB／驗證較高者，避免 auth soft timeout／舊快取把 ≥3 降成 0 後藏標註鈕
-        return Math.max(authPerm, hubPerm);
+        return hubPerm;
       }
 
-      /** 歷史記帳＝唯讀查詢＋看圖；不提供標示／刪除／改帳（那些走送出紀錄或其他頁） */
-      var HISTORY_READ_ONLY = true;
+      function sessionPerm() {
+        // 與會計選單一致：取 HUB／驗證較高者，避免 auth soft timeout／舊快取把 ≥3 降成 0 後藏標註鈕
+        return Math.max(authSessionPerm(), hubSessionPerm());
+      }
+
+      function ledgerViewAllMinPerm() {
+        if (typeof LedgerEntryMap !== 'undefined') return LedgerEntryMap.LEDGER_VIEW_ALL_MIN_PERMISSION;
+        if (typeof AccountingApi !== 'undefined' && AccountingApi.LEDGER_VIEW_ALL_MIN_PERMISSION) {
+          return AccountingApi.LEDGER_VIEW_ALL_MIN_PERMISSION;
+        }
+        return 5;
+      }
+
+      function canViewAllLedgerHistory() {
+        // API 只看 session.auth.permission；勿用 HUB 較高值顯示「全部」
+        return LedgerEntryMap.canViewAllLedger(authSessionPerm());
+      }
+
+      function hubPermissionAheadOfAuth() {
+        var min = ledgerViewAllMinPerm();
+        return hubSessionPerm() >= min && authSessionPerm() < min;
+      }
+
+      function readHistoryMineOnlyFlag() {
+        if (!canViewAllLedgerHistory()) return true;
+        var scope = document.getElementById('histScope');
+        return scope && (scope.value || 'all') === 'mine';
+      }
+
+      function syncHistoryScopeUi() {
+        var row = document.getElementById('histScopeRow');
+        var hint = document.getElementById('pageModeHint');
+        var canAll = canViewAllLedgerHistory();
+        if (row) row.classList.toggle('hidden', !canAll);
+        if (!hint) return;
+        if (!canAll) {
+          var base = '權限 ≥1 可查<strong>自己記的帳</strong>（列表依伺服器回傳）。可用廠商名／金額篩選；本人可改帳／作廢。權限 5 可看全部人。預設近 30 天。';
+          if (hubPermissionAheadOfAuth()) {
+            base += ' <span class="hint">權限更新中，請重新整理</span>';
+          }
+          hint.innerHTML = base;
+          return;
+        }
+        var mineOnly = readHistoryMineOnlyFlag();
+        hint.innerHTML = mineOnly
+          ? '目前為<strong>只看我記的</strong>。權限 5 可改回「全部」看他人紀錄。'
+          : '權限 5 可<strong>查全部人</strong>或改選只看我記的。點列可改帳／作廢（本人或權限 5）。';
+      }
+
+      function sessionAuthPermForLedger() {
+        return authSessionPerm();
+      }
 
       function sessionCanEditDetail(detail) {
-        if (HISTORY_READ_ONLY) return false;
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
-        if (detail && detail.error_flagged) return false;
-        if (sessionPerm() > 4) return true;
-        if (detail && detail.can_edit === true) return true;
-        return false;
+        return LedgerEntryMap.showEditButton(detail);
       }
 
-      function sessionCanFlagDetail(detail) {
-        if (HISTORY_READ_ONLY) return false;
-        if (!sessionRef || !sessionRef.auth) return false;
-        if (detail && detail.error_flagged) return false;
-        if (sessionPerm() >= 3) return true;
-        if (detail && detail.can_flag === true) return true;
-        return false;
-      }
-
-      function sessionCanDeleteDetail(detail) {
-        if (HISTORY_READ_ONLY) return false;
+      function sessionCanVoidDetail(detail) {
         if (isPaymentRequestItem(detail)) return false;
         if (!sessionRef || !sessionRef.auth) return false;
-        if (!(detail && detail.error_flagged)) return false;
-        if (sessionPerm() >= 4) return true;
-        if (detail && detail.can_delete === true) return true;
-        return false;
+        return LedgerEntryMap.showVoidButton(detail);
       }
 
-      /**
-       * 錯誤記帳原因（頁內對話框；勿用瀏覽器原生 prompt——LINE／iframe 常被擋＝按了沒反應）
-       * @returns {Promise<string|null>}
-       */
-      function promptFlagReason() {
+      function sessionCanDupReviewClear(detail) {
+        if (isPaymentRequestItem(detail)) return false;
+        if (!sessionRef || !sessionRef.auth) return false;
+        return LedgerEntryMap.showDupClearButton(detail);
+      }
+
+      /** 作廢原因（可留空）；勿用原生 prompt */
+      function promptVoidReason() {
         return new Promise(function (resolve) {
-          var mask = document.getElementById('histFlagReasonMask');
-          var input = document.getElementById('histFlagReasonInput');
-          var okBtn = document.getElementById('histFlagReasonOk');
-          var cancelBtn = document.getElementById('histFlagReasonCancel');
+          var mask = document.getElementById('histVoidReasonMask');
+          var input = document.getElementById('histVoidReasonInput');
+          var okBtn = document.getElementById('histVoidReasonOk');
+          var cancelBtn = document.getElementById('histVoidReasonCancel');
           if (!mask || !input || !okBtn || !cancelBtn) {
             resolve(null);
             return;
@@ -646,12 +733,7 @@
           }
           function onOk() {
             var reason = String(input.value || '').replace(/\s+/g, ' ').trim();
-            if (!reason) {
-              window.alert('請填寫錯誤記帳原因後再標示。');
-              try { input.focus(); } catch (eF) {}
-              return;
-            }
-            if (reason.length > 120) reason = reason.slice(0, 120);
+            if (reason.length > 200) reason = reason.slice(0, 200);
             finish(reason);
           }
           function onCancel() { finish(null); }
@@ -673,6 +755,29 @@
         });
       }
 
+      function applyModerationItemPatch(summaryItem, updated) {
+        var key = historyItemKey(summaryItem) || historyItemKey(updated);
+        if (key && itemsByKey[key]) {
+          Object.assign(itemsByKey[key], updated);
+        }
+      }
+
+      function renderHistoryTotals(items) {
+        var el = document.getElementById('historyTotals');
+        if (!el) return;
+        if (!items || !items.length) {
+          el.classList.add('hidden');
+          el.textContent = '';
+          return;
+        }
+        var totals = LedgerEntryMap.computeTotals(items);
+        el.classList.remove('hidden');
+        el.textContent =
+          '本頁合計（已排除作廢）：收入 ' + formatMoney(totals.income) +
+          ' · 支出 ' + formatMoney(totals.expense) +
+          ' · 淨額 ' + formatMoney(totals.net);
+      }
+
       function fileToPhotoPayload(file) {
         return new Promise(function (resolve, reject) {
           var reader = new FileReader();
@@ -692,11 +797,11 @@
       }
 
       function buildModerationActions(panel, summaryItem, detail) {
-        var merged = Object.assign({}, summaryItem || {}, detail || {});
+        var merged = LedgerEntryMap.normalizeItem(Object.assign({}, summaryItem || {}, detail || {}));
         var canEdit = sessionCanEditDetail(merged);
-        var canFlag = sessionCanFlagDetail(merged);
-        var canDelete = sessionCanDeleteDetail(merged);
-        if (!canEdit && !canFlag && !canDelete) return;
+        var canVoid = sessionCanVoidDetail(merged);
+        var canDup = sessionCanDupReviewClear(merged);
+        if (!canEdit && !canVoid && !canDup) return;
 
         var actions = document.createElement('div');
         actions.className = 'hist-edit-actions hist-mod-bar';
@@ -711,129 +816,92 @@
         }
 
         function locOpts() {
-          if (isPaymentRequestItem(merged) || isPaymentRequestItem(summaryItem)) {
-            var src = isPaymentRequestItem(merged) ? merged : summaryItem;
-            return {
-              record_kind: 'payment_request',
-              payment_request_id: resolvePaymentRequestId(src) ||
-                resolvePaymentRequestId(merged) ||
-                resolvePaymentRequestId(summaryItem)
-            };
-          }
-          var rowVal = merged.row != null ? merged.row : (summaryItem && summaryItem.row);
-          var o = {
-            sheet: merged.sheet || (summaryItem && summaryItem.sheet),
-            ingest_id: merged.ingest_id || (summaryItem && summaryItem.ingest_id),
-            record_kind: 'ledger'
-          };
-          if (rowVal != null && rowVal !== '' && Number(rowVal) > 0) o.row = rowVal;
-          return o;
+          return LedgerEntryMap.locBodyFromItem(merged);
         }
 
-        if (canFlag) {
-          var flagBtn = document.createElement('button');
-          flagBtn.type = 'button';
-          flagBtn.className = 'btn-flag-warn';
-          flagBtn.setAttribute('data-role', 'flag-error');
-          flagBtn.textContent = '錯誤記帳標示';
-          flagBtn.addEventListener('click', function (e) {
+        if (canDup) {
+          var dupHint = document.createElement('span');
+          dupHint.className = 'hist-dup-badge';
+          dupHint.textContent = '疑重待審';
+          actions.appendChild(dupHint);
+          var dupClearBtn = document.createElement('button');
+          dupClearBtn.type = 'button';
+          dupClearBtn.className = 'btn-ghost';
+          dupClearBtn.setAttribute('data-role', 'dup-review-clear');
+          dupClearBtn.textContent = '清除待審標記';
+          dupClearBtn.addEventListener('click', function (e) {
             e.stopPropagation();
-            if (!sessionRef || typeof AccountingApi.accountingLedgerFlag !== 'function') {
-              setModMsg('標示功能尚未就緒', false);
+            if (!sessionRef || typeof AccountingApi.accountingLedgerDupReviewClear !== 'function') {
+              setModMsg('清除功能尚未就緒', false);
               return;
             }
-            flagBtn.disabled = true;
-            setModMsg('請填寫原因…', true);
-            promptFlagReason().then(function (reason) {
-              if (!reason) {
-                flagBtn.disabled = false;
-                setModMsg('', true);
+            if (!window.confirm('清除這筆的疑重待審標記？')) return;
+            dupClearBtn.disabled = true;
+            setModMsg('處理中…', true);
+            AccountingApi.accountingLedgerDupReviewClear(sessionRef, locOpts()).then(function (data) {
+              dupClearBtn.disabled = false;
+              if (!data || !data.success) {
+                setModMsg(LedgerEntryMap.friendlyLedgerError(data, '清除失敗'), false);
                 return;
               }
-              var flagPayload = buildFlagSubmitPayload(merged, reason);
-              if (flagPayload.record_kind === 'payment_request' && !flagPayload.payment_request_id) {
-                flagBtn.disabled = false;
-                setModMsg('找不到請款單編號，無法標示', false);
+              setModMsg(data.message || '已清除待審', true);
+              var updated = data.item || Object.assign({}, merged);
+              applyModerationItemPatch(summaryItem, updated);
+              fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
+              try { loadLedgerHistory(); } catch (eReload) {}
+            }).catch(function (err) {
+              dupClearBtn.disabled = false;
+              setModMsg((err && err.message) || '清除失敗', false);
+            });
+          });
+          actions.appendChild(dupClearBtn);
+        }
+
+        if (canVoid) {
+          var voidBtn = document.createElement('button');
+          voidBtn.type = 'button';
+          voidBtn.className = 'btn-delete-danger';
+          voidBtn.setAttribute('data-role', 'void-ledger');
+          voidBtn.textContent = '作廢';
+          voidBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (!sessionRef || typeof AccountingApi.accountingLedgerVoid !== 'function') {
+              setModMsg('作廢功能尚未就緒', false);
+              return;
+            }
+            voidBtn.disabled = true;
+            promptVoidReason().then(function (reason) {
+              if (reason === null) {
+                voidBtn.disabled = false;
                 return;
               }
-              setModMsg('標示中…', true);
-              return AccountingApi.accountingLedgerFlag(sessionRef, flagPayload).then(function (data) {
-                flagBtn.disabled = false;
+              setModMsg('作廢中…', true);
+              return AccountingApi.accountingLedgerVoid(sessionRef, LedgerEntryMap.voidRequestBody(merged, reason)).then(function (data) {
+                voidBtn.disabled = false;
                 if (!data || !data.success) {
-                  setModMsg(friendlyFlagErrorMessage(data, merged), false);
+                  setModMsg(LedgerEntryMap.friendlyLedgerError(data, '作廢失敗'), false);
                   return;
                 }
-                setModMsg(data.message || '已標示錯誤記帳', true);
+                setModMsg(data.message || '已作廢', true);
                 var updated = data.item || Object.assign({}, merged, {
-                  error_flagged: true,
-                  error_flag_reason: reason,
-                  can_flag: false,
-                  can_delete: sessionPerm() >= 4,
-                  can_edit: sessionPerm() > 4
+                  voided: true,
+                  void_reason: data.void_reason || (data.item && data.item.void_reason) || reason || '',
+                  voided_at: data.voided_at || (data.item && data.item.voided_at) || '',
+                  voided_by: data.voided_by || (data.item && data.item.voided_by) || '',
+                  voided_by_name: data.voided_by_name || (data.item && data.item.voided_by_name) || '',
+                  can_void: false,
+                  can_edit: false
                 });
-                var key = historyItemKey(summaryItem) || historyItemKey(updated);
-                if (key && itemsByKey[key]) {
-                  Object.assign(itemsByKey[key], {
-                    error_flagged: true,
-                    error_flagged_at: updated.error_flagged_at,
-                    error_flagged_by: updated.error_flagged_by,
-                    error_flag_reason: updated.error_flag_reason || reason
-                  });
-                }
+                applyModerationItemPatch(summaryItem, updated);
                 fillHistoryDetailPanel(panel, itemsByKey[openHistoryKey] || updated, updated);
                 try { loadLedgerHistory(); } catch (eReload) {}
               });
             }).catch(function (err) {
-              flagBtn.disabled = false;
-              setModMsg((err && err.message) || '標示失敗', false);
+              voidBtn.disabled = false;
+              setModMsg((err && err.message) || '作廢失敗', false);
             });
           });
-          actions.appendChild(flagBtn);
-        }
-
-        if (canDelete) {
-          var delBtn = document.createElement('button');
-          delBtn.type = 'button';
-          delBtn.className = 'btn-delete-danger';
-          delBtn.textContent = '刪除錯誤帳';
-          delBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            if (!sessionRef || typeof AccountingApi.accountingLedgerDeleteFlagged !== 'function') {
-              setModMsg('刪除功能尚未就緒', false);
-              return;
-            }
-            if (!window.confirm('確定刪除這筆已標註的錯誤記帳？\n刪除後無法從列表還原。')) return;
-            delBtn.disabled = true;
-            setModMsg('刪除中…', true);
-            AccountingApi.accountingLedgerDeleteFlagged(sessionRef, locOpts()).then(function (data) {
-              delBtn.disabled = false;
-              if (!data || !data.success) {
-                setModMsg((data && data.message) || '刪除失敗', false);
-                return;
-              }
-              setModMsg(data.message || '已刪除', true);
-              var key = historyItemKey(summaryItem) || historyItemKey(merged);
-              if (key && itemsByKey[key]) delete itemsByKey[key];
-              openHistoryKey = '';
-              try { loadLedgerHistory(); } catch (eReload) {}
-              if (isDesktopDetail()) {
-                var ph = document.getElementById('historyDetailPlaceholder');
-                var body = document.getElementById('historyDetailBody');
-                if (body) {
-                  body.classList.add('hidden');
-                  body.innerHTML = '';
-                }
-                if (ph) {
-                  ph.classList.remove('hidden');
-                  ph.textContent = '已刪除錯誤記帳。請再點列表一筆。';
-                }
-              }
-            }).catch(function (err) {
-              delBtn.disabled = false;
-              setModMsg((err && err.message) || '刪除失敗', false);
-            });
-          });
-          actions.appendChild(delBtn);
+          actions.appendChild(voidBtn);
         }
 
         var editBtn = null;
@@ -841,6 +909,7 @@
           editBtn = document.createElement('button');
           editBtn.type = 'button';
           editBtn.className = 'btn-ghost btn-edit-primary';
+          editBtn.setAttribute('data-role', 'btn-edit');
           editBtn.textContent = '修改這一筆';
           actions.appendChild(editBtn);
         }
@@ -993,10 +1062,12 @@
         }).then(function (data) {
           if (saveBtn) saveBtn.disabled = false;
           if (!data || !data.success) {
-            setMsg((data && data.message) || '修改失敗', false);
+            setMsg(LedgerEntryMap.friendlyLedgerError(data, '修改失敗'), false);
             return;
           }
-          setMsg(data.message || '已修改', true);
+          var pendingDup = LedgerEntryMap.saveIndicatesDupReviewPending(data) ||
+            data.duplicate_review_pending === true;
+          setMsg((data.message || '已修改') + (pendingDup ? '（已儲存為疑重待審）' : ''), true);
           var updated = data.item || Object.assign({}, merged, fields, {
             sheet: data.sheet,
             row: data.row,
@@ -1103,7 +1174,6 @@
         panel.appendChild(status);
 
         var merged = Object.assign({}, summaryItem || {}, detail || {});
-        // 唯讀：不掛標示／刪除／改帳列；詳情＋圖片集
         if (isPaymentRequestItem(merged)) {
           var fieldsPay = document.createElement('div');
           fieldsPay.innerHTML = renderHistoryDetailFields(merged);
@@ -1116,7 +1186,7 @@
           panel.appendChild(payHint);
           return;
         }
-        if (!HISTORY_READ_ONLY) {
+        if (!isPaymentRequestItem(merged)) {
           buildEditForm(panel, summaryItem, detail || merged);
         }
         var fields = document.createElement('div');
@@ -1327,6 +1397,7 @@
         }
         var recorded = it.recorded_at_display || it.recorded_at || '';
         if (it.error_flagged) div.classList.add('is-flagged');
+        if (LedgerEntryMap.isVoided(it)) div.classList.add('is-voided');
         div.innerHTML =
           '<div class="hist-top">' +
             '<div class="hist-top-left">' +
@@ -1335,6 +1406,8 @@
               (kind === 'payment' && it.status_label
                 ? ('<span class="hist-status-badge">' + escHtml(it.status_label) + '</span>')
                 : '') +
+              (LedgerEntryMap.isVoided(it) ? '<span class="hist-void-badge">作廢</span>' : '') +
+              (LedgerEntryMap.isDupReviewPending(it) ? '<span class="hist-dup-badge">待審</span>' : '') +
               (it.error_flagged ? '<span class="hist-flag-badge">已標示錯誤</span>' : '') +
               (it.error_flagged && it.error_flag_reason
                 ? ('<span class="hist-list-flag-hint" title="' + escHtml(it.error_flag_reason) + '">原因：' +
@@ -1375,10 +1448,14 @@
           pin.innerHTML = '';
           pin.classList.add('hidden');
         }
-        if (!items || !items.length) return;
+        if (!items || !items.length) {
+          renderHistoryTotals([]);
+          return;
+        }
         items.forEach(function (it) {
           box.appendChild(buildHistoryItemEl(it));
         });
+        renderHistoryTotals(items);
       }
 
       /** 預設載入區間（天）；非硬上限——使用者可自訂更早 date_from */
@@ -1468,10 +1545,9 @@
         var amountRaw = (document.getElementById('histAmount').value || '').trim();
         var recordKind = (document.getElementById('histRecordKind').value || 'all').trim() || 'all';
         // 不傳 months：分頁依交易日存放，掃幾個月由後端依記帳時間窗決定（避免只掃1月漏倒填）
-        // 固定全部人（本頁已無「本人」篩選開關）
         var filters = {
           limit: 50,
-          mine_only: false,
+          mine_only: readHistoryMineOnlyFlag(),
           date_from: dates.from,
           date_to: dates.to,
           record_kind: recordKind
@@ -1491,7 +1567,10 @@
         document.getElementById('histKeyword').value = '';
         document.getElementById('histAmount').value = '';
         document.getElementById('histRecordKind').value = 'ledger';
+        var scope = document.getElementById('histScope');
+        if (scope) scope.value = 'all';
         syncRecordKindTabs();
+        syncHistoryScopeUi();
       }
 
       function renderEmptyExpandActions(from, to) {
@@ -1544,7 +1623,8 @@
           var kindLabel = kind === 'payment_request'
             ? '待付款請款'
             : (kind === 'ledger' ? '收支登錄' : '全部來源');
-          var bits = [kindLabel, '所有人紀錄', from + '～' + to];
+          var mineOnly = data.mine_only !== undefined ? !!data.mine_only : !!filters.mine_only;
+          var bits = [kindLabel, mineOnly ? '只看我記的' : '所有人紀錄', from + '～' + to];
           if (filters.type) bits.push(filters.type);
           if (filters.keyword) bits.push('「' + filters.keyword + '」');
           if (filters.amount != null) bits.push('$' + filters.amount);
@@ -1558,7 +1638,7 @@
           var listEl = document.getElementById('historyList');
           if (n) {
             setStatus(
-              '共 ' + n + ' 筆 · 唯讀查詢（點列看詳情／圖片）· ' +
+              '共 ' + n + ' 筆 · 點列看詳情／改帳／作廢 · ' +
               bits.join(' · '),
               'ok'
             );
@@ -1569,6 +1649,7 @@
               || ('這段時間沒有符合條件的' + kindLabel + '。可改查近 ' + HISTORY_EXPAND_DAYS + ' 天，或自訂更早區間／關鍵字後再查。');
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
             listEl.innerHTML = '';
+            renderHistoryTotals([]);
             listEl.appendChild(renderEmptyExpandActions(from, to));
           }
         }).catch(function (e) {
@@ -1578,10 +1659,18 @@
           }
           setStatus(msg, 'error');
           document.getElementById('historyList').innerHTML = '';
+          renderHistoryTotals([]);
         });
       }
 
       function bindFilters() {
+        var scope = document.getElementById('histScope');
+        if (scope) {
+          scope.addEventListener('change', function () {
+            syncHistoryScopeUi();
+            loadLedgerHistory();
+          });
+        }
         Array.prototype.forEach.call(document.querySelectorAll('.hist-kind-tab'), function (btn) {
           btn.addEventListener('click', function () {
             var kind = btn.getAttribute('data-kind') || 'all';
@@ -1633,11 +1722,12 @@
         syncRecordKindTabs();
         bindFilters();
         await AccountingBoot.run({
-          minPermission: AccountingApi.SUPERVISOR_MIN_PERMISSION,
-          deniedMsg: '歷史記帳紀錄需主管權限（≥3）',
+          minPermission: AccountingApi.LEDGER_MIN_VIEW_PERMISSION,
+          deniedMsg: AccountingApi.LEDGER_VIEW_DENIED_MSG,
           preloadBootstrap: false,
           onReady: async function (sess) {
             sessionRef = sess;
+            syncHistoryScopeUi();
             await loadLedgerHistory();
           }
         });
