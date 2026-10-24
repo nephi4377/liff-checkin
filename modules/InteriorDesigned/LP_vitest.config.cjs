@@ -18,6 +18,7 @@ module.exports = defineConfig({
             'LP_3DViewer_lifecycle.test.js',
             'LP_3D_pixel_rgb.test.js',
             'LP_underlay.test.js',
+            'LP_storage.test.js',
         ],
     },
 });
