@@ -20,6 +20,15 @@ import {
     segmentLengthCmRounded,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
+import { detachSelectedFromExistingLayoutGroups } from './LP_layout_group_logic.js';
+import {
+    detectLayoutPlannerTouchUi,
+    bindPrimaryPointerDown,
+    installCanvasPinchPan,
+    createRafThrottle,
+    isPrimaryPointerButton,
+    LP_MOBILE_LONG_PRESS_MS,
+} from './LP_layout_mobile.js';
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
@@ -35,6 +44,8 @@ let placedCabinets = [];
 let isBgEditMode = false;
 let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
+/** 底圖 data URL 僅保留一份；history 快照只存位置／縮放與是否顯示 */
+let layoutPlannerActiveBgDataUrl = '';
 let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
 /** @type {Set<string>} 多選櫃體（含 layout 群組成員） */
@@ -106,12 +117,21 @@ function scheduleLp3dRebuild() {
     if (!lp3dMode || !lp3dViewer) return;
     clearTimeout(lp3dRebuildTimer);
     lp3dRebuildTimer = setTimeout(() => {
+        lp3dRebuildTimer = null;
+        if (!lp3dMode || !lp3dViewer) return;
         try {
             lp3dViewer.rebuild();
         } catch (err) {
             console.warn('[LP 3D] rebuild failed:', err);
         }
     }, 200);
+}
+
+function cancelScheduledLp3dRebuild() {
+    if (lp3dRebuildTimer) {
+        clearTimeout(lp3dRebuildTimer);
+        lp3dRebuildTimer = null;
+    }
 }
 // [v8.9 修復] 補回遺失的變數宣告
 let isResizing = false;
@@ -143,6 +163,9 @@ let annotationDragType = null; // 'box' or 'target'
 let annotationDragOffset = { x: 0, y: 0 }; // [修正] 補上遺漏的變數宣告
 // [v8.8 新增] 全局畫布縮放比列
 let viewScale = 1.0;
+let lpTouchUiMode = false;
+/** @type {ReturnType<typeof createRafThrottle> | null} */
+let renderDrawnAreasThrottle = null;
 // [v8.8 補回] 歷史紀錄堆疊
 let history = [];
 let historyIndex = -1;
@@ -704,6 +727,7 @@ function onLayerVisibilityToggle(groupName, visible) {
         }
     }
     applyLayerVisibilityRefresh();
+    saveState();
 }
 
 function setAllLayerVisibility(visible) {
@@ -785,6 +809,10 @@ function renderAllDrawnAreas() {
 function renderSingleArea(layer, area, isSelected) {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.id = area.id;
+
+    if (area.type === 'wall' && area.points?.length >= 3 && !area.pathData) {
+        area.pathData = calculateWallPath(area.points, area.thickness || 15);
+    }
 
     // [修正] 鎖定邏輯：同時檢查「鎖定繪圖」與「鎖定牆壁」
     const lockDrawnAreas = document.getElementById('lock-drawn-areas').checked;
@@ -896,20 +924,22 @@ function renderVertexHandles(area) {
         const handle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
         handle.setAttribute('cx', point.x);
         handle.setAttribute('cy', point.y);
-        handle.setAttribute('r', '6'); // 控點大小
+        handle.setAttribute('r', lpTouchUiMode ? '12' : '6'); // 控點大小（觸控加大）
         handle.setAttribute('fill', '#ffffff');
         handle.setAttribute('stroke', '#3b82f6'); // [您的要求] 修正拼寫錯誤
         handle.setAttribute('stroke-width', '2');
         handle.style.cursor = 'move';
 
-        // 為每個控點綁定 mousedown 事件
-        handle.addEventListener('mousedown', (e) => {
+        const startVertexDrag = (e) => {
+            if (!isPrimaryPointerButton(e)) return;
             e.stopPropagation();
+            if (e.pointerType === 'touch') e.preventDefault();
             historyGesture.begin();
             isDraggingVertex = true;
             draggedAreaId = area.id;
             draggedVertexIndex = index;
-        });
+        };
+        bindPrimaryPointerDown(handle, startVertexDrag);
         handleGroup.appendChild(handle);
     });
 }
@@ -997,7 +1027,7 @@ function renderAllAnnotations() {
         const targetDot = document.createElementNS(svgns, "circle");
         targetDot.setAttribute("cx", anno.targetX);
         targetDot.setAttribute("cy", anno.targetY);
-        targetDot.setAttribute("r", "6");
+        targetDot.setAttribute("r", lpTouchUiMode ? "12" : "6");
         targetDot.setAttribute("fill", "#f97316");
         targetDot.setAttribute("stroke", "white");
         targetDot.setAttribute("stroke-width", "2");
@@ -1005,7 +1035,7 @@ function renderAllAnnotations() {
         targetDot.style.pointerEvents = "auto"; // 允許拖曳
         
         // 綁定指示點拖曳事件
-        targetDot.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'target'));
+        bindPrimaryPointerDown(targetDot, (e) => startAnnotationDrag(e, anno, 'target'));
         svg.appendChild(targetDot);
 
         // B. 繪製說明方塊 (HTML Div)
@@ -1028,7 +1058,7 @@ function renderAllAnnotations() {
         `;
 
         // 綁定方塊拖曳事件
-        box.addEventListener('mousedown', (e) => startAnnotationDrag(e, anno, 'box'));
+        bindPrimaryPointerDown(box, (e) => startAnnotationDrag(e, anno, 'box'));
         
         layer.appendChild(box);
     });
@@ -1055,6 +1085,11 @@ function renderCabinet(cab) {
         el.classList.add('is-wall');
     }
     el.id = cab.id;
+    if (cab.layoutGroupId) {
+        el.dataset.layoutGroupId = cab.layoutGroupId;
+    } else {
+        delete el.dataset.layoutGroupId;
+    }
     updateCabStyle(el, cab);
 
     // [v9.0 重構] 根據 adjustable 屬性生成對應方向的拉伸控點
@@ -1088,13 +1123,39 @@ function renderCabinet(cab) {
         <div class="size-label">${Math.round(cab.currentW)}x${Math.round(cab.currentH)} cm (${cmToFeet(cab.currentW)}x${cmToFeet(cab.currentH)}尺)</div>
     `;
 
-    // 綁定元件拖曳事件
-    el.onmousedown = (e) => startCabDrag(e, cab);
+    bindPrimaryPointerDown(el, (e) => startCabDrag(e, cab));
+    if (lpTouchUiMode) {
+        let longPressTimer = null;
+        let pressStartX = 0;
+        let pressStartY = 0;
+        el.addEventListener('pointerdown', (e) => {
+            if (!isPrimaryPointerButton(e)) return;
+            clearTimeout(longPressTimer);
+            pressStartX = e.clientX;
+            pressStartY = e.clientY;
+            longPressTimer = setTimeout(() => {
+                selectCabinet(cab.id);
+                showMobileCabinetSheet();
+            }, LP_MOBILE_LONG_PRESS_MS);
+        });
+        el.addEventListener('pointermove', (e) => {
+            if (!longPressTimer) return;
+            if (Math.hypot(e.clientX - pressStartX, e.clientY - pressStartY) > 10) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        });
+        const clearPress = () => {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        };
+        el.addEventListener('pointerup', clearPress);
+        el.addEventListener('pointercancel', clearPress);
+    }
 
-    // 綁定拉伸控點事件
     const handles = el.querySelectorAll('.resize-handle');
     handles.forEach(handle => {
-        handle.addEventListener('mousedown', (e) => {
+        bindPrimaryPointerDown(handle, (e) => {
             const direction = handle.dataset.dir;
             dbgLog(`[Resize] Start resizing cab ${cab.id}, direction: ${direction}`);
             startResize(cab.id, e, direction);
@@ -1767,9 +1828,7 @@ function handleKeyDown(e) {
     }
     if (e.key.toLowerCase() === 'd' || e.key === 'Delete') { // [您的要求] 增加 Delete 鍵支援
         e.preventDefault();
-        const idToDelete = selectedCabId;
-        deselectAll();
-        deleteCabById(idToDelete);
+        deleteSelectedCabinets();
         return;
     }
     const step = e.shiftKey ? 10 : snapGridStepCm;
@@ -1863,6 +1922,8 @@ function groupSelectedCabinets() {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
     }
+    const selectedIds = new Set(targets.map((c) => c.id));
+    detachSelectedFromExistingLayoutGroups(placedCabinets, selectedIds);
     const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
         cab.layoutGroupId = groupId;
@@ -1962,20 +2023,33 @@ function moveSelectedCabLayer(direction) {
     }
 }
 
-function deleteCabById(id) {
-    const cab = placedCabinets.find((c) => c.id === id);
-    const idsToRemove = new Set([id]);
-    if (cab?.layoutGroupId) {
-        placedCabinets
-            .filter((c) => c.layoutGroupId === cab.layoutGroupId)
-            .forEach((c) => idsToRemove.add(c.id));
+function deleteSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length) {
+        if (selectedCabId) deleteCabById(selectedCabId);
+        return;
     }
+    const idsToRemove = new Set();
+    targets.forEach((cab) => {
+        idsToRemove.add(cab.id);
+        if (cab.layoutGroupId) {
+            placedCabinets
+                .filter((c) => c.layoutGroupId === cab.layoutGroupId)
+                .forEach((c) => idsToRemove.add(c.id));
+        }
+    });
     placedCabinets = placedCabinets.filter((c) => !idsToRemove.has(c.id));
     deselectAll();
     renderAllCabinets();
     updateQuotation();
     saveState();
     renderLayerVisibilityPanel();
+}
+
+function deleteCabById(id) {
+    if (!id) return;
+    setCabinetSelection([id], id);
+    deleteSelectedCabinets();
 }
 
 // [新增] 刪除標註
@@ -2255,7 +2329,7 @@ function handleGlobalMove(e) {
                 area.pathData = calculateWallPath(area.points, thickness);
             }
             
-            renderAllDrawnAreas();
+            requestDrawnAreasRender();
         }
     }
 
@@ -2273,8 +2347,10 @@ function handleGlobalMove(e) {
 }
 
 function endDrag() {
+    const wasDraggingBg = isDraggingBg;
     if (isDraggingCab) saveState();
     if (isResizing) saveState();
+    if (wasDraggingBg) saveState();
     if (isDraggingVertex) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
@@ -2407,12 +2483,8 @@ function selectArea(id) {
     const area = drawnAreas.find(a => a.id === id);
 
     if (area) {
-        const group = document.querySelector(`#drawn-areas-layer g[data-id="${id}"]`);
-        if (group) {
-            group.querySelector('polygon').classList.add('selected');
-            // [您的要求] 為選取的區域產生可拖曳的頂點
-            renderVertexHandles(area);
-        }
+        renderAllDrawnAreas();
+        renderVertexHandles(area);
 
         document.getElementById('selected-info').style.display = 'block';
         
@@ -2497,7 +2569,8 @@ function handleBgUpload(event) {
         const reader = new FileReader();
         reader.onload = function (e) {
             const bgImg = document.getElementById('bg-img');
-            bgImg.src = e.target.result;
+            layoutPlannerActiveBgDataUrl = e.target.result;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
             // Reset position and scale when new image loaded
@@ -2505,6 +2578,7 @@ function handleBgUpload(event) {
             bgScale = 1.0;
             updateBgScale(1.0);
             updateBgTransform();
+            saveState();
         };
         reader.readAsDataURL(file);
     }
@@ -2753,6 +2827,7 @@ function applyUiLayoutMode(mode) {
         try {
             centerView();
         } catch (_) { /* ignore */ }
+        syncCanvasPointerBlockForMobilePanels();
     }, 40);
 }
 
@@ -3263,18 +3338,61 @@ function getQuotationForDisplay() {
     return { lineItems, subtotals: calc.subtotals, grandTotal };
 }
 
-function onBudgetFieldEdit(lineKey, field, rawValue) {
-    if (!lineKey) return;
-    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+function getAutoQuotationFieldValue(lineKey, field) {
+    const calc = calculateFullQuotation();
+    for (const item of calc.lineItems) {
+        if (item.isHeader || item.lineKey !== lineKey) continue;
+        if (field === 'quantity') return item.quantity > 0 ? item.quantity : '';
+        if (field === 'totalPrice') return item.totalPrice > 0 ? item.totalPrice : '';
+        return item[field];
+    }
+    return undefined;
+}
+
+function budgetFieldValuesEqual(field, a, b) {
     if (field === 'quantity' || field === 'totalPrice') {
-        quotationManualOverrides[lineKey][field] = rawValue === '' ? '' : (parseFloat(rawValue) || 0);
+        const na = a === '' || a === undefined ? 0 : Number(a);
+        const nb = b === '' || b === undefined ? 0 : Number(b);
+        if (!Number.isFinite(na) && !Number.isFinite(nb)) return String(a ?? '') === String(b ?? '');
+        return na === nb;
+    }
+    return String(a ?? '') === String(b ?? '');
+}
+
+function applyBudgetFieldEdit(lineKey, field, rawValue) {
+    if (!lineKey) return;
+    const autoVal = getAutoQuotationFieldValue(lineKey, field);
+    const normalized = (field === 'quantity' || field === 'totalPrice')
+        ? (rawValue === '' ? '' : (parseFloat(rawValue) || 0))
+        : rawValue;
+
+    if (budgetFieldValuesEqual(field, normalized, autoVal)) {
+        const o = quotationManualOverrides[lineKey];
+        if (o) {
+            delete o[field];
+            const keys = Object.keys(o).filter((k) => k !== 'hidden');
+            if (keys.length === 0 && !o.hidden) delete quotationManualOverrides[lineKey];
+        }
     } else {
-        quotationManualOverrides[lineKey][field] = rawValue;
+        if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+        quotationManualOverrides[lineKey][field] = normalized;
     }
     const quotation = getQuotationForDisplay();
     const totalEl = document.getElementById('modal-total-price');
     if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
     updateQuotation();
+}
+
+function commitBudgetFieldEdit(lineKey, field, rawValue) {
+    applyBudgetFieldEdit(lineKey, field, rawValue);
+    commitSaveState();
+}
+
+function refreshBudgetModalIfOpen() {
+    const modal = document.getElementById('budget-modal');
+    if (modal && modal.style.display === 'flex') {
+        renderBudgetTable();
+    }
 }
 
 function hideQuotationRow(lineKey) {
@@ -3283,6 +3401,7 @@ function hideQuotationRow(lineKey) {
     quotationManualOverrides[lineKey].hidden = true;
     renderBudgetTable();
     updateQuotation();
+    saveState();
 }
 
 function resetQuotationToAuto() {
@@ -3524,6 +3643,51 @@ function switchTab(tabName) {
         componentsBtn.classList.add('active');
         componentsContent.classList.remove('hidden');
     }
+    syncCanvasPointerBlockForMobilePanels();
+}
+
+function syncCanvasPointerBlockForMobilePanels() {
+    if (!document.body.classList.contains('lp-touch-mode')) return;
+    const toolboxOpen = getComputedStyle(document.getElementById('toolbox-window')).display !== 'none';
+    const infoOpen = getComputedStyle(document.getElementById('info-window')).display !== 'none';
+    const block = toolboxOpen || infoOpen;
+    document.body.classList.toggle('lp-mobile-panel-open', block);
+}
+
+let floatingPanelPointerSyncInstalled = false;
+
+/** 觸控模式：任何面板 display 變更都同步 canvas pointer-events（不只有 toggleWindow） */
+function installFloatingPanelPointerSyncForTouch() {
+    if (floatingPanelPointerSyncInstalled) return;
+    if (!document.body.classList.contains('lp-touch-mode')) return;
+    floatingPanelPointerSyncInstalled = true;
+    const observer = new MutationObserver(() => syncCanvasPointerBlockForMobilePanels());
+    ['toolbox-window', 'info-window'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    syncCanvasPointerBlockForMobilePanels();
+}
+
+function closeFloatingWindowForTouch(windowId) {
+    const win = document.getElementById(windowId);
+    if (!win) return;
+    const isHidden = (win.style.display === 'none') || (getComputedStyle(win).display === 'none');
+    if (isHidden) return;
+    const base = windowId.replace('-window', '');
+    const candidateBtnIds = [
+        `${base}-btn`,
+        `toggle-${base}-btn`,
+        `${base}-toggle-btn`,
+        `toggle-${base}`,
+    ];
+    let btn = null;
+    for (const id of candidateBtnIds) {
+        btn = document.getElementById(id);
+        if (btn) break;
+    }
+    win.style.display = 'none';
+    if (btn) btn.classList.remove('hidden');
 }
 
 function toggleWindow(windowId) {
@@ -3550,12 +3714,17 @@ function toggleWindow(windowId) {
 
     const isHidden = (win.style.display === 'none') || (getComputedStyle(win).display === 'none');
     if (isHidden) {
+        if (lpTouchUiMode) {
+            const siblingId = windowId === 'toolbox-window' ? 'info-window' : 'toolbox-window';
+            closeFloatingWindowForTouch(siblingId);
+        }
         win.style.display = 'flex';
         if (btn) btn.classList.add('hidden');
     } else {
         win.style.display = 'none';
         if (btn) btn.classList.remove('hidden');
     }
+    syncCanvasPointerBlockForMobilePanels();
 }
 
 function initDraggable(windowId) {
@@ -3855,8 +4024,8 @@ function cancelDrawing(silent = false) {
 }
 // [錯誤修正] 新增遺漏的 startCabDrag, startResize, toggleBgMode, updateBgScale 函式
 function startCabDrag(e, cab) {
-    if (e.button !== 0 || isBgEditMode || isDrawing) return;
-    e.stopPropagation();
+    if (!isPrimaryPointerButton(e) || isBgEditMode || isDrawing) return;
+    if (e.pointerType !== 'touch') e.stopPropagation();
     if (e.shiftKey) {
         toggleCabinetInSelection(cab.id);
         return;
@@ -3892,7 +4061,7 @@ function startCabDrag(e, cab) {
 }
 
 function startResize(id, e, direction = null) {
-    if (e.button !== 0) return;
+    if (!isPrimaryPointerButton(e)) return;
     e.stopPropagation();
     historyGesture.begin();
     isResizing = true;
@@ -3914,7 +4083,7 @@ function startResize(id, e, direction = null) {
 
 // [新增] 開始拖曳標註
 function startAnnotationDrag(e, anno, type) {
-    if (e.button !== 0) return;
+    if (!isPrimaryPointerButton(e)) return;
     e.stopPropagation();
     historyGesture.begin();
     isDraggingAnnotation = true;
@@ -4093,6 +4262,57 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+function snapshotBackgroundForHistory() {
+    const bgImg = document.getElementById('bg-img');
+    const src = bgImg?.src || '';
+    const hasDataBg = src.startsWith('data:image');
+    if (hasDataBg) layoutPlannerActiveBgDataUrl = src;
+    return {
+        position: { x: bgPosition.x, y: bgPosition.y },
+        scale: bgScale,
+        hasBackground: hasDataBg,
+    };
+}
+
+function resolveBackgroundDataUrlFromState(bg) {
+    if (bg?.src && String(bg.src).startsWith('data:image')) return bg.src;
+    if (bg?.hasBackground && layoutPlannerActiveBgDataUrl) return layoutPlannerActiveBgDataUrl;
+    return '';
+}
+
+function applyBackgroundFromHistoryState(bg) {
+    const bgImg = document.getElementById('bg-img');
+    const bgControls = document.getElementById('bg-controls');
+    if (!bgImg) return;
+    const dataUrl = resolveBackgroundDataUrlFromState(bg);
+    if (!dataUrl) {
+        bgImg.style.display = 'none';
+        bgImg.removeAttribute('src');
+        bgControls?.classList.add('opacity-50', 'pointer-events-none');
+        bgScale = bg?.scale ?? 1.0;
+        bgPosition = bg?.position ? { x: bg.position.x, y: bg.position.y } : { x: 0, y: 0 };
+        const scaleInput = document.getElementById('bg-scale');
+        const scaleNum = document.getElementById('bg-scale-num');
+        if (scaleInput) scaleInput.value = String(bgScale);
+        if (scaleNum) scaleNum.value = String(bgScale);
+        updateBgTransform();
+        return;
+    }
+    layoutPlannerActiveBgDataUrl = dataUrl;
+    bgPosition = bg.position
+        ? { x: bg.position.x, y: bg.position.y }
+        : { x: 0, y: 0 };
+    bgScale = bg.scale ?? 1.0;
+    bgImg.src = dataUrl;
+    bgImg.style.display = 'block';
+    bgControls?.classList.remove('opacity-50', 'pointer-events-none');
+    const scaleInput = document.getElementById('bg-scale');
+    const scaleNum = document.getElementById('bg-scale-num');
+    if (scaleInput) scaleInput.value = String(bgScale);
+    if (scaleNum) scaleNum.value = String(bgScale);
+    updateBgTransform();
+}
+
 function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
@@ -4106,14 +4326,10 @@ function commitSaveState() {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
         placedAnnotations: JSON.parse(JSON.stringify(placedAnnotations)), // [新增]
-        background: {
-            position: bgPosition,
-            scale: bgScale,
-            src: document.getElementById('bg-img').src
-        },
+        background: snapshotBackgroundForHistory(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides: quotationManualOverrides,
-        layerVisibility: layerVisibility
+        quotationManualOverrides: JSON.parse(JSON.stringify(quotationManualOverrides)),
+        layerVisibility: JSON.parse(JSON.stringify(layerVisibility)),
     };
 
     // 避免儲存與上一步完全相同的狀態
@@ -4142,6 +4358,14 @@ function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
+    quotationManualOverrides = state.quotationManualOverrides
+        ? JSON.parse(JSON.stringify(state.quotationManualOverrides))
+        : {};
+    layerVisibility = state.layerVisibility
+        ? JSON.parse(JSON.stringify(state.layerVisibility))
+        : {};
+
+    applyBackgroundFromHistoryState(state.background);
 
     const constructionAreaEl = document.getElementById('construction-area');
     if (constructionAreaEl) {
@@ -4151,7 +4375,11 @@ function loadState(state) {
     renderAllCabinets();
     renderAllDrawnAreas();
     renderAllAnnotations(); // [新增]
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
+    updateBgTransform();
     updateQuotation();
+    refreshBudgetModalIfOpen();
     deselectAll();
     deselectAllAreas();
     scheduleLp3dRebuild();
@@ -4198,6 +4426,7 @@ function closeLayoutPlanner3D() {
         toggleBtn.textContent = '🧊 3D 檢視';
         toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
     }
+    cancelScheduledLp3dRebuild();
     if (lp3dViewer) lp3dViewer.close();
 }
 
@@ -4233,13 +4462,18 @@ function initLayoutPlanner3D() {
                 viewer.rebuild();
             } catch (err) {
                 console.error('[LP 3D]', err);
+                const webglHint = lp3dViewer?.getUserHint?.()
+                    || document.getElementById('lp-3d-hint')?.textContent?.trim();
                 resetLp3dViewerAfterLoadFailure();
                 lp3dMode = false;
                 document.body.classList.remove('lp-3d-mode');
                 if (overlay) overlay.setAttribute('aria-hidden', 'true');
                 toggleBtn.textContent = '🧊 3D 檢視';
                 toggleBtn.title = '將牆體與櫃體以 3D 預覽（不影響 2D 編輯）';
-                showGlobalNotification('3D 模組載入失敗，平面編輯仍可使用', 6000, 'error');
+                const notifyMsg = (webglHint && /WebGL/i.test(webglHint))
+                    ? webglHint
+                    : '3D 模組載入失敗，平面編輯仍可使用';
+                showGlobalNotification(notifyMsg, 6000, 'error');
             } finally {
                 lp3dOpening = false;
                 toggleBtn.disabled = false;
@@ -4249,6 +4483,115 @@ function initLayoutPlanner3D() {
 
         closeLayoutPlanner3D();
     });
+}
+
+function requestDrawnAreasRender() {
+    if (!lpTouchUiMode) {
+        renderAllDrawnAreas();
+        return;
+    }
+    if (!renderDrawnAreasThrottle) {
+        renderDrawnAreasThrottle = createRafThrottle(() => renderAllDrawnAreas());
+    }
+    renderDrawnAreasThrottle();
+}
+
+function showMobileCabinetSheet() {
+    if (!lpTouchUiMode || !selectedCabId) return;
+    const sheet = document.getElementById('lp-mobile-cab-sheet');
+    const label = document.getElementById('lp-mobile-cab-sheet-label');
+    const cab = placedCabinets.find((c) => c.id === selectedCabId);
+    if (!sheet || !cab) return;
+    if (label) {
+        const name = cab.data?.name || cab.data?.title || '櫃體';
+        label.textContent = `${name} · ${Math.round(cab.currentW)}×${Math.round(cab.currentH)} cm`;
+    }
+    sheet.classList.remove('hidden');
+    sheet.setAttribute('aria-hidden', 'false');
+    const backdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (backdrop) {
+        backdrop.classList.remove('hidden');
+        backdrop.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function hideMobileCabinetSheet() {
+    const sheet = document.getElementById('lp-mobile-cab-sheet');
+    if (!sheet) return;
+    sheet.classList.add('hidden');
+    sheet.setAttribute('aria-hidden', 'true');
+    const backdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (backdrop) {
+        backdrop.classList.add('hidden');
+        backdrop.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function initLayoutPlannerTouchUi() {
+    lpTouchUiMode = detectLayoutPlannerTouchUi();
+    if (!lpTouchUiMode) return;
+
+    document.body.classList.add('lp-touch-mode');
+    applyUiLayoutMode('dock-tb-float-bi');
+
+    const mobileWarn = document.getElementById('mobile-warning');
+    if (mobileWarn) {
+        mobileWarn.classList.add('hidden');
+        mobileWarn.style.display = 'none';
+    }
+
+    const toolboxWin = document.getElementById('toolbox-window');
+    const infoWin = document.getElementById('info-window');
+    if (toolboxWin) toolboxWin.style.display = 'none';
+    if (infoWin) infoWin.style.display = 'none';
+    document.getElementById('toggle-toolbox-btn')?.classList.remove('hidden');
+    document.getElementById('toggle-info-btn')?.classList.remove('hidden');
+    installFloatingPanelPointerSyncForTouch();
+
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (wrapper) {
+        installCanvasPinchPan(wrapper, {
+            getScale: () => viewScale,
+            setScale: (n) => updateViewZoom(n),
+            getScroll: () => ({ left: wrapper.scrollLeft, top: wrapper.scrollTop }),
+            setScroll: (left, top) => {
+                wrapper.scrollLeft = left;
+                wrapper.scrollTop = top;
+            },
+        }, {
+            onPinchStart: () => {
+                if (isDraggingCab || isResizing || isDraggingVertex) endDrag();
+            },
+        });
+    }
+
+    const sheetBackdrop = document.getElementById('lp-mobile-cab-sheet-backdrop');
+    if (sheetBackdrop) {
+        sheetBackdrop.addEventListener('click', hideMobileCabinetSheet);
+    }
+    const sheetClose = document.getElementById('lp-mobile-cab-sheet-close');
+    if (sheetClose) sheetClose.addEventListener('click', hideMobileCabinetSheet);
+    const sheetRotate = document.getElementById('lp-mobile-cab-rotate-btn');
+    if (sheetRotate) {
+        sheetRotate.addEventListener('click', () => {
+            rotateSelectedCab();
+            hideMobileCabinetSheet();
+        });
+    }
+    const sheetDup = document.getElementById('lp-mobile-cab-duplicate-btn');
+    if (sheetDup) {
+        sheetDup.addEventListener('click', () => {
+            duplicateSelectedCab();
+            hideMobileCabinetSheet();
+        });
+    }
+    const sheetDel = document.getElementById('lp-mobile-cab-delete-btn');
+    if (sheetDel) {
+        sheetDel.addEventListener('click', () => {
+            deleteCabById(selectedCabId);
+            hideMobileCabinetSheet();
+        });
+    }
 }
 
 function bindGlobalPointerEndForDrag() {
@@ -4273,7 +4616,14 @@ function bindEventListeners() {
     initLayoutPlanner3D();
     // 全域事件（含視窗外放開，避免 undo 手勢卡住）
     bindGlobalPointerEndForDrag();
-    document.addEventListener('mousemove', handleGlobalMove);
+    document.addEventListener('mousemove', (e) => {
+        if (lpTouchUiMode) return;
+        handleGlobalMove(e);
+    });
+    document.addEventListener('pointermove', (e) => {
+        if (!lpTouchUiMode && e.pointerType === 'mouse') return;
+        handleGlobalMove(e);
+    });
     document.addEventListener('keydown', handleKeyDown);
     document.body.addEventListener('click', handleGlobalClick);
 
@@ -4298,6 +4648,8 @@ function bindEventListeners() {
             // 在底圖模式下，點擊畫布任何地方都可以拖曳底圖 (更直覺)
             e.preventDefault();
             e.stopPropagation();
+            canvas.focus({ preventScroll: true });
+            historyGesture.begin();
             isDraggingBg = true;
             bgDragStart = { x: e.clientX, y: e.clientY };
             bgStartPos = { x: bgPosition.x, y: bgPosition.y };
@@ -4420,7 +4772,18 @@ function bindEventListeners() {
         budgetTableBody.addEventListener('input', (e) => {
             const el = e.target;
             if (!el.classList.contains('budget-edit-input')) return;
-            onBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+            applyBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            el.dataset.lpCommitBaseline = el.value;
+        });
+        budgetTableBody.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            if (el.dataset.lpCommitBaseline !== undefined && el.dataset.lpCommitBaseline === el.value) return;
+            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
         budgetTableBody.addEventListener('click', (e) => {
             const btn = e.target.closest('.budget-hide-row-btn');
@@ -4749,7 +5112,8 @@ function loadLayoutFromData(layoutData, options = {}) {
         bgScale = layoutData.background.scale || 1.0;
         const bgImg = document.getElementById('bg-img');
         if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
-            bgImg.src = layoutData.background.src;
+            layoutPlannerActiveBgDataUrl = layoutData.background.src;
+            bgImg.src = layoutPlannerActiveBgDataUrl;
             bgImg.style.display = 'block';
             document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
         }
@@ -4965,31 +5329,37 @@ function centerView() {
 
 // 應用程式進入點
 window.onload = () => {
-    // 【核心修正】修正手機裝置偵測邏輯。
-    // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
-    // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
-    // 從而避免因 iframe 寬度造成的誤判。
-    const isMobile = /Mobi/i.test(navigator.userAgent);
-    if (isMobile) {
-        // 如果是手機，則顯示提示訊息並停止後續所有程式碼的執行
-        document.getElementById('mobile-warning').style.display = 'flex';
-        // 隱藏所有其他介面元素
-        document.querySelectorAll('body > *:not(#mobile-warning)').forEach(el => el.style.display = 'none');
-        return; // 終止執行
-    }
-
-    // 只有在電腦版才會執行以下程式碼
     if (isLayoutPlannerUrlPreview()) {
         document.documentElement.classList.add('lp-url-preview');
     }
     bindEventListeners();
+    window.__LP_TEST_HOOKS__ = {
+        ...(window.__LP_TEST_HOOKS__ || {}),
+        getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
+        historyBackgroundSnapshots: () => history.map((h) => h.background),
+        forceCabinetSelection: (ids) => {
+            if (!Array.isArray(ids) || ids.length === 0) return;
+            setCabinetSelection(ids, ids[ids.length - 1]);
+        },
+        setCabinetPricing: (id, unitPrice, pricingType) => {
+            const cab = placedCabinets.find((c) => c.id === id);
+            if (!cab) return false;
+            cab.data.unitPrice = unitPrice;
+            cab.data.pricingType = pricingType;
+            updateQuotation();
+            return true;
+        },
+    };
     initWorkspaceAndUiFromStorage();
+    initLayoutPlannerTouchUi();
 
-    // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕
-    document.getElementById('toolbox-window').style.display = 'flex';
-    document.getElementById('info-window').style.display = 'flex';
-    document.getElementById('toggle-toolbox-btn').classList.add('hidden');
-    document.getElementById('toggle-info-btn').classList.add('hidden');
+    // [修改] 初始化視窗狀態：桌面預設打開工具箱和預算；觸控模式由 initLayoutPlannerTouchUi 收合
+    if (!lpTouchUiMode) {
+        document.getElementById('toolbox-window').style.display = 'flex';
+        document.getElementById('info-window').style.display = 'flex';
+        document.getElementById('toggle-toolbox-btn').classList.add('hidden');
+        document.getElementById('toggle-info-btn').classList.add('hidden');
+    }
 
     loadFromSheets();
     switchTab('settings'); // 預設顯示設定頁籤
