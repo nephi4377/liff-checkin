@@ -1,6 +1,29 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 
+/** TINA r6：真點擊／tap，驗證 hit-test 與 44px 觸控目標 */
+async function expectMobilePanelCloseWorks(page, closeSelector) {
+  const btn = page.locator(closeSelector);
+  await expect(btn).toBeVisible();
+  const box = await btn.boundingBox();
+  expect(box, `${closeSelector} boundingBox`).toBeTruthy();
+  expect(box.width, `${closeSelector} width`).toBeGreaterThanOrEqual(44);
+  expect(box.height, `${closeSelector} height`).toBeGreaterThanOrEqual(44);
+
+  const hitOk = await page.evaluate((sel) => {
+    const el = document.querySelector(sel);
+    if (!el) return false;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const top = document.elementFromPoint(cx, cy);
+    return top === el || el.contains(top);
+  }, closeSelector);
+  expect(hitOk, `elementFromPoint 應命中 ${closeSelector}`).toBe(true);
+
+  await btn.click();
+}
+
 test.describe('LayoutPlanner mobile / tablet', () => {
   test('?lpMobile=1：啟用觸控 UI、不顯示舊版全螢幕阻擋', async ({ page }) => {
     const errors = [];
@@ -35,13 +58,15 @@ test.describe('LayoutPlanner mobile / tablet', () => {
 
     await page.locator('#toggle-toolbox-btn').click();
     await expect(page.locator('#toolbox-window')).toBeVisible();
-    // Playwright 指標點擊常被大畫布 hit-test 擋住；dispatchEvent 驗證關閉邏輯（真機靠 lp-mobile-panel-open 放行標題列）
-    await page.locator('#toggle-toolbox-btn-header').dispatchEvent('click');
+    await expect(page.locator('body')).toHaveClass(/lp-mobile-panel-open/);
+    await expectMobilePanelCloseWorks(page, '#toggle-toolbox-btn-header');
     await expect(page.locator('#toolbox-window')).toBeHidden();
+    await expect(page.locator('body')).not.toHaveClass(/lp-mobile-panel-open/);
 
     await page.locator('#toggle-info-btn').click();
     await expect(page.locator('#info-window')).toBeVisible();
-    await page.locator('#toggle-info-btn-header').dispatchEvent('click');
+    await expect(page.locator('body')).toHaveClass(/lp-mobile-panel-open/);
+    await expectMobilePanelCloseWorks(page, '#toggle-info-btn-header');
     await expect(page.locator('#info-window')).toBeHidden();
   });
 

@@ -603,6 +603,21 @@
             pointer-events: none !important;
         }
 
+        body.lp-touch-mode.lp-mobile-panel-open #left-rail,
+        body.lp-touch-mode.lp-mobile-panel-open #right-rail {
+            z-index: 6000 !important;
+            pointer-events: none;
+        }
+
+        body.lp-touch-mode.lp-mobile-panel-open #toolbox-window,
+        body.lp-touch-mode.lp-mobile-panel-open #info-window {
+            pointer-events: auto !important;
+        }
+
+        body.lp-touch-mode.lp-mobile-panel-open #canvas-wrapper {
+            z-index: 0;
+        }
+
         body.lp-touch-mode #canvas-wrapper {
             touch-action: none;
             padding: 12px;
@@ -702,28 +717,46 @@
                 pointer-events: none;
             }
 
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #left-rail #toolbox-window,
             body.lp-touch-mode.lp-ui-dock-tb-float-bi #toolbox-window {
                 position: fixed !important;
                 left: 8px !important;
                 right: 8px !important;
                 bottom: 64px !important;
                 top: auto !important;
-                width: auto !important;
+                width: calc(100vw - 16px) !important;
+                min-width: calc(100vw - 16px) !important;
+                max-width: calc(100vw - 16px) !important;
                 max-height: min(72vh, 560px);
                 z-index: 5000;
                 pointer-events: auto;
+                display: flex;
+                flex-direction: column;
             }
 
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #right-rail #info-window,
             body.lp-touch-mode.lp-ui-dock-tb-float-bi #info-window {
                 position: fixed !important;
                 left: 8px !important;
                 right: 8px !important;
                 bottom: 64px !important;
                 top: auto !important;
-                width: auto !important;
+                width: calc(100vw - 16px) !important;
+                min-width: calc(100vw - 16px) !important;
+                max-width: calc(100vw - 16px) !important;
                 max-height: min(72vh, 560px);
                 z-index: 5000;
                 pointer-events: auto;
+                display: flex;
+                flex-direction: column;
+            }
+
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #toolbox-window .window-content,
+            body.lp-touch-mode.lp-ui-dock-tb-float-bi #info-window .window-content {
+                flex: 1 1 auto;
+                min-height: 0;
+                max-height: none;
+                overflow-y: auto;
             }
 
             body.lp-touch-mode.lp-ui-dock-tb-float-bi #toolbox-window .window-header button,

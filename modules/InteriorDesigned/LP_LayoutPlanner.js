@@ -2827,6 +2827,7 @@ function applyUiLayoutMode(mode) {
         try {
             centerView();
         } catch (_) { /* ignore */ }
+        syncCanvasPointerBlockForMobilePanels();
     }, 40);
 }
 
@@ -3642,6 +3643,7 @@ function switchTab(tabName) {
         componentsBtn.classList.add('active');
         componentsContent.classList.remove('hidden');
     }
+    syncCanvasPointerBlockForMobilePanels();
 }
 
 function syncCanvasPointerBlockForMobilePanels() {
@@ -3650,6 +3652,21 @@ function syncCanvasPointerBlockForMobilePanels() {
     const infoOpen = getComputedStyle(document.getElementById('info-window')).display !== 'none';
     const block = toolboxOpen || infoOpen;
     document.body.classList.toggle('lp-mobile-panel-open', block);
+}
+
+let floatingPanelPointerSyncInstalled = false;
+
+/** 觸控模式：任何面板 display 變更都同步 canvas pointer-events（不只有 toggleWindow） */
+function installFloatingPanelPointerSyncForTouch() {
+    if (floatingPanelPointerSyncInstalled) return;
+    if (!document.body.classList.contains('lp-touch-mode')) return;
+    floatingPanelPointerSyncInstalled = true;
+    const observer = new MutationObserver(() => syncCanvasPointerBlockForMobilePanels());
+    ['toolbox-window', 'info-window'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) observer.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    syncCanvasPointerBlockForMobilePanels();
 }
 
 function toggleWindow(windowId) {
@@ -4504,6 +4521,7 @@ function initLayoutPlannerTouchUi() {
     if (infoWin) infoWin.style.display = 'none';
     document.getElementById('toggle-toolbox-btn')?.classList.remove('hidden');
     document.getElementById('toggle-info-btn')?.classList.remove('hidden');
+    installFloatingPanelPointerSyncForTouch();
 
     const wrapper = document.getElementById('canvas-wrapper');
     if (wrapper) {
