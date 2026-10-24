@@ -2612,6 +2612,7 @@ function applyLayoutBackground(bg) {
     }
     if (bgLayer) {
         bgLayer.classList.toggle('bg-underlay-hidden', bgHidden);
+        bgLayer.setAttribute('aria-hidden', bgHidden ? 'true' : 'false');
     }
     syncUnderlayControlInputs();
     updateBgScale(bgScale);
@@ -4335,6 +4336,7 @@ function updateBgTransform() {
     }
     if (bgLayer) {
         bgLayer.classList.toggle('bg-underlay-hidden', bgHidden);
+        bgLayer.setAttribute('aria-hidden', bgHidden ? 'true' : 'false');
     }
 }
 
@@ -5410,7 +5412,7 @@ function centerView() {
 }
 
 // 應用程式進入點
-window.onload = () => {
+function bootLayoutPlannerApp() {
     // 【核心修正】修正手機裝置偵測邏輯。
     // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
     // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
@@ -5455,6 +5457,8 @@ window.onload = () => {
             updateQuotation();
             return true;
         },
+        backgroundForClientZipExport: (bg) => backgroundForClientZipExport(bg ?? getSerializedBackground()),
+        isLpPreviewMode: () => isLayoutPlannerUrlPreview(),
     };
     initWorkspaceAndUiFromStorage();
 
@@ -5475,7 +5479,13 @@ window.onload = () => {
     setTimeout(centerView, 100);
 
     maybeInitLayoutPlannerUrlPreview();
-};
+}
+
+if (document.readyState === 'complete') {
+    bootLayoutPlannerApp();
+} else {
+    window.addEventListener('load', bootLayoutPlannerApp, { once: true });
+}
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)
 function updateSelectedPriceDisplay(id) {
