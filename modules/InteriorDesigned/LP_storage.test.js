@@ -18,6 +18,8 @@ import {
     LayoutPlannerStorageError,
     runStorageWrite,
     readStorageIndex,
+    readLegacyAutosaveRaw,
+    isIndexedDBAvailable,
 } from './LP_storage.js';
 
 const TINY_PNG =
@@ -88,7 +90,7 @@ describe('IndexedDB session', () => {
 });
 
 describe('legacy migration', () => {
-    it('成功搬移後清除舊 key', async () => {
+    it('成功搬移後保留舊 localStorage key（只讀遷移）', async () => {
         const legacy = {
             version: '2.0',
             timestamp: Date.now(),
@@ -96,14 +98,22 @@ describe('legacy migration', () => {
             drawnAreas: [],
             background: { src: TINY_PNG, scale: 1, position: { x: 0, y: 0 } },
         };
-        localStorage.setItem(LP_LEGACY_AUTOSAVE_KEY, JSON.stringify(legacy));
+        const raw = JSON.stringify(legacy);
+        localStorage.setItem(LP_LEGACY_AUTOSAVE_KEY, raw);
         const result = await tryMigrateFromLegacyLocalStorage();
         expect(result.migrated).toBe(true);
-        expect(localStorage.getItem(LP_LEGACY_AUTOSAVE_KEY)).toBeNull();
+        expect(readLegacyAutosaveRaw()).toBe(raw);
         const idx = readStorageIndex();
         expect(idx.migratedFromLegacy).toBe(true);
+        expect(idx.legacyKeyPreserved).toBe(true);
         const session = await loadLayoutSession();
         expect(session?.layout.placedCabinets.length).toBe(1);
+    });
+});
+
+describe('isIndexedDBAvailable', () => {
+    it('jsdom 環境應可用', () => {
+        expect(isIndexedDBAvailable()).toBe(true);
     });
 });
 

@@ -2,7 +2,7 @@
 
 ## 目的
 
-避免 `localStorage` 容量上限導致大底圖（data URL）或多份 undo history 無法寫入或損壞。平面配置與底圖改存 **IndexedDB**；`localStorage` 僅保留輕量索引。
+避免 `localStorage` 容量上限導致大底圖（data URL）或多份 undo history 無法寫入或損壞。平面配置與底圖改存 **IndexedDB**；`localStorage` 僅保留**小型索引**（`layoutPlanner_storage_index_v1`）。
 
 ## 資料庫
 
@@ -12,50 +12,61 @@
 | 版本 | `1` |
 | Object stores | `blobs`（key = blobId）、`sessions`（key = `default`） |
 
-## localStorage 索引
+## localStorage
 
-- Key：`layoutPlanner_storage_index_v1`
-- 欄位：`idbReady`、`migratedFromLegacy`、`lastSavedAt`、`lastError`
+| Key | 用途 |
+|-----|------|
+| `layoutPlanner_storage_index_v1` | `idbReady`、`migratedFromLegacy`、`lastSavedAt`、`lastError`、`lastErrorCode`、`legacyKeyPreserved` |
+| `layoutPlanner_autosave_v1` | **Legacy** 舊自動備份；遷移時**只讀複製到 IDB，不刪除** |
 
 ## 佈局版本
 
-- 自動備份／IndexedDB session：`version` **3.0**
-- 手動「儲存佈局 (.json)」：仍為 **2.0**（相容舊流程）
-- 專案檔：**3.0**，`format` = `layout-planner-project-1`
+| 用途 | version / format |
+|------|------------------|
+| IndexedDB session | `3.0` |
+| 手動「儲存佈局 (.json)」 | `2.0`（相容舊流程） |
+| **專案檔**（完整備份，含底圖） | `3.0`，`format` = `layout-planner-project-1` |
+| 客戶 **ZIP** 內佈局 JSON | `2.0`，**不含**底圖 data URL（`hasUnderlay` 旗標） |
 
-## 底圖
+## 底圖與 undo history
 
 - 畫面上仍用 `<img src="data:...">`。
-- 持久化時：底圖像素存 **Blob**（`blobs` store），`background` 只留 `blobId`、`position`、`scale`、`rotationDeg`、`opacity`、`locked`、`hidden`。
-- Undo history 寫入 IDB 前會經 `collectHistoryForIndexedDb` 去重並轉成 blob 參照。
+- **記憶體中** undo 堆疊與 #218/#222 一致：`background.src` 字串參照；`commitSaveState` 去重為 `src ===`、其餘欄位 `JSON.stringify`。
+- **寫入 IndexedDB** 前：`collectHistoryForIndexedDb` 將底圖像素存 Blob，history 只留 `blobId`；載入時 `hydrateHistoryEntries` 還原 `src` 供 undo/redo。
 
-## 搬移（legacy）
+## 搬移（legacy localStorage）
 
-1. 首次啟動讀 `layoutPlanner_autosave_v1`（舊 autosave）。
-2. 解析成功 → 底圖入 Blob、layout 入 `sessions` → **成功後**才 `removeItem` 舊 key。
-3. 失敗：保留舊 key、`lastError` 寫入索引，並以通知提示；可選擇仍從 legacy 還原。
-
-## 專案檔匯出／匯入
-
-- 單一 `.json`，`buildProjectFileExport` / `validateProjectFile`。
-- 匯入前驗證 `format`、`version`（3.x）、`layout.placedCabinets` / `drawnAreas` 陣列。
-- 匯入後寫入 IndexedDB 並更新 blob。
+1. 首次啟動讀 `layoutPlanner_autosave_v1`。
+2. 解析成功 → 寫入 IndexedDB → 標記 `migratedFromLegacy`；**不** `removeItem` 舊 key。
+3. 失敗：保留舊 key、寫入 `lastError`；僅在搬移失敗且 24h 內有內容時，可選擇從 legacy 還原（避免與 IDB 成功還原重複提示）。
 
 ## 錯誤處理
 
-- `runStorageWrite`：將 `QuotaExceededError` 等轉為 `LayoutPlannerStorageError`，UI 以 `showGlobalNotification` 顯示，不靜默丟資料。
+| 情況 | 行為 |
+|------|------|
+| IndexedDB 不可用 | 通知停用自動備份；索引 `IDB_UNAVAILABLE`；**不**假裝有 IDB 還原 |
+| QuotaExceeded / 寫入失敗 | `notifyStorageError` + 索引 `lastError`；提示匯出專案檔 |
+| `?lpPreview=1` | 不寫 IDB、不搬移、不還原提示 |
+
+## 專案檔 vs ZIP
+
+- **匯出專案檔**：單一 JSON，內嵌底圖 data URL，供設計師完整備份。
+- **下載設計 ZIP**：PNG + 佈局 JSON（無底圖 data URL）+ CSV，給客戶／郵件流程。
 
 ## 測試
 
-- Vitest：`modules/InteriorDesigned/LP_storage.test.js`（`fake-indexeddb`）
-- Playwright：`e2e/LP_storage.spec.cjs`
+- Vitest：`LP_storage.test.js`（`fake-indexeddb`）
+- Playwright：`e2e/LP_storage.spec.cjs`（含手機 viewport）
 
-## 限制
+## 限制與未做項
 
-- 仍受瀏覽器 **IndexedDB／磁碟** 總容量限制；極大案場請定期匯出專案檔。
-- `?lpPreview=1` 測試預覽不寫入 IndexedDB／不跑搬移與還原提示。
+| 項目 | 理由 |
+|------|------|
+| 多專案／多案件分庫 | 本階段單一 `default` session；多案請用專案檔分檔 |
+| 自動清理舊 Blob | 未實作 LRU；history 上限仍受 `MAX_HISTORY_STATES` 與瀏覽器磁碟限制 |
+| 刪除 legacy localStorage key | 依需求**刻意保留**，方便人工比對與救援 |
+| 雲端同步 | 不在本任務範圍 |
 
-## 與其他 PR
+## 分支
 
-- 本任務分支：`cursor/lp-storage-1-576d`，建議 base：`cursor/floorplan-underlay-1-576d`（#222）。
-- main 與本任務開發時點：**尚未**另有 IndexedDB 實作；若後續 main 合入類似功能，以本文件與 `LP_storage.js` 為準對齊。
+- 實作：`cursor/lp-storage-1-576d`，base：`cursor/floorplan-underlay-1-576d`（#222）。

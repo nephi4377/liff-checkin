@@ -64,9 +64,21 @@ export function writeStorageIndex(patch) {
     return next;
 }
 
+export function isIndexedDBAvailable() {
+    return typeof indexedDB !== 'undefined';
+}
+
+export function readLegacyAutosaveRaw() {
+    try {
+        return localStorage.getItem(LP_LEGACY_AUTOSAVE_KEY);
+    } catch {
+        return null;
+    }
+}
+
 function openDatabase() {
-    if (typeof indexedDB === 'undefined') {
-        return Promise.reject(new Error('此環境不支援 IndexedDB'));
+    if (!isIndexedDBAvailable()) {
+        return Promise.reject(new LayoutPlannerStorageError('此環境不支援 IndexedDB，請改用匯出專案檔備份。', 'IDB_UNAVAILABLE'));
     }
     return new Promise((resolve, reject) => {
         const req = indexedDB.open(LP_DB_NAME, LP_DB_VERSION);
@@ -324,11 +336,16 @@ export async function migrateLegacyLocalStorageAutosave(legacyLayout) {
             background: backgroundRef,
         };
         await saveLayoutSession(layout, { history: [], historyIndex: 0, blobs });
-        localStorage.removeItem(LP_LEGACY_AUTOSAVE_KEY);
-        writeStorageIndex({ migratedFromLegacy: true, idbReady: true });
+        writeStorageIndex({
+            migratedFromLegacy: true,
+            idbReady: true,
+            legacyKeyPreserved: true,
+            legacyMigratedAt: Date.now(),
+        });
         return { ok: true };
     } catch (err) {
-        writeStorageIndex({ lastError: String(err?.message || err) });
+        const code = err instanceof LayoutPlannerStorageError ? err.code : 'MIGRATE_FAILED';
+        writeStorageIndex({ idbReady: false, lastError: String(err?.message || err), lastErrorCode: code });
         return { ok: false, error: String(err?.message || err) };
     }
 }
@@ -409,10 +426,15 @@ export async function runStorageWrite(fn) {
     try {
         await fn();
     } catch (err) {
+        if (err instanceof LayoutPlannerStorageError) throw err;
         const name = err?.name || '';
         if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
             throw new LayoutPlannerStorageError('本機儲存空間不足，請匯出專案檔備份後清理瀏覽器資料。', 'QUOTA_EXCEEDED');
         }
-        throw new LayoutPlannerStorageError(err?.message || '儲存失敗', 'WRITE_FAILED');
+        const msg = String(err?.message || err);
+        if (msg.includes('IndexedDB') || name === 'InvalidStateError' || name === 'UnknownError') {
+            throw new LayoutPlannerStorageError('IndexedDB 無法寫入，請匯出專案檔備份。', 'IDB_WRITE_FAILED');
+        }
+        throw new LayoutPlannerStorageError(msg || '儲存失敗', 'WRITE_FAILED');
     }
 }

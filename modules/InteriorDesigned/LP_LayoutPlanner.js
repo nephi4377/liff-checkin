@@ -41,9 +41,12 @@ import {
     LP_LAYOUT_VERSION,
     LP_LEGACY_AUTOSAVE_KEY,
     readStorageIndex,
+    writeStorageIndex,
     saveLayoutSession,
     loadLayoutSession,
     tryMigrateFromLegacyLocalStorage,
+    isIndexedDBAvailable,
+    readLegacyAutosaveRaw,
     validateProjectFile,
     buildProjectFileExport,
     hydrateHistoryEntries,
@@ -5042,6 +5045,24 @@ async function prepareLayoutBackgroundForIdb(bg) {
 
 async function flushPersistToIndexedDB(silent = true) {
     if (isLayoutPlannerUrlPreview()) return;
+    if (!isIndexedDBAvailable()) {
+        if (!silent) {
+            notifyStorageError(new LayoutPlannerStorageError('此環境不支援 IndexedDB。', 'IDB_UNAVAILABLE'));
+        }
+        writeStorageIndex({ idbReady: false, lastError: 'IDB_UNAVAILABLE' });
+        return;
+    }
+    const forced = window.__LP_TEST_HOOKS__?.consumeForcedStorageError?.();
+    if (forced) {
+        notifyStorageError(new LayoutPlannerStorageError(
+            forced === 'QUOTA_EXCEEDED'
+                ? '本機儲存空間不足，請匯出專案檔備份後清理瀏覽器資料。'
+                : 'IndexedDB 寫入失敗。',
+            forced,
+        ));
+        writeStorageIndex({ idbReady: false, lastError: forced });
+        return;
+    }
     if (lpPersistInFlight) {
         await lpPersistInFlight;
         return;
@@ -5063,6 +5084,8 @@ async function flushPersistToIndexedDB(silent = true) {
         } catch (err) {
             console.error('IndexedDB 自動備份失敗:', err);
             notifyStorageError(err);
+            const code = err instanceof LayoutPlannerStorageError ? err.code : 'WRITE_FAILED';
+            writeStorageIndex({ idbReady: false, lastError: String(err?.message || err), lastErrorCode: code });
         } finally {
             lpPersistInFlight = null;
         }
@@ -5108,6 +5131,16 @@ async function applyIndexedDbSession(session) {
 async function initLayoutPlannerPersistence() {
     if (isLayoutPlannerUrlPreview()) return false;
 
+    if (!isIndexedDBAvailable()) {
+        showGlobalNotification(
+            '此瀏覽器無法使用 IndexedDB，自動備份已停用；請用「匯出專案檔」保存進度。',
+            9000,
+            'warning',
+        );
+        writeStorageIndex({ idbReady: false, lastError: 'IDB_UNAVAILABLE' });
+        return false;
+    }
+
     const mig = await tryMigrateFromLegacyLocalStorage();
     if (mig.migrated) {
         showGlobalNotification('已將舊版 localStorage 自動備份搬移至 IndexedDB', 4500, 'success');
@@ -5119,8 +5152,8 @@ async function initLayoutPlannerPersistence() {
         );
     }
 
-    const legacyRaw = localStorage.getItem(LP_LEGACY_AUTOSAVE_KEY);
-    if (legacyRaw && !mig.migrated && mig.error) {
+    const legacyRaw = readLegacyAutosaveRaw();
+    if (legacyRaw && mig.error && !readStorageIndex().migratedFromLegacy) {
         try {
             const data = JSON.parse(legacyRaw);
             const ts = data.timestamp || 0;
@@ -5464,6 +5497,15 @@ window.onload = async () => {
         loadLayoutSession: () => loadLayoutSession(),
         buildProjectFileExport: (layout) => buildProjectFileExport(layout),
         validateProjectFile: (data) => validateProjectFile(data),
+        readLegacyAutosaveRaw: () => readLegacyAutosaveRaw(),
+        forceNextStorageError: (code) => {
+            window.__LP_TEST_HOOKS__._forcedStorageError = code || 'QUOTA_EXCEEDED';
+        },
+        consumeForcedStorageError: () => {
+            const c = window.__LP_TEST_HOOKS__._forcedStorageError;
+            window.__LP_TEST_HOOKS__._forcedStorageError = null;
+            return c;
+        },
     };
     initWorkspaceAndUiFromStorage();
 
