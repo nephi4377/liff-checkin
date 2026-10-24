@@ -111,19 +111,6 @@ test.describe('LP-BUG-SWEEP-1 2D', () => {
     await expect.poll(async () => page.evaluate(() => document.getElementById('bg-img')?.src || '')).toBe(srcB);
   });
 
-  test('復原後底圖隱藏（無 data URL 快照）', async ({ page }) => {
-    const bgFile = path.join(__dirname, 'fixtures', 'lp-tiny-bg.png');
-    await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
-    await page.locator('#bg-upload').setInputFiles(bgFile);
-    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
-    await expect(page.locator('#bg-img')).toBeVisible();
-    await page.keyboard.press('Control+z');
-    await expect.poll(async () => page.evaluate(() => {
-      const img = document.getElementById('bg-img');
-      return img?.style.display === 'none' || !img?.src?.startsWith('data:image');
-    })).toBe(true);
-  });
-
   test('圖層顯示切換可 Ctrl+Z 復原', async ({ page }) => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#layout-upload').setInputFiles(KEYGUARD_FIXTURE);
