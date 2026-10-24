@@ -6,11 +6,12 @@ var fs = require('fs');
 var path = require('path');
 var assert = require('assert');
 
+var cacheBust = require('./test-cache-bust-helper');
 var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=106') >= 0, 'cache bust v=106');
+cacheBust.assertNumericCacheBust(html, cacheBust.RE.accountingApi, 'ledger_history accounting_api.js cache bust', 106);
 assert(html.indexOf('HISTORY_READ_ONLY = true') >= 0, 'HISTORY_READ_ONLY');
 assert(html.indexOf('data-role="list-flag"') < 0, 'list flag button removed from markup');
 assert(html.indexOf('每一列可按「錯誤記帳標示」') < 0, 'no per-row flag CTA copy');

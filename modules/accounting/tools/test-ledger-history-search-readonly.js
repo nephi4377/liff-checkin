@@ -5,11 +5,12 @@ var fs = require('fs');
 var path = require('path');
 var assert = require('assert');
 
+var cacheBust = require('./test-cache-bust-helper');
 var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=106') >= 0, 'cache bust v=106');
+cacheBust.assertNumericCacheBust(html, cacheBust.RE.accountingApi, 'ledger_history accounting_api.js cache bust', 106);
 assert(html.indexOf('HISTORY_READ_ONLY = true') >= 0, 'read-only flag');
 assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
 assert(html.indexOf('廠商名／金額') >= 0 || html.indexOf('廠商／金額') >= 0, 'vendor/amount copy');
