@@ -4,10 +4,20 @@
     "test:layout-planner": "npm test --prefix modules/InteriorDesigned",
     "test:layout-planner:unit": "npm run test:unit --prefix modules/InteriorDesigned",
     "test:layout-planner:e2e": "npm run test:e2e --prefix modules/InteriorDesigned",
-    "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh"
+    "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh",
+    "test:rtdb-auth-merge": "vitest run",
+    "test:rtdb-rules": "firebase emulators:exec --config firebase/emulator.firebase.json --only database,auth --project demo-tanxin-rtdb-rules \"node firebase/rtdb-rules.quotations.test.mjs\"",
+    "test:rtdb-rules-legacy": "firebase emulators:exec --config firebase/emulator.firebase.json --only database,auth --project demo-tanxin-legacy \"node firebase/rtdb-rules.legacy-compat.test.mjs\"",
+    "test:budget-web-e2e": "playwright test -c playwright.config.cjs"
   },
   "dependencies": {
-    "firebase": "^12.10.0",
+    "firebase": "^11.10.0",
     "playwright": "^1.60.0"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^4.0.1",
+    "@playwright/test": "^1.64.1",
+    "firebase-tools": "^14.0.0",
+    "vitest": "^3.0.5"
   }
 }

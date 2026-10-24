@@ -1647,6 +1647,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+<script src="../shared/js/firebase-rtdb-public-config.js"></script>
+<script src="../shared/js/firebase-rtdb-auth-compat.js"></script>
 
 <script>
     /* ============================================================
@@ -1687,43 +1689,14 @@
     /* ============================================================
        FIREBASE CONFIG
        ============================================================ */
-    const FB_CONFIG_DEFAULT = {
-        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
-        gasURL: "https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec",
-        apiKey: "", authDomain: "", projectId: ""
-    };
-    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
+    const _tanxinFb = TanxinFirebaseRtdb.init({
+        databaseURL: 'https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app',
+        gasURL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec',
+    });
+    let fbConfig = _tanxinFb.config;
+    const db = _tanxinFb.db;
 
-    function firebaseAuthConfigured() {
-        return !!(
-            (fbConfig.apiKey    || '').trim() &&
-            (fbConfig.authDomain || '').trim() &&
-            (fbConfig.projectId  || '').trim()
-        );
-    }
-
-    function buildFirebaseInitOptions() {
-        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
-        if (firebaseAuthConfigured()) {
-            o.apiKey     = fbConfig.apiKey.trim();
-            o.authDomain = fbConfig.authDomain.trim();
-            o.projectId  = fbConfig.projectId.trim();
-        }
-        return o;
-    }
-
-    function tryAnonymousSignIn() {
-        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
-        firebase.auth().signInAnonymously().catch(e => console.warn('[Auth] 匿名登入失敗:', e.message));
-    }
-
-    if (!firebase.apps.length) {
-        firebase.initializeApp(buildFirebaseInitOptions());
-        tryAnonymousSignIn();
-    }
-    const db = firebase.database();
-
-    /* 雲端位址以程式內 FB_CONFIG_DEFAULT 為預設，並可經由 localStorage「fb_audit_config」覆寫（同 BudgetWeb_Standalone）。 */
+    /* 雲端位址以程式內預設為準，並可經由 localStorage「fb_audit_config」覆寫（同 BudgetWeb_Standalone）。 */
 
     /* ============================================================
        PERMISSION HELPERS  [v2.1]
@@ -1934,6 +1907,7 @@
 
         try {
             await reconcileClosedProjectsFromSheet();
+            await TanxinFirebaseRtdb.ensureAuth();
             const snap     = await db.ref('quotations').once('value');
             if (!still()) return;
             const projects = snap.val() || {};
@@ -2102,7 +2076,7 @@
     async function ensureClosureSyncedFromAuthority() {
         if (!appData?.is_closed || !appData.案號) return;
         try {
-            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            await TanxinFirebaseRtdb.ensureAuth();
             const snap = await firebase.database().ref(`quotations/${appData.案號}`).once('value');
             const data = snap.val();
             if (data?.is_closed || data?.context?.is_closed) return;
@@ -2182,7 +2156,7 @@
         }
 
         try {
-            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            await TanxinFirebaseRtdb.ensureAuth();
             const snap = await firebase.database().ref(`quotations/${projectNo}`).once('value');
             if (!stillThisLoad()) return;
             const data = snap.val();
@@ -2236,6 +2210,7 @@
                     document.getElementById('h-project-name').innerText = displayName;
                     if (appData?.total_summary) appData.total_summary.siteName = displayName;
                     try {
+                        await TanxinFirebaseRtdb.ensureAuth();
                         const refPath = `quotations/${projectNo}`;
                         const sv = (await firebase.database().ref(refPath).once('value')).val();
                         if (sv?.context) await firebase.database().ref(`${refPath}/context/total_summary/siteName`).set(displayName);
@@ -2252,7 +2227,7 @@
         if (!appData) return;
         if (!fbConfig.databaseURL) { showToast('未設定 Database URL，無法連線雲端。', 'warning'); return; }
         try {
-            if (!firebase.apps.length) { firebase.initializeApp(buildFirebaseInitOptions()); tryAnonymousSignIn(); }
+            await TanxinFirebaseRtdb.ensureAuth();
             const db2       = firebase.database();
             const projectNo = appData.案號 || 'UNKNOWN';
             refreshOverall();
