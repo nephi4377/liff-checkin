@@ -55,6 +55,7 @@ import {
     collectHistoryForIndexedDb,
     persistBackgroundDataUrl,
     stripBackgroundForPersist,
+    backgroundBlobExists,
     LayoutPlannerStorageError,
     runStorageWrite,
 } from './LP_storage.js';
@@ -2613,6 +2614,11 @@ function setUnderlayChromeEnabled(enabled) {
 
 function applyLayoutBackground(bg) {
     const norm = normalizeLayoutBackground(bg);
+    if (bg?.blobId) {
+        currentBackgroundBlobId = bg.blobId;
+    } else if (!norm.src || !norm.src.startsWith('data:image')) {
+        currentBackgroundBlobId = null;
+    }
     bgPosition = { ...norm.position };
     bgScale = norm.scale;
     bgRotationDeg = norm.rotationDeg;
@@ -2677,7 +2683,7 @@ async function applyUnderlayDataUrl(dataUrl) {
     updateBgTransform();
     if (!isLayoutPlannerUrlPreview()) {
         try {
-            currentBackgroundBlobId = await persistBackgroundDataUrl(dataUrl, currentBackgroundBlobId);
+            currentBackgroundBlobId = await persistBackgroundDataUrl(dataUrl);
             schedulePersistToIndexedDB();
         } catch (err) {
             console.error('[LP storage] 底圖寫入 IndexedDB 失敗', err);
@@ -2896,10 +2902,7 @@ async function importProjectFileFromJson(parsed) {
     const layout = validated.layout;
     if (layout.background?.src?.startsWith('data:image')) {
         try {
-            currentBackgroundBlobId = await persistBackgroundDataUrl(
-                layout.background.src,
-                currentBackgroundBlobId,
-            );
+            currentBackgroundBlobId = await persistBackgroundDataUrl(layout.background.src);
         } catch (err) {
             notifyStorageError(err);
             throw err;
@@ -4586,6 +4589,7 @@ function loadState(state) {
     deselectAll();
     deselectAllAreas();
     scheduleLp3dRebuild();
+    void syncCurrentBackgroundBlobFromHistoryState(state);
 }
 
 function undo() {
@@ -5124,14 +5128,76 @@ function schedulePersistToIndexedDB() {
 async function prepareLayoutBackgroundForIdb(bg) {
     const norm = normalizeLayoutBackground(bg);
     if (norm.src && norm.src.startsWith('data:image')) {
-        let blobId = currentBackgroundBlobId;
-        if (!blobId) {
-            blobId = await persistBackgroundDataUrl(norm.src);
-            currentBackgroundBlobId = blobId;
-        }
+        const blobId = await persistBackgroundDataUrl(norm.src);
+        currentBackgroundBlobId = blobId;
         return stripBackgroundForPersist({ ...norm, blobId, hasBackground: true });
     }
-    return stripBackgroundForPersist({ ...norm, blobId: currentBackgroundBlobId });
+    const blobId = norm.blobId || currentBackgroundBlobId;
+    if (blobId) {
+        const exists = await backgroundBlobExists(blobId);
+        if (!exists) {
+            showGlobalNotification(
+                '底圖備份遺失，請重新匯入底圖或匯出專案檔備份。',
+                8000,
+                'error',
+            );
+            currentBackgroundBlobId = null;
+            return stripBackgroundForPersist({
+                ...norm,
+                blobId: null,
+                hasBackground: false,
+                srcOmitted: true,
+            });
+        }
+        currentBackgroundBlobId = blobId;
+        return stripBackgroundForPersist({ ...norm, blobId, hasBackground: true });
+    }
+    return stripBackgroundForPersist({ ...norm, blobId: null });
+}
+
+function writeLegacyAutosaveFallback() {
+    if (isLayoutPlannerUrlPreview()) return;
+    try {
+        const snapshot = buildCurrentLayoutSnapshot();
+        let background = snapshot.background || {};
+        if (background.src && isDataUrlOverAutosaveLimit(background.src)) {
+            const { src, ...rest } = background;
+            background = { ...rest, src: '', srcOmitted: true };
+        }
+        localStorage.setItem(
+            LP_LEGACY_AUTOSAVE_KEY,
+            JSON.stringify({ ...snapshot, background, timestamp: Date.now() }),
+        );
+        writeStorageIndex({ localStorageFallbackAt: Date.now(), idbReady: false });
+    } catch (err) {
+        console.warn('[LP storage] localStorage 備份回退失敗', err);
+    }
+}
+
+async function syncCurrentBackgroundBlobFromHistoryState(state) {
+    if (isLayoutPlannerUrlPreview()) return;
+    const raw = state?.background || {};
+    const norm = normalizeLayoutBackground(raw);
+    if (norm.src && norm.src.startsWith('data:image')) {
+        try {
+            currentBackgroundBlobId = await persistBackgroundDataUrl(norm.src);
+        } catch (err) {
+            notifyStorageError(err);
+        }
+        return;
+    }
+    if (raw.blobId) {
+        currentBackgroundBlobId = raw.blobId;
+        if (!(await backgroundBlobExists(raw.blobId))) {
+            showGlobalNotification(
+                '底圖備份遺失，請重新匯入底圖或匯出專案檔備份。',
+                8000,
+                'error',
+            );
+        }
+        return;
+    }
+    currentBackgroundBlobId = null;
 }
 
 async function flushPersistToIndexedDB(silent = true) {
@@ -5152,6 +5218,7 @@ async function flushPersistToIndexedDB(silent = true) {
             forced,
         ));
         writeStorageIndex({ idbReady: false, lastError: forced });
+        writeLegacyAutosaveFallback();
         return;
     }
     if (lpPersistInFlight) {
@@ -5177,6 +5244,14 @@ async function flushPersistToIndexedDB(silent = true) {
             notifyStorageError(err);
             const code = err instanceof LayoutPlannerStorageError ? err.code : 'WRITE_FAILED';
             writeStorageIndex({ idbReady: false, lastError: String(err?.message || err), lastErrorCode: code });
+            writeLegacyAutosaveFallback();
+            if (code === 'QUOTA_EXCEEDED' || code === 'IDB_WRITE_FAILED' || code === 'IDB_UNAVAILABLE') {
+                showGlobalNotification(
+                    'IndexedDB 無法寫入，已嘗試寫入 localStorage 備份；請盡快匯出專案檔。',
+                    10000,
+                    'error',
+                );
+            }
         } finally {
             lpPersistInFlight = null;
         }
@@ -5259,7 +5334,17 @@ async function initLayoutPlannerPersistence() {
         }
     }
 
-    const session = await loadLayoutSession();
+    let session;
+    try {
+        session = await loadLayoutSession();
+    } catch (err) {
+        console.error('loadLayoutSession failed:', err);
+        writeStorageIndex({
+            idbReady: false,
+            lastError: String(err?.message || err),
+        });
+        throw err;
+    }
     if (!session?.layout) return false;
 
     const index = readStorageIndex();
@@ -5279,6 +5364,15 @@ async function initLayoutPlannerPersistence() {
 function initAutoSave() {
     if (isLayoutPlannerUrlPreview()) return;
     setInterval(() => flushPersistToIndexedDB(true), AUTO_SAVE_INTERVAL);
+}
+
+function initPageLifecycleFlush() {
+    if (isLayoutPlannerUrlPreview()) return;
+    const onLeave = () => {
+        void flushPersistToIndexedDB(true);
+    };
+    window.addEventListener('pagehide', onLeave);
+    window.addEventListener('beforeunload', onLeave);
 }
 
 const LP_PREVIEW_FIXTURE_RE = /^e2e\/fixtures\/[\w.-]+\.json$/;
@@ -5605,6 +5699,12 @@ async function bootLayoutPlannerApp() {
             window.__LP_TEST_HOOKS__._forcedStorageError = null;
             return c;
         },
+        testAbortNextBlobPut: () => {
+            window.__LP_STORAGE_TEST__ = {
+                ...(window.__LP_STORAGE_TEST__ || {}),
+                abortNextBlobPut: true,
+            };
+        },
         loadLayoutFromData: (data, opts) => loadLayoutFromData(data, opts),
         getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
         historyBackgroundSnapshots: () => history.map((h) => h.background),
@@ -5634,13 +5734,25 @@ async function bootLayoutPlannerApp() {
     loadFromSheets();
     switchTab('settings'); // 預設顯示設定頁籤
 
-    const restoredFromIdb = await initLayoutPlannerPersistence();
+    let restoredFromIdb = false;
+    try {
+        restoredFromIdb = await initLayoutPlannerPersistence();
+    } catch (err) {
+        console.error('initLayoutPlannerPersistence failed:', err);
+        notifyStorageError(err);
+        showGlobalNotification(
+            '自動備份初始化失敗，仍可使用編輯器；請用「匯出專案檔」保存進度。',
+            9000,
+            'error',
+        );
+    }
     if (!restoredFromIdb) {
         saveState();
     }
 
     initAutoSave();
-    
+    initPageLifecycleFlush();
+
     // [v9.13] 初始載入時置中視圖
     setTimeout(centerView, 100);
 

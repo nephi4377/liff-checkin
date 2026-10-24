@@ -9,9 +9,13 @@ export const LP_LAYOUT_VERSION = '3.0';
 export const LP_DB_NAME = 'layout-planner-storage-v1';
 export const LP_DB_VERSION = 1;
 
+/** history 內最多保留的獨立底圖 blob 數（含當前 layout） */
+export const LP_MAX_HISTORY_BG_BLOBS = 48;
+
 const SESSION_KEY = 'default';
 
-/** @typedef {{ idbReady?: boolean, migratedFromLegacy?: boolean, lastSavedAt?: number, lastError?: string }} LpStorageIndex */
+/** @type {Map<string, Promise<string>>} */
+const hydrateDataUrlCache = new Map();
 
 /**
  * @param {string} dataUrl
@@ -26,6 +30,31 @@ export function dataUrlToBlob(dataUrl) {
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new Blob([bytes], { type: mime });
+}
+
+/**
+ * @param {Blob} blob
+ */
+async function blobToArrayBuffer(blob) {
+    if (blob && typeof blob.arrayBuffer === 'function') {
+        return blob.arrayBuffer();
+    }
+    if (typeof Response !== 'undefined') {
+        return new Response(blob).arrayBuffer();
+    }
+    throw new Error('無法讀取 Blob 內容');
+}
+
+/**
+ * @param {Blob} blob
+ */
+export async function hashBlobContent(blob) {
+    const buf = await blobToArrayBuffer(blob);
+    const digest = await crypto.subtle.digest('SHA-256', buf);
+    return Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('')
+        .slice(0, 32);
 }
 
 /**
@@ -98,15 +127,60 @@ function openDatabase() {
 
 /**
  * @param {IDBDatabase} db
+ * @param {string[]} storeNames
+ * @param {IDBTransactionMode} mode
+ * @param {(tx: IDBTransaction) => void} work
+ */
+function runIdbTransaction(db, storeNames, mode, work) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeNames, mode);
+        let settled = false;
+        const finish = (err) => {
+            if (settled) return;
+            settled = true;
+            if (err) reject(err);
+            else resolve();
+        };
+        tx.onabort = () => {
+            finish(tx.error || new DOMException('Transaction aborted', 'AbortError'));
+        };
+        tx.onerror = () => {
+            finish(tx.error || new Error('IndexedDB transaction failed'));
+        };
+        tx.oncomplete = () => finish();
+        try {
+            work(tx);
+        } catch (err) {
+            try {
+                tx.abort();
+            } catch {
+                /* ignore */
+            }
+            finish(err);
+        }
+    });
+}
+
+/**
+ * @param {IDBDatabase} db
  * @param {string} id
  * @param {Blob} blob
  */
 function idbPutBlob(db, id, blob) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction('blobs', 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.objectStore('blobs').put(blob, id);
+    return runIdbTransaction(db, ['blobs'], 'readwrite', (tx) => {
+        if (globalThis.__LP_STORAGE_TEST__?.abortNextBlobPut) {
+            globalThis.__LP_STORAGE_TEST__.abortNextBlobPut = false;
+            tx.abort();
+            return;
+        }
+        const req = tx.objectStore('blobs').put(blob, id);
+        req.onerror = () => {
+            try {
+                tx.abort();
+            } catch {
+                /* ignore */
+            }
+        };
     });
 }
 
@@ -116,11 +190,41 @@ function idbPutBlob(db, id, blob) {
  */
 function idbGetBlob(db, id) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction('blobs', 'readonly');
-        tx.onerror = () => reject(tx.error);
-        const req = tx.objectStore('blobs').get(id);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => reject(req.error);
+        runIdbTransaction(db, ['blobs'], 'readonly', (tx) => {
+            const req = tx.objectStore('blobs').get(id);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => {
+                try {
+                    tx.abort();
+                } catch {
+                    /* ignore */
+                }
+                reject(req.error);
+            };
+        }).catch(reject);
+    });
+}
+
+/**
+ * @param {IDBDatabase} db
+ * @param {string} id
+ */
+function idbDeleteBlob(db, id) {
+    return runIdbTransaction(db, ['blobs'], 'readwrite', (tx) => {
+        tx.objectStore('blobs').delete(id);
+    });
+}
+
+/**
+ * @param {IDBDatabase} db
+ */
+function idbListBlobKeys(db) {
+    return new Promise((resolve, reject) => {
+        runIdbTransaction(db, ['blobs'], 'readonly', (tx) => {
+            const req = tx.objectStore('blobs').getAllKeys();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => reject(req.error);
+        }).catch(reject);
     });
 }
 
@@ -129,11 +233,15 @@ function idbGetBlob(db, id) {
  * @param {object} session
  */
 function idbPutSession(db, session) {
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction('sessions', 'readwrite');
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-        tx.objectStore('sessions').put(session, SESSION_KEY);
+    return runIdbTransaction(db, ['sessions'], 'readwrite', (tx) => {
+        const req = tx.objectStore('sessions').put(session, SESSION_KEY);
+        req.onerror = () => {
+            try {
+                tx.abort();
+            } catch {
+                /* ignore */
+            }
+        };
     });
 }
 
@@ -142,12 +250,26 @@ function idbPutSession(db, session) {
  */
 function idbGetSession(db) {
     return new Promise((resolve, reject) => {
-        const tx = db.transaction('sessions', 'readonly');
-        tx.onerror = () => reject(tx.error);
-        const req = tx.objectStore('sessions').get(SESSION_KEY);
-        req.onsuccess = () => resolve(req.result || null);
-        req.onerror = () => reject(req.error);
+        runIdbTransaction(db, ['sessions'], 'readonly', (tx) => {
+            const req = tx.objectStore('sessions').get(SESSION_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        }).catch(reject);
     });
+}
+
+/**
+ * @param {IDBDatabase} db
+ * @param {Set<string>} keepIds
+ */
+async function pruneOrphanBlobs(db, keepIds) {
+    const keys = await idbListBlobKeys(db);
+    for (const key of keys) {
+        const id = String(key);
+        if (!keepIds.has(id)) {
+            await idbDeleteBlob(db, id);
+        }
+    }
 }
 
 /**
@@ -168,7 +290,7 @@ export function stripBackgroundForPersist(bg) {
     }
     const blobId = bg.blobId || null;
     const hasBg = !!(blobId || (bg.src && String(bg.src).startsWith('data:image')));
-    return {
+    const out = {
         position: bg.position && typeof bg.position === 'object'
             ? { x: Number(bg.position.x) || 0, y: Number(bg.position.y) || 0 }
             : { x: 0, y: 0 },
@@ -180,6 +302,26 @@ export function stripBackgroundForPersist(bg) {
         blobId,
         hasBackground: hasBg && !!blobId,
     };
+    if (bg.srcOmitted) out.srcOmitted = true;
+    return out;
+}
+
+/**
+ * @param {string} blobId
+ */
+export async function backgroundBlobExists(blobId) {
+    if (!blobId) return false;
+    const db = await openDatabase();
+    try {
+        const raw = await idbGetBlob(db, blobId);
+        return !!raw;
+    } finally {
+        db.close();
+    }
+}
+
+export function clearHydrateBackgroundCache() {
+    hydrateDataUrlCache.clear();
 }
 
 /**
@@ -190,7 +332,21 @@ export async function hydrateLayoutBackground(bg) {
     const blobId = bg.blobId;
     const hasSrc = typeof bg.src === 'string' && bg.src.startsWith('data:image');
     if (!blobId || hasSrc) return { ...bg };
-    const src = await loadBackgroundBlobAsDataUrl(blobId);
+    if (hydrateDataUrlCache.has(blobId)) {
+        const src = await hydrateDataUrlCache.get(blobId);
+        return { ...bg, src };
+    }
+    const loadPromise = loadBackgroundBlobAsDataUrl(blobId).then((src) => {
+        if (!src) {
+            hydrateDataUrlCache.delete(blobId);
+        }
+        return src;
+    });
+    hydrateDataUrlCache.set(blobId, loadPromise);
+    const src = await loadPromise;
+    if (blobId && !src) {
+        return { ...bg, src: '', srcOmitted: true };
+    }
     return { ...bg, src };
 }
 
@@ -213,25 +369,50 @@ export async function hydrateHistoryEntries(history) {
  * @param {object[]} history
  */
 export async function collectHistoryForIndexedDb(history) {
-    const blobCache = new Map();
+    const srcToBlobId = new Map();
+    const usedBlobIds = [];
     const out = [];
     for (const state of history) {
         const bg = state.background || {};
         let blobId = bg.blobId || null;
         const src = typeof bg.src === 'string' ? bg.src : '';
         if (src.startsWith('data:image')) {
+            blobId = srcToBlobId.get(src);
             if (!blobId) {
-                blobId = blobCache.get(src);
-                if (!blobId) {
-                    blobId = await persistBackgroundDataUrl(src);
-                    blobCache.set(src, blobId);
-                }
+                blobId = await persistBackgroundDataUrl(src);
+                srcToBlobId.set(src, blobId);
             }
+            if (!usedBlobIds.includes(blobId)) usedBlobIds.push(blobId);
+        } else if (blobId && !usedBlobIds.includes(blobId)) {
+            usedBlobIds.push(blobId);
         }
         const stripped = stripBackgroundForPersist({ ...bg, blobId, hasBackground: !!blobId });
         out.push({ ...state, background: stripped });
     }
+    while (usedBlobIds.length > LP_MAX_HISTORY_BG_BLOBS) {
+        const drop = usedBlobIds.shift();
+        for (const entry of out) {
+            if (entry.background?.blobId === drop) {
+                entry.background = stripBackgroundForPersist({
+                    ...entry.background,
+                    blobId: null,
+                    hasBackground: false,
+                    srcOmitted: true,
+                });
+            }
+        }
+    }
     return out;
+}
+
+function collectReferencedBlobIds(layoutState, history) {
+    const keep = new Set();
+    const add = (bg) => {
+        if (bg?.blobId) keep.add(bg.blobId);
+    };
+    add(layoutState?.background);
+    for (const h of history || []) add(h.background);
+    return keep;
 }
 
 /**
@@ -240,21 +421,27 @@ export async function collectHistoryForIndexedDb(history) {
  */
 export async function saveLayoutSession(layoutState, extras = {}) {
     const db = await openDatabase();
-    const blobEntries = extras.blobs || new Map();
-    for (const [id, blob] of blobEntries.entries()) {
-        await idbPutBlob(db, id, blob);
+    try {
+        const blobEntries = extras.blobs || new Map();
+        for (const [id, blob] of blobEntries.entries()) {
+            await idbPutBlob(db, id, blob);
+        }
+        const session = {
+            version: LP_LAYOUT_VERSION,
+            savedAt: Date.now(),
+            layout: layoutState,
+            history: extras.history || [],
+            historyIndex: typeof extras.historyIndex === 'number' ? extras.historyIndex : 0,
+        };
+        await idbPutSession(db, session);
+        const keepIds = collectReferencedBlobIds(layoutState, session.history);
+        for (const id of blobEntries.keys()) keepIds.add(id);
+        await pruneOrphanBlobs(db, keepIds);
+        writeStorageIndex({ idbReady: true, lastSavedAt: session.savedAt, lastError: '' });
+        return session;
+    } finally {
+        db.close();
     }
-    const session = {
-        version: LP_LAYOUT_VERSION,
-        savedAt: Date.now(),
-        layout: layoutState,
-        history: extras.history || [],
-        historyIndex: typeof extras.historyIndex === 'number' ? extras.historyIndex : 0,
-    };
-    await idbPutSession(db, session);
-    db.close();
-    writeStorageIndex({ idbReady: true, lastSavedAt: session.savedAt, lastError: '' });
-    return session;
 }
 
 /**
@@ -262,18 +449,22 @@ export async function saveLayoutSession(layoutState, extras = {}) {
  */
 export async function loadLayoutSession() {
     const db = await openDatabase();
-    const session = await idbGetSession(db);
-    db.close();
-    if (!session?.layout) return null;
-    return {
-        layout: session.layout,
-        history: session.history || [],
-        historyIndex: session.historyIndex || 0,
-    };
+    try {
+        const session = await idbGetSession(db);
+        if (!session?.layout) return null;
+        return {
+            layout: session.layout,
+            history: session.history || [],
+            historyIndex: session.historyIndex || 0,
+        };
+    } finally {
+        db.close();
+    }
 }
 
 /**
- * @param {string} blobId
+ * @param {IDBDatabase} db
+ * @param {*} raw
  */
 async function normalizeStoredBlob(raw) {
     if (!raw) return null;
@@ -297,23 +488,33 @@ async function normalizeStoredBlob(raw) {
 export async function loadBackgroundBlobAsDataUrl(blobId) {
     if (!blobId) return '';
     const db = await openDatabase();
-    const raw = await idbGetBlob(db, blobId);
-    db.close();
-    const blob = await normalizeStoredBlob(raw);
-    if (!blob) return '';
-    return blobToDataUrl(blob);
+    try {
+        const raw = await idbGetBlob(db, blobId);
+        const blob = await normalizeStoredBlob(raw);
+        if (!blob) return '';
+        return blobToDataUrl(blob);
+    } finally {
+        db.close();
+    }
 }
 
 /**
  * @param {string} dataUrl
  * @param {string} [existingId]
  */
-export async function persistBackgroundDataUrl(dataUrl, existingId) {
+export async function persistBackgroundDataUrl(dataUrl) {
     const blob = dataUrlToBlob(dataUrl);
-    const id = existingId || `bg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const contentHash = await hashBlobContent(blob);
+    const id = `bg-${contentHash}`;
     const db = await openDatabase();
-    await idbPutBlob(db, id, blob);
-    db.close();
+    try {
+        const existing = await idbGetBlob(db, id);
+        if (!existing) {
+            await idbPutBlob(db, id, blob);
+        }
+    } finally {
+        db.close();
+    }
     return id;
 }
 
@@ -323,19 +524,29 @@ export async function persistBackgroundDataUrl(dataUrl, existingId) {
  */
 export async function migrateLegacyLocalStorageAutosave(legacyLayout) {
     try {
-        const bg = legacyLayout.background;
-        let backgroundRef = stripBackgroundForPersist(bg || {});
-        const blobs = new Map();
+        const bg = legacyLayout.background || {};
+        let backgroundRef = stripBackgroundForPersist(bg);
+        if (bg?.srcOmitted) {
+            backgroundRef = { ...backgroundRef, srcOmitted: true };
+        }
         if (bg?.src && String(bg.src).startsWith('data:image')) {
             const blobId = await persistBackgroundDataUrl(bg.src);
             backgroundRef = stripBackgroundForPersist({ ...bg, blobId, hasBackground: true });
+        } else if (bg?.srcOmitted) {
+            backgroundRef = stripBackgroundForPersist({
+                ...bg,
+                src: '',
+                blobId: null,
+                hasBackground: false,
+                srcOmitted: true,
+            });
         }
         const layout = {
             ...legacyLayout,
             version: LP_LAYOUT_VERSION,
             background: backgroundRef,
         };
-        await saveLayoutSession(layout, { history: [], historyIndex: 0, blobs });
+        await saveLayoutSession(layout, { history: [], historyIndex: 0 });
         writeStorageIndex({
             migratedFromLegacy: true,
             idbReady: true,
@@ -422,13 +633,21 @@ export class LayoutPlannerStorageError extends Error {
 /**
  * @param {() => Promise<void>} fn
  */
+/** Vitest／e2e：下一筆 blob put 會 abort transaction */
+export function testAbortNextBlobPut() {
+    globalThis.__LP_STORAGE_TEST__ = {
+        ...(globalThis.__LP_STORAGE_TEST__ || {}),
+        abortNextBlobPut: true,
+    };
+}
+
 export async function runStorageWrite(fn) {
     try {
         await fn();
     } catch (err) {
         if (err instanceof LayoutPlannerStorageError) throw err;
         const name = err?.name || '';
-        if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+        if (name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED' || name === 'AbortError') {
             throw new LayoutPlannerStorageError('本機儲存空間不足，請匯出專案檔備份後清理瀏覽器資料。', 'QUOTA_EXCEEDED');
         }
         const msg = String(err?.message || err);
