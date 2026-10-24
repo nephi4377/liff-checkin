@@ -7,6 +7,7 @@
 | three | 0.170.0 | [LICENSE-three](./LICENSE-three) |
 | three-bvh-csg | 0.0.16 | [LICENSE-three-bvh-csg](./LICENSE-three-bvh-csg) |
 | three-mesh-bvh | **0.9.16** | [LICENSE-three-mesh-bvh](./LICENSE-three-mesh-bvh) |
+| pdfjs-dist | 4.4.168 | [pdfjs-dist/LICENSE](./pdfjs-dist/LICENSE) |
 
 `LP_LayoutPlanner.js` 僅在使用者按下「3D 檢視」時才 `import('./LP_3DViewer.js')`；vendor 載入失敗時平面編輯不受影響。
 

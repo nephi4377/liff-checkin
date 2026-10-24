@@ -20,10 +20,23 @@ import {
     segmentLengthCmRounded,
 } from './LP_core.js';
 import { createHistoryGestureCoalescer } from './LP_layout_history.js';
+import { detachSelectedFromExistingLayoutGroups } from './LP_layout_group_logic.js';
 import {
     buildLayoutPlannerQuoteDraft,
     budgetWebDraftToCsvWithBom,
 } from './LP_quotation_budgetweb_export.js';
+import {
+    compressImageDataUrlIfNeeded,
+    computeRotationDeltaToHorizontalDeg,
+    computeScaleFromTwoPointCalibration,
+    isPdfFile,
+    normalizeLayoutBackground,
+    pointAtSegmentLength,
+    renderPdfFirstPageToDataUrl,
+    UNDERLAY_MAX_DATA_URL_BYTES,
+    estimateDataUrlBytes,
+    isDataUrlOverAutosaveLimit,
+} from './LP_underlay.js';
 
 /** 開啟時於 console 輸出除錯訊息（元件載入、渲染、縮放、繪圖等） */
 const DEBUG = false;
@@ -35,6 +48,15 @@ let placedCabinets = [];
 let isBgEditMode = false;
 let bgScale = 1.0;
 let bgPosition = { x: 0, y: 0 };
+let bgRotationDeg = 0;
+let bgOpacity = 0.75;
+let bgLocked = false;
+let bgHidden = false;
+/** @type {'scale' | 'rotate' | null} */
+let underlayCalibrateMode = null;
+/** @type {{ x: number, y: number }[]} */
+let underlayCalibratePoints = [];
+let wallSegmentLengthCm = 0;
 let placedAnnotations = []; // [新增] 工程標註資料陣列
 let selectedCabId = null;
 /** @type {Set<string>} 多選櫃體（含 layout 群組成員） */
@@ -704,6 +726,7 @@ function onLayerVisibilityToggle(groupName, visible) {
         }
     }
     applyLayerVisibilityRefresh();
+    saveState();
 }
 
 function setAllLayerVisibility(visible) {
@@ -785,6 +808,10 @@ function renderAllDrawnAreas() {
 function renderSingleArea(layer, area, isSelected) {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     group.dataset.id = area.id;
+
+    if (area.type === 'wall' && area.points?.length >= 3 && !area.pathData) {
+        area.pathData = calculateWallPath(area.points, area.thickness || 15);
+    }
 
     // [修正] 鎖定邏輯：同時檢查「鎖定繪圖」與「鎖定牆壁」
     const lockDrawnAreas = document.getElementById('lock-drawn-areas').checked;
@@ -1055,6 +1082,11 @@ function renderCabinet(cab) {
         el.classList.add('is-wall');
     }
     el.id = cab.id;
+    if (cab.layoutGroupId) {
+        el.dataset.layoutGroupId = cab.layoutGroupId;
+    } else {
+        delete el.dataset.layoutGroupId;
+    }
     updateCabStyle(el, cab);
 
     // [v9.0 重構] 根據 adjustable 屬性生成對應方向的拉伸控點
@@ -1637,6 +1669,11 @@ function handleKeyDown(e) {
     }
 
     // [新增] 如果按下 Escape 鍵，則取消目前的繪圖（優先於表單欄位略過）
+    if (e.key === 'Escape' && underlayCalibrateMode) {
+        cancelUnderlayCalibrate();
+        showGlobalNotification('已取消底圖校正。', 2000, 'info');
+        return;
+    }
     if (e.key === 'Escape' && isDrawing) {
         cancelDrawing();
         return;
@@ -1767,9 +1804,7 @@ function handleKeyDown(e) {
     }
     if (e.key.toLowerCase() === 'd' || e.key === 'Delete') { // [您的要求] 增加 Delete 鍵支援
         e.preventDefault();
-        const idToDelete = selectedCabId;
-        deselectAll();
-        deleteCabById(idToDelete);
+        deleteSelectedCabinets();
         return;
     }
     const step = e.shiftKey ? 10 : snapGridStepCm;
@@ -1863,6 +1898,8 @@ function groupSelectedCabinets() {
         showGlobalNotification('請先選取至少兩個元件再群組', 2500, 'info');
         return;
     }
+    const selectedIds = new Set(targets.map((c) => c.id));
+    detachSelectedFromExistingLayoutGroups(placedCabinets, selectedIds);
     const groupId = createLayoutGroupId();
     targets.forEach((cab) => {
         cab.layoutGroupId = groupId;
@@ -1962,20 +1999,33 @@ function moveSelectedCabLayer(direction) {
     }
 }
 
-function deleteCabById(id) {
-    const cab = placedCabinets.find((c) => c.id === id);
-    const idsToRemove = new Set([id]);
-    if (cab?.layoutGroupId) {
-        placedCabinets
-            .filter((c) => c.layoutGroupId === cab.layoutGroupId)
-            .forEach((c) => idsToRemove.add(c.id));
+function deleteSelectedCabinets() {
+    const targets = getSelectedCabinetObjects();
+    if (!targets.length) {
+        if (selectedCabId) deleteCabById(selectedCabId);
+        return;
     }
+    const idsToRemove = new Set();
+    targets.forEach((cab) => {
+        idsToRemove.add(cab.id);
+        if (cab.layoutGroupId) {
+            placedCabinets
+                .filter((c) => c.layoutGroupId === cab.layoutGroupId)
+                .forEach((c) => idsToRemove.add(c.id));
+        }
+    });
     placedCabinets = placedCabinets.filter((c) => !idsToRemove.has(c.id));
     deselectAll();
     renderAllCabinets();
     updateQuotation();
     saveState();
     renderLayerVisibilityPanel();
+}
+
+function deleteCabById(id) {
+    if (!id) return;
+    setCabinetSelection([id], id);
+    deleteSelectedCabinets();
 }
 
 // [新增] 刪除標註
@@ -2083,7 +2133,12 @@ function handleGlobalMove(e) {
             currentDrawingPoints,
             areaVertices: drawingSnapVertices,
         });
-        updateDrawingPreview({ x: resolved.x, y: resolved.y });
+        let preview = { x: resolved.x, y: resolved.y };
+        if (currentDrawingPoints.length > 0) {
+            const last = currentDrawingPoints[currentDrawingPoints.length - 1];
+            preview = applyWallSegmentLengthIfNeeded(last, preview);
+        }
+        updateDrawingPreview(preview);
         return;
     }
 
@@ -2262,7 +2317,7 @@ function handleGlobalMove(e) {
     // --------------------------
     // 4. 處理底圖拖曳
     // --------------------------
-    if (isDraggingBg && isBgEditMode) {
+    if (isDraggingBg && isBgEditMode && !bgLocked) {
         const safeScale = viewScale || 1.0;
         const deltaX = (e.clientX - bgDragStart.x) / safeScale;
         const deltaY = (e.clientY - bgDragStart.y) / safeScale;
@@ -2273,8 +2328,10 @@ function handleGlobalMove(e) {
 }
 
 function endDrag() {
+    const wasDraggingBg = isDraggingBg;
     if (isDraggingCab) saveState();
     if (isResizing) saveState();
+    if (wasDraggingBg) saveState();
     if (isDraggingVertex) {
         const area = drawnAreas.find(a => a.id === draggedAreaId);
         if (area) {
@@ -2299,6 +2356,7 @@ function endDrag() {
     if (isDraggingAnnotation) {
         saveState();
     }
+    if (isDraggingBg) saveState();
     isDraggingAnnotation = false;
     currentDragAnnotationId = null;
 
@@ -2407,12 +2465,8 @@ function selectArea(id) {
     const area = drawnAreas.find(a => a.id === id);
 
     if (area) {
-        const group = document.querySelector(`#drawn-areas-layer g[data-id="${id}"]`);
-        if (group) {
-            group.querySelector('polygon').classList.add('selected');
-            // [您的要求] 為選取的區域產生可拖曳的頂點
-            renderVertexHandles(area);
-        }
+        renderAllDrawnAreas();
+        renderVertexHandles(area);
 
         document.getElementById('selected-info').style.display = 'block';
         
@@ -2490,24 +2544,227 @@ function toggleDrawnAreasLock(isLocked) {
     }
 }
 
-// [錯誤修正] 新增遺漏的 handleBgUpload 函式
-function handleBgUpload(event) {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            const bgImg = document.getElementById('bg-img');
-            bgImg.src = e.target.result;
-            bgImg.style.display = 'block';
-            document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
-            // Reset position and scale when new image loaded
-            bgPosition = { x: 0, y: 0 };
-            bgScale = 1.0;
-            updateBgScale(1.0);
-            updateBgTransform();
-        };
-        reader.readAsDataURL(file);
+function getSerializedBackground() {
+    const bgImg = document.getElementById('bg-img');
+    const src = bgImg?.src || '';
+    return normalizeLayoutBackground({
+        position: bgPosition,
+        scale: bgScale,
+        rotationDeg: bgRotationDeg,
+        opacity: bgOpacity,
+        locked: bgLocked,
+        hidden: bgHidden,
+        src: src.startsWith('data:image') ? src : '',
+    });
+}
+
+function hasUnderlayImage() {
+    const bgImg = document.getElementById('bg-img');
+    return !!(bgImg?.src && bgImg.src.startsWith('data:image'));
+}
+
+function syncUnderlayControlInputs() {
+    const opacityEl = document.getElementById('bg-opacity');
+    const opacityNum = document.getElementById('bg-opacity-num');
+    const rotEl = document.getElementById('bg-rotation-deg');
+    const rotNum = document.getElementById('bg-rotation-num');
+    const lockEl = document.getElementById('bg-lock-toggle');
+    const hideEl = document.getElementById('bg-hide-toggle');
+    if (opacityEl) opacityEl.value = String(bgOpacity);
+    if (opacityNum) opacityNum.value = String(bgOpacity);
+    if (rotEl) rotEl.value = String(bgRotationDeg);
+    if (rotNum) rotNum.value = String(bgRotationDeg);
+    if (lockEl) lockEl.checked = bgLocked;
+    if (hideEl) hideEl.checked = bgHidden;
+}
+
+function setUnderlayChromeEnabled(enabled) {
+    const controls = document.getElementById('bg-controls');
+    if (!controls) return;
+    if (enabled) {
+        controls.classList.remove('opacity-50', 'pointer-events-none');
+    } else {
+        controls.classList.add('opacity-50', 'pointer-events-none');
     }
+}
+
+function applyLayoutBackground(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    bgPosition = { ...norm.position };
+    bgScale = norm.scale;
+    bgRotationDeg = norm.rotationDeg;
+    bgOpacity = norm.opacity;
+    bgLocked = norm.locked;
+    bgHidden = norm.hidden;
+
+    const bgImg = document.getElementById('bg-img');
+    const bgLayer = document.getElementById('bg-layer');
+    if (norm.src && norm.src.startsWith('data:image')) {
+        if (bgImg) {
+            bgImg.src = norm.src;
+            bgImg.style.display = 'block';
+        }
+        setUnderlayChromeEnabled(true);
+    } else if (bgImg) {
+        bgImg.removeAttribute('src');
+        bgImg.style.display = 'none';
+        setUnderlayChromeEnabled(false);
+    }
+    if (bgLayer) {
+        bgLayer.classList.toggle('bg-underlay-hidden', bgHidden);
+        bgLayer.setAttribute('aria-hidden', bgHidden ? 'true' : 'false');
+    }
+    syncUnderlayControlInputs();
+    updateBgScale(bgScale);
+    updateBgTransform();
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('檔案讀取失敗'));
+        reader.readAsDataURL(file);
+    });
+}
+
+async function applyUnderlayDataUrl(dataUrl) {
+    if (isDataUrlOverAutosaveLimit(dataUrl)) {
+        showGlobalNotification(
+            '底圖過大，無法完整寫入自動備份（請用「儲存佈局」或匯出專案檔）。',
+            8000,
+            'warning',
+        );
+    } else if (estimateDataUrlBytes(dataUrl) > UNDERLAY_MAX_DATA_URL_BYTES) {
+        showGlobalNotification('底圖仍超過建議大小，請改用較小圖檔或降低掃描解析度。', 6000, 'warning');
+    }
+    const bgImg = document.getElementById('bg-img');
+    if (!bgImg) return;
+    bgImg.src = dataUrl;
+    bgImg.style.display = 'block';
+    bgPosition = { x: 0, y: 0 };
+    bgScale = 1.0;
+    bgRotationDeg = 0;
+    bgOpacity = 0.75;
+    bgLocked = false;
+    bgHidden = false;
+    setUnderlayChromeEnabled(true);
+    syncUnderlayControlInputs();
+    updateBgScale(1.0);
+    updateBgTransform();
+}
+
+function cancelUnderlayCalibrate() {
+    underlayCalibrateMode = null;
+    underlayCalibratePoints = [];
+    document.getElementById('bg-calibrate-scale-btn')?.classList.remove('ring-2', 'ring-red-400');
+    document.getElementById('bg-rotate-align-btn')?.classList.remove('ring-2', 'ring-red-400');
+}
+
+function startUnderlayCalibrate(mode) {
+    if (!hasUnderlayImage()) {
+        showGlobalNotification('請先匯入平面底圖。', 3000, 'warning');
+        return;
+    }
+    if (isDrawing) {
+        showGlobalNotification('請先結束繪圖模式。', 3000, 'warning');
+        return;
+    }
+    cancelUnderlayCalibrate();
+    underlayCalibrateMode = mode;
+    underlayCalibratePoints = [];
+    const btnId = mode === 'scale' ? 'bg-calibrate-scale-btn' : 'bg-rotate-align-btn';
+    document.getElementById(btnId)?.classList.add('ring-2', 'ring-red-400');
+    const msg = mode === 'scale'
+        ? '比例校正：在畫布點選兩個已知距離的端點，再按「套用比例」。'
+        : '旋轉對齊：在畫布點選兩個端點，系統會將連線拉平。';
+    showGlobalNotification(msg, 8000, 'info');
+}
+
+function canvasPointerFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const safeScale = viewScale || 1.0;
+    return {
+        x: (e.clientX - rect.left) / safeScale,
+        y: (e.clientY - rect.top) / safeScale,
+    };
+}
+
+function applyWallSegmentLengthIfNeeded(last, target) {
+    if (currentDrawingType !== 'wall' || wallSegmentLengthCm <= 0 || !last) return target;
+    return pointAtSegmentLength(last, target, wallSegmentLengthCm);
+}
+
+function handleUnderlayCalibrateClick(e) {
+    const pt = canvasPointerFromEvent(e);
+    underlayCalibratePoints.push(pt);
+    if (underlayCalibratePoints.length < 2) {
+        showGlobalNotification(`已標記第 ${underlayCalibratePoints.length} 點，請再點第二點。`, 2500, 'info');
+        return;
+    }
+    const [p1, p2] = underlayCalibratePoints;
+    if (underlayCalibrateMode === 'rotate') {
+        bgRotationDeg += computeRotationDeltaToHorizontalDeg(p1, p2);
+        syncUnderlayControlInputs();
+        updateBgTransform();
+        saveState();
+        showGlobalNotification('已依兩點旋轉對齊。', 3000, 'success');
+        cancelUnderlayCalibrate();
+        return;
+    }
+    showGlobalNotification('兩點已標記，請輸入實際長度 (cm) 後按「套用比例」。', 4000, 'info');
+}
+
+function applyUnderlayScaleFromCalibration() {
+    if (underlayCalibratePoints.length < 2) {
+        showGlobalNotification('請先用「兩點校正」在畫布標記兩點。', 3000, 'warning');
+        return;
+    }
+    const realInput = document.getElementById('bg-calibrate-real-cm');
+    const realCm = parseFloat(realInput?.value || '');
+    if (!Number.isFinite(realCm) || realCm <= 0) {
+        showGlobalNotification('請輸入有效的實際長度 (cm)。', 3000, 'error');
+        return;
+    }
+    const [p1, p2] = underlayCalibratePoints;
+    const measured = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    bgScale = computeScaleFromTwoPointCalibration(measured, realCm, bgScale);
+    updateBgScale(bgScale);
+    saveState();
+    showGlobalNotification('底圖比例已更新。', 3000, 'success');
+    cancelUnderlayCalibrate();
+}
+
+async function withUnderlayHiddenForExport(exportFn) {
+    document.body.classList.add('lp-export-no-underlay');
+    try {
+        return await exportFn();
+    } finally {
+        document.body.classList.remove('lp-export-no-underlay');
+    }
+}
+
+// [錯誤修正] 新增遺漏的 handleBgUpload 函式
+async function handleBgUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+        let dataUrl;
+        if (isPdfFile(file)) {
+            const buf = await file.arrayBuffer();
+            dataUrl = await renderPdfFirstPageToDataUrl(buf);
+            showGlobalNotification('已將 PDF 第一頁轉為底圖（僅本機，未上傳）。', 4000, 'info');
+        } else {
+            dataUrl = await readFileAsDataUrl(file);
+        }
+        dataUrl = await compressImageDataUrlIfNeeded(dataUrl);
+        await applyUnderlayDataUrl(dataUrl);
+        saveState();
+    } catch (err) {
+        console.error('[underlay upload]', err);
+        showGlobalNotification(`底圖匯入失敗：${err.message || err}`, 6000, 'error');
+    }
+    event.target.value = '';
 }
 
 // [錯誤修正] 新增遺漏的 saveCanvasAsImage 函式
@@ -2526,13 +2783,13 @@ function saveCanvasAsImage() {
 
     showGlobalNotification('正在產生圖片，請稍候...', 5000, 'info');
 
-    // 2. 使用 html2canvas 進行截圖
-    html2canvas(canvasElement, {
+    // 2. 使用 html2canvas 進行截圖（不含客戶底圖）
+    withUnderlayHiddenForExport(() => html2canvas(canvasElement, {
         logging: false, // 關閉 html2canvas 的 console log
         backgroundColor: '#ffffff', // 確保背景是白色
         useCORS: true, // 允許載入跨域圖片 (例如從 Google Sheet 來的圖片)
         scale: 1 // 使用 1:1 的比例，避免模糊
-    }).then(canvas => {
+    })).then(canvas => {
         // 3. 建立下載連結
         const link = document.createElement('a');
         link.download = `design-layout-${Date.now()}.png`;
@@ -2556,11 +2813,7 @@ function saveLayout() {
         drawnAreas: drawnAreas,
         placedAnnotations: placedAnnotations, // [修正] 加入標註資料
         workspaceSize: getWorkspaceCanvasPx(),
-        background: {
-            position: bgPosition,
-            scale: bgScale,
-            src: document.getElementById('bg-img').src
-        },
+        background: getSerializedBackground(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
         quotationManualOverrides: quotationManualOverrides,
         layerVisibility: layerVisibility
@@ -3263,18 +3516,61 @@ function getQuotationForDisplay() {
     return { lineItems, subtotals: calc.subtotals, grandTotal };
 }
 
-function onBudgetFieldEdit(lineKey, field, rawValue) {
-    if (!lineKey) return;
-    if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+function getAutoQuotationFieldValue(lineKey, field) {
+    const calc = calculateFullQuotation();
+    for (const item of calc.lineItems) {
+        if (item.isHeader || item.lineKey !== lineKey) continue;
+        if (field === 'quantity') return item.quantity > 0 ? item.quantity : '';
+        if (field === 'totalPrice') return item.totalPrice > 0 ? item.totalPrice : '';
+        return item[field];
+    }
+    return undefined;
+}
+
+function budgetFieldValuesEqual(field, a, b) {
     if (field === 'quantity' || field === 'totalPrice') {
-        quotationManualOverrides[lineKey][field] = rawValue === '' ? '' : (parseFloat(rawValue) || 0);
+        const na = a === '' || a === undefined ? 0 : Number(a);
+        const nb = b === '' || b === undefined ? 0 : Number(b);
+        if (!Number.isFinite(na) && !Number.isFinite(nb)) return String(a ?? '') === String(b ?? '');
+        return na === nb;
+    }
+    return String(a ?? '') === String(b ?? '');
+}
+
+function applyBudgetFieldEdit(lineKey, field, rawValue) {
+    if (!lineKey) return;
+    const autoVal = getAutoQuotationFieldValue(lineKey, field);
+    const normalized = (field === 'quantity' || field === 'totalPrice')
+        ? (rawValue === '' ? '' : (parseFloat(rawValue) || 0))
+        : rawValue;
+
+    if (budgetFieldValuesEqual(field, normalized, autoVal)) {
+        const o = quotationManualOverrides[lineKey];
+        if (o) {
+            delete o[field];
+            const keys = Object.keys(o).filter((k) => k !== 'hidden');
+            if (keys.length === 0 && !o.hidden) delete quotationManualOverrides[lineKey];
+        }
     } else {
-        quotationManualOverrides[lineKey][field] = rawValue;
+        if (!quotationManualOverrides[lineKey]) quotationManualOverrides[lineKey] = {};
+        quotationManualOverrides[lineKey][field] = normalized;
     }
     const quotation = getQuotationForDisplay();
     const totalEl = document.getElementById('modal-total-price');
     if (totalEl) totalEl.innerText = `$${quotation.grandTotal.toLocaleString()} `;
     updateQuotation();
+}
+
+function commitBudgetFieldEdit(lineKey, field, rawValue) {
+    applyBudgetFieldEdit(lineKey, field, rawValue);
+    commitSaveState();
+}
+
+function refreshBudgetModalIfOpen() {
+    const modal = document.getElementById('budget-modal');
+    if (modal && modal.style.display === 'flex') {
+        renderBudgetTable();
+    }
 }
 
 function hideQuotationRow(lineKey) {
@@ -3283,6 +3579,7 @@ function hideQuotationRow(lineKey) {
     quotationManualOverrides[lineKey].hidden = true;
     renderBudgetTable();
     updateQuotation();
+    saveState();
 }
 
 function resetQuotationToAuto() {
@@ -3646,6 +3943,12 @@ function handleDrawingClick(e) {
         }
         x = resolved.x;
         y = resolved.y;
+        if (currentDrawingPoints.length > 0) {
+            const last = currentDrawingPoints[currentDrawingPoints.length - 1];
+            const fixed = applyWallSegmentLengthIfNeeded(last, { x, y });
+            x = fixed.x;
+            y = fixed.y;
+        }
     }
 
     currentDrawingPoints.push({ x, y });
@@ -3936,19 +4239,23 @@ function startAnnotationDrag(e, anno, type) {
 }
 
 function toggleBgMode(enabled) {
+    if (enabled && bgLocked) {
+        const chk = document.getElementById('bg-edit-mode');
+        if (chk) chk.checked = false;
+        showGlobalNotification('底圖已鎖定，請先取消鎖定再調整位置／縮放。', 3500, 'warning');
+        return;
+    }
     isBgEditMode = enabled;
     const bgLayer = document.getElementById('bg-layer');
-    const bgControls = document.getElementById('bg-controls');
     
     if (isBgEditMode) {
-        bgLayer.style.cursor = 'grab';
+        cancelUnderlayCalibrate();
+        bgLayer.style.cursor = bgLocked ? 'not-allowed' : 'grab';
         bgLayer.style.pointerEvents = 'auto';
-        bgControls.classList.remove('opacity-50', 'pointer-events-none');
         showGlobalNotification('底圖調整模式：可拖曳底圖或使用滑桿縮放', 3000, 'info');
     } else {
         bgLayer.style.cursor = 'default';
         bgLayer.style.pointerEvents = 'none';
-        bgControls.classList.add('opacity-50', 'pointer-events-none');
     }
 }
 
@@ -3999,10 +4306,11 @@ function initZoomControls() {
 
     document.addEventListener('wheel', (e) => {
         // [v9.8 新增] 底圖調整模式下，滾輪直接縮放底圖
-        if (isBgEditMode) {
+        if (isBgEditMode && !bgLocked) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? -0.05 : 0.05;
             updateBgScale(Math.max(0.1, bgScale + delta));
+            saveState();
             return;
         }
 
@@ -4017,12 +4325,18 @@ function initZoomControls() {
 // [v8.7 修復] 補回遺失的 updateBgTransform 函式，恢復底圖調整功能
 function updateBgTransform() {
     const bgImg = document.getElementById('bg-img');
+    const bgLayer = document.getElementById('bg-layer');
     if (bgImg) {
-        // 設定 transform-origin 為左上角，讓位移和縮放更直觀
         bgImg.style.transformOrigin = '0 0';
-        bgImg.style.transform = `translate(${bgPosition.x}px, ${bgPosition.y}px) scale(${bgScale})`;
-        // 確保在調整模式下顯示
-        bgImg.style.display = 'block';
+        bgImg.style.transform = `translate(${bgPosition.x}px, ${bgPosition.y}px) rotate(${bgRotationDeg}deg) scale(${bgScale})`;
+        bgImg.style.opacity = String(bgOpacity);
+        if (hasUnderlayImage()) {
+            bgImg.style.display = 'block';
+        }
+    }
+    if (bgLayer) {
+        bgLayer.classList.toggle('bg-underlay-hidden', bgHidden);
+        bgLayer.setAttribute('aria-hidden', bgHidden ? 'true' : 'false');
     }
 }
 
@@ -4093,6 +4407,28 @@ function saveState() {
 /**
  * 儲存當前的畫布狀態到歷史紀錄中（實際寫入 history 堆疊）
  */
+function historyBackgroundFieldsEqual(bgA, bgB) {
+    const a = bgA || {};
+    const b = bgB || {};
+    const srcA = a.src || '';
+    const srcB = b.src || '';
+    if (srcA !== srcB) return false;
+    const stripSrc = (bg) => {
+        const { src, ...rest } = bg;
+        return rest;
+    };
+    return JSON.stringify(stripSrc(a)) === JSON.stringify(stripSrc(b));
+}
+
+function historyStatesEquivalent(prev, next) {
+    if (!historyBackgroundFieldsEqual(prev.background, next.background)) return false;
+    const omitBg = (s) => {
+        const { background, ...rest } = s;
+        return rest;
+    };
+    return JSON.stringify(omitBg(prev)) === JSON.stringify(omitBg(next));
+}
+
 function commitSaveState() {
     // 如果當前指針不在歷史紀錄的末尾 (表示已經執行過 undo)，
     // 則移除後續的所有 "redo" 狀態
@@ -4106,18 +4442,13 @@ function commitSaveState() {
         placedCabinets: JSON.parse(JSON.stringify(placedCabinets)),
         drawnAreas: JSON.parse(JSON.stringify(drawnAreas)),
         placedAnnotations: JSON.parse(JSON.stringify(placedAnnotations)), // [新增]
-        background: {
-            position: bgPosition,
-            scale: bgScale,
-            src: document.getElementById('bg-img').src
-        },
+        background: getSerializedBackground(),
         constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-        quotationManualOverrides: quotationManualOverrides,
-        layerVisibility: layerVisibility
+        quotationManualOverrides: JSON.parse(JSON.stringify(quotationManualOverrides)),
+        layerVisibility: JSON.parse(JSON.stringify(layerVisibility)),
     };
 
-    // 避免儲存與上一步完全相同的狀態
-    if (history.length > 0 && JSON.stringify(currentState) === JSON.stringify(history[history.length - 1])) {
+    if (history.length > 0 && historyStatesEquivalent(history[history.length - 1], currentState)) {
         return;
     }
 
@@ -4142,16 +4473,28 @@ function loadState(state) {
     placedCabinets = JSON.parse(JSON.stringify(state.placedCabinets));
     drawnAreas = JSON.parse(JSON.stringify(state.drawnAreas));
     placedAnnotations = state.placedAnnotations ? JSON.parse(JSON.stringify(state.placedAnnotations)) : []; // [新增]
+    quotationManualOverrides = state.quotationManualOverrides
+        ? JSON.parse(JSON.stringify(state.quotationManualOverrides))
+        : {};
+    layerVisibility = state.layerVisibility
+        ? JSON.parse(JSON.stringify(state.layerVisibility))
+        : {};
 
     const constructionAreaEl = document.getElementById('construction-area');
     if (constructionAreaEl) {
         constructionAreaEl.value = state.constructionArea !== undefined ? state.constructionArea : '';
     }
 
+    applyLayoutBackground(state.background);
+
     renderAllCabinets();
     renderAllDrawnAreas();
     renderAllAnnotations(); // [新增]
+    renderLayerVisibilityPanel();
+    applyLayerVisibilityRefresh();
+    updateBgTransform();
     updateQuotation();
+    refreshBudgetModalIfOpen();
     deselectAll();
     deselectAllAreas();
     scheduleLp3dRebuild();
@@ -4294,10 +4637,12 @@ function bindEventListeners() {
     // [v8.5 優化] 底圖拖曳邏輯重構：移至畫布層級監聽，解決點不到圖的問題
     // 原本綁定在 bg-layer，但 bg-layer 可能因圖片位移而跑掉或太小
     canvas.addEventListener('mousedown', (e) => {
-        if (isBgEditMode) {
+        if (isBgEditMode && !bgLocked) {
             // 在底圖模式下，點擊畫布任何地方都可以拖曳底圖 (更直覺)
             e.preventDefault();
             e.stopPropagation();
+            canvas.focus({ preventScroll: true });
+            historyGesture.begin();
             isDraggingBg = true;
             bgDragStart = { x: e.clientX, y: e.clientY };
             bgStartPos = { x: bgPosition.x, y: bgPosition.y };
@@ -4308,6 +4653,10 @@ function bindEventListeners() {
     // [v8.16 修復] 綁定繪圖點擊事件，讓使用者可以放置頂點
     // 原本的程式碼中似乎遺漏了這個綁定，導致點擊畫布無反應
     canvas.addEventListener('click', (e) => {
+        if (underlayCalibrateMode) {
+            handleUnderlayCalibrateClick(e);
+            return;
+        }
         if (isDrawing) {
             handleDrawingClick(e);
         }
@@ -4316,8 +4665,48 @@ function bindEventListeners() {
     // 工具箱 - 設定頁
     document.getElementById('bg-upload').addEventListener('change', handleBgUpload);
     document.getElementById('bg-edit-mode').addEventListener('change', (e) => toggleBgMode(e.target.checked));
-    document.getElementById('bg-scale').addEventListener('input', (e) => updateBgScale(parseFloat(e.target.value)));
-    document.getElementById('bg-scale-num').addEventListener('input', (e) => updateBgScale(parseFloat(e.target.value)));
+    document.getElementById('bg-scale').addEventListener('input', (e) => { updateBgScale(parseFloat(e.target.value)); saveState(); });
+    document.getElementById('bg-scale-num').addEventListener('input', (e) => { updateBgScale(parseFloat(e.target.value)); saveState(); });
+    const bgOpacityEl = document.getElementById('bg-opacity');
+    const bgOpacityNum = document.getElementById('bg-opacity-num');
+    const syncOpacity = (v) => {
+        bgOpacity = Math.min(1, Math.max(0.1, v));
+        syncUnderlayControlInputs();
+        updateBgTransform();
+        saveState();
+    };
+    bgOpacityEl?.addEventListener('input', (e) => syncOpacity(parseFloat(e.target.value)));
+    bgOpacityNum?.addEventListener('change', (e) => syncOpacity(parseFloat(e.target.value)));
+    const bgRotEl = document.getElementById('bg-rotation-deg');
+    const bgRotNum = document.getElementById('bg-rotation-num');
+    const syncRotation = (v) => {
+        bgRotationDeg = Number.isFinite(v) ? v : 0;
+        syncUnderlayControlInputs();
+        updateBgTransform();
+        saveState();
+    };
+    bgRotEl?.addEventListener('input', (e) => syncRotation(parseFloat(e.target.value)));
+    bgRotNum?.addEventListener('change', (e) => syncRotation(parseFloat(e.target.value)));
+    document.getElementById('bg-lock-toggle')?.addEventListener('change', (e) => {
+        bgLocked = e.target.checked;
+        if (bgLocked && isBgEditMode) toggleBgMode(false);
+        const chk = document.getElementById('bg-edit-mode');
+        if (chk) chk.checked = false;
+        saveState();
+    });
+    document.getElementById('bg-hide-toggle')?.addEventListener('change', (e) => {
+        bgHidden = e.target.checked;
+        updateBgTransform();
+        saveState();
+    });
+    document.getElementById('bg-calibrate-scale-btn')?.addEventListener('click', () => startUnderlayCalibrate('scale'));
+    document.getElementById('bg-rotate-align-btn')?.addEventListener('click', () => startUnderlayCalibrate('rotate'));
+    document.getElementById('bg-calibrate-apply-btn')?.addEventListener('click', () => applyUnderlayScaleFromCalibration());
+    const segLenInput = document.getElementById('wall-segment-length-input');
+    segLenInput?.addEventListener('change', () => {
+        const v = parseFloat(segLenInput.value);
+        wallSegmentLengthCm = Number.isFinite(v) && v > 0 ? v : 0;
+    });
     document.getElementById('save-canvas-as-image-btn').addEventListener('click', saveCanvasAsImage);
     document.getElementById('save-layout-btn').addEventListener('click', saveLayout);
     document.getElementById('layout-upload-label').addEventListener('click', () => document.getElementById('layout-upload').click());
@@ -4420,7 +4809,18 @@ function bindEventListeners() {
         budgetTableBody.addEventListener('input', (e) => {
             const el = e.target;
             if (!el.classList.contains('budget-edit-input')) return;
-            onBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+            applyBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
+        });
+        budgetTableBody.addEventListener('focusin', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            el.dataset.lpCommitBaseline = el.value;
+        });
+        budgetTableBody.addEventListener('change', (e) => {
+            const el = e.target;
+            if (!el.classList.contains('budget-edit-input')) return;
+            if (el.dataset.lpCommitBaseline !== undefined && el.dataset.lpCommitBaseline === el.value) return;
+            commitBudgetFieldEdit(el.dataset.lineKey, el.dataset.field, el.value);
         });
         budgetTableBody.addEventListener('click', (e) => {
             const btn = e.target.closest('.budget-hide-row-btn');
@@ -4605,6 +5005,46 @@ function calculateWallPath(points, thickness) {
 
 const AUTO_SAVE_KEY = 'layoutPlanner_autosave_v1';
 const AUTO_SAVE_INTERVAL = 60000; // 60秒自動儲存一次
+let autoSaveOmitBgNoticeShown = false;
+let autoSaveHardFailNoticeShown = false;
+
+function backgroundForAutosavePersist(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    if (norm.src && norm.src.startsWith('data:image') && isDataUrlOverAutosaveLimit(norm.src)) {
+        const { src, ...rest } = norm;
+        return { ...rest, src: '', srcOmitted: true };
+    }
+    return norm;
+}
+
+function backgroundForClientZipExport(bg) {
+    const norm = normalizeLayoutBackground(bg);
+    const hasUnderlay = !!(norm.src && norm.src.startsWith('data:image'));
+    const { src, ...rest } = norm;
+    return { ...rest, src: '', hasUnderlay };
+}
+
+function buildAutosaveLayoutData() {
+    const constructionAreaEl = document.getElementById('construction-area');
+    return {
+        version: '2.0',
+        timestamp: new Date().getTime(),
+        prettyTime: new Date().toLocaleString(),
+        placedCabinets,
+        drawnAreas,
+        placedAnnotations,
+        workspaceSize: getWorkspaceCanvasPx(),
+        background: backgroundForAutosavePersist(getSerializedBackground()),
+        constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
+        quotationManualOverrides,
+        layerVisibility,
+    };
+}
+
+function isQuotaExceededError(err) {
+    const name = err?.name || '';
+    return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
+}
 
 function initAutoSave() {
     if (isLayoutPlannerUrlPreview()) return;
@@ -4616,35 +5056,48 @@ function initAutoSave() {
 }
 
 function autoSave(silent = false) {
+    const layoutData = buildAutosaveLayoutData();
     try {
-        // 收集當前狀態
-        const constructionAreaEl = document.getElementById('construction-area');
-        const layoutData = {
-            version: '2.0',
-            timestamp: new Date().getTime(), // 使用 timestamp 方便比較
-            prettyTime: new Date().toLocaleString(), // 易讀的時間格式
-            placedCabinets: placedCabinets,
-            drawnAreas: drawnAreas,
-            placedAnnotations: placedAnnotations, // [新增]
-            workspaceSize: getWorkspaceCanvasPx(),
-            background: {
-                position: bgPosition,
-                scale: bgScale,
-                src: document.getElementById('bg-img').src
-            },
-            constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
-            quotationManualOverrides: quotationManualOverrides,
-            layerVisibility: layerVisibility
-        };
-
         localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(layoutData));
-
+        autoSaveOmitBgNoticeShown = false;
+        autoSaveHardFailNoticeShown = false;
         if (!silent) {
-            // 使用非侵入式的方式提示 (只顯示 1 秒)
             showGlobalNotification('☁️ 進度已自動備份', 1000, 'info');
         }
+        return;
     } catch (e) {
-        console.error('自動備份失敗 (可能是 LocalStorage 已滿):', e);
+        if (!isQuotaExceededError(e)) {
+            console.error('自動備份失敗:', e);
+            return;
+        }
+    }
+
+    try {
+        localStorage.removeItem(AUTO_SAVE_KEY);
+        const slim = {
+            ...layoutData,
+            background: backgroundForAutosavePersist({ ...getSerializedBackground(), src: '' }),
+        };
+        slim.background.srcOmitted = true;
+        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(slim));
+        if (!autoSaveOmitBgNoticeShown) {
+            showGlobalNotification(
+                '底圖過大未能完整自動備份，請按「儲存佈局」下載 JSON 備份。',
+                9000,
+                'warning',
+            );
+            autoSaveOmitBgNoticeShown = true;
+        }
+    } catch (e2) {
+        console.error('自動備份失敗 (LocalStorage 已滿):', e2);
+        if (!autoSaveHardFailNoticeShown) {
+            showGlobalNotification(
+                '自動備份失敗（儲存空間不足），請立即下載佈局 JSON。',
+                9000,
+                'error',
+            );
+            autoSaveHardFailNoticeShown = true;
+        }
     }
 }
 
@@ -4744,15 +5197,14 @@ function loadLayoutFromData(layoutData, options = {}) {
     quotationManualOverrides = layoutData.quotationManualOverrides || {};
     layerVisibility = layoutData.layerVisibility || {};
 
-    if (layoutData.background) {
-        bgPosition = layoutData.background.position || { x: 0, y: 0 };
-        bgScale = layoutData.background.scale || 1.0;
-        const bgImg = document.getElementById('bg-img');
-        if (layoutData.background.src && layoutData.background.src.startsWith('data:image')) {
-            bgImg.src = layoutData.background.src;
-            bgImg.style.display = 'block';
-            document.getElementById('bg-controls').classList.remove('opacity-50', 'pointer-events-none');
-        }
+    const bgRaw = layoutData.background;
+    applyLayoutBackground(bgRaw);
+    if (bgRaw?.srcOmitted) {
+        showGlobalNotification(
+            '底圖未備份，請重新匯入或載入佈局 JSON。',
+            9000,
+            'warning',
+        );
     }
 
     const constructionAreaElLoad = document.getElementById('construction-area');
@@ -4804,12 +5256,12 @@ async function downloadDesignFilesAsZip() {
         watermark.style.display = 'flex';
 
         const canvasElement = document.getElementById('design-canvas');
-        const canvas = await html2canvas(canvasElement, {
+        const canvas = await withUnderlayHiddenForExport(() => html2canvas(canvasElement, {
             logging: false,
             backgroundColor: '#ffffff',
             useCORS: true,
             scale: 1
-        });
+        }));
 
         const imageData = canvas.toDataURL('image/png').split(',')[1];
         zip.file(`設計圖面_${dateString}.png`, imageData, { base64: true });
@@ -4828,11 +5280,7 @@ async function downloadDesignFilesAsZip() {
             drawnAreas: drawnAreas,
             placedAnnotations: placedAnnotations, // [新增]
             workspaceSize: getWorkspaceCanvasPx(),
-            background: {
-                position: bgPosition,
-                scale: bgScale,
-                src: document.getElementById('bg-img').src
-            },
+            background: backgroundForClientZipExport(getSerializedBackground()),
             constructionArea: constructionAreaEl ? constructionAreaEl.value : '',
             quotationManualOverrides: quotationManualOverrides,
             layerVisibility: layerVisibility
@@ -4964,7 +5412,7 @@ function centerView() {
 }
 
 // 應用程式進入點
-window.onload = () => {
+function bootLayoutPlannerApp() {
     // 【核心修正】修正手機裝置偵測邏輯。
     // 舊邏輯 (window.innerWidth < 768) 在 iframe 中會因寬度不足而被誤判。
     // 新邏輯優先檢查 User Agent 是否包含 'Mobi' 關鍵字，這能更準確地判斷是否為真實的行動裝置，
@@ -4983,6 +5431,35 @@ window.onload = () => {
         document.documentElement.classList.add('lp-url-preview');
     }
     bindEventListeners();
+    window.__LP_TEST_HOOKS__ = {
+        ...(window.__LP_TEST_HOOKS__ || {}),
+        getSerializedBackground: () => getSerializedBackground(),
+        getDrawingPoints: () => JSON.parse(JSON.stringify(currentDrawingPoints)),
+        runAutoSave: (silent) => {
+            autoSave(!!silent);
+        },
+        readAutosaveJson: () => {
+            const raw = localStorage.getItem(AUTO_SAVE_KEY);
+            return raw ? JSON.parse(raw) : null;
+        },
+        loadLayoutFromData: (data, opts) => loadLayoutFromData(data, opts),
+        getQuotationOverrides: () => JSON.parse(JSON.stringify(quotationManualOverrides)),
+        historyBackgroundSnapshots: () => history.map((h) => h.background),
+        forceCabinetSelection: (ids) => {
+            if (!Array.isArray(ids) || ids.length === 0) return;
+            setCabinetSelection(ids, ids[ids.length - 1]);
+        },
+        setCabinetPricing: (id, unitPrice, pricingType) => {
+            const cab = placedCabinets.find((c) => c.id === id);
+            if (!cab) return false;
+            cab.data.unitPrice = unitPrice;
+            cab.data.pricingType = pricingType;
+            updateQuotation();
+            return true;
+        },
+        backgroundForClientZipExport: (bg) => backgroundForClientZipExport(bg ?? getSerializedBackground()),
+        isLpPreviewMode: () => isLayoutPlannerUrlPreview(),
+    };
     initWorkspaceAndUiFromStorage();
 
     // [修改] 初始化視窗狀態：預設打開工具箱和預算視窗，隱藏對應的最小化按鈕
@@ -5002,7 +5479,13 @@ window.onload = () => {
     setTimeout(centerView, 100);
 
     maybeInitLayoutPlannerUrlPreview();
-};
+}
+
+if (document.readyState === 'complete') {
+    bootLayoutPlannerApp();
+} else {
+    window.addEventListener('load', bootLayoutPlannerApp, { once: true });
+}
 
 // [v9.8 新增] 僅更新資訊面板的價格顯示 (不重繪 DOM，防止焦點跳離)
 function updateSelectedPriceDisplay(id) {
