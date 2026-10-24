@@ -3669,6 +3669,27 @@ function installFloatingPanelPointerSyncForTouch() {
     syncCanvasPointerBlockForMobilePanels();
 }
 
+function closeFloatingWindowForTouch(windowId) {
+    const win = document.getElementById(windowId);
+    if (!win) return;
+    const isHidden = (win.style.display === 'none') || (getComputedStyle(win).display === 'none');
+    if (isHidden) return;
+    const base = windowId.replace('-window', '');
+    const candidateBtnIds = [
+        `${base}-btn`,
+        `toggle-${base}-btn`,
+        `${base}-toggle-btn`,
+        `toggle-${base}`,
+    ];
+    let btn = null;
+    for (const id of candidateBtnIds) {
+        btn = document.getElementById(id);
+        if (btn) break;
+    }
+    win.style.display = 'none';
+    if (btn) btn.classList.remove('hidden');
+}
+
 function toggleWindow(windowId) {
     const win = document.getElementById(windowId);
     if (!win) {
@@ -3693,6 +3714,10 @@ function toggleWindow(windowId) {
 
     const isHidden = (win.style.display === 'none') || (getComputedStyle(win).display === 'none');
     if (isHidden) {
+        if (lpTouchUiMode) {
+            const siblingId = windowId === 'toolbox-window' ? 'info-window' : 'toolbox-window';
+            closeFloatingWindowForTouch(siblingId);
+        }
         win.style.display = 'flex';
         if (btn) btn.classList.add('hidden');
     } else {
