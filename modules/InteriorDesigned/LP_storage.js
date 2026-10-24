@@ -35,22 +35,28 @@ export function dataUrlToBlob(dataUrl) {
 /**
  * @param {Blob} blob
  */
-async function blobToArrayBuffer(blob) {
+async function blobToUint8Array(blob) {
+    let buf;
     if (blob && typeof blob.arrayBuffer === 'function') {
-        return blob.arrayBuffer();
+        buf = await blob.arrayBuffer();
+    } else if (typeof Response !== 'undefined') {
+        buf = await new Response(blob).arrayBuffer();
+    } else {
+        throw new Error('無法讀取 Blob 內容');
     }
-    if (typeof Response !== 'undefined') {
-        return new Response(blob).arrayBuffer();
+    if (buf instanceof ArrayBuffer) return new Uint8Array(buf);
+    if (ArrayBuffer.isView(buf)) {
+        return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
     }
-    throw new Error('無法讀取 Blob 內容');
+    return new Uint8Array(buf);
 }
 
 /**
  * @param {Blob} blob
  */
 export async function hashBlobContent(blob) {
-    const buf = await blobToArrayBuffer(blob);
-    const digest = await crypto.subtle.digest('SHA-256', buf);
+    const bytes = await blobToUint8Array(blob);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
     return Array.from(new Uint8Array(digest))
         .map((b) => b.toString(16).padStart(2, '0'))
         .join('')
