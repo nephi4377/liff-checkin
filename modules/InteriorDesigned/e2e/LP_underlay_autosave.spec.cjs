@@ -8,7 +8,7 @@ test.describe('FLOORPLAN-UNDERLAY autosave', () => {
     page.on('dialog', (d) => d.dismiss());
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#bg-upload').setInputFiles(DEMO_PLAN);
-    await page.waitForTimeout(600);
+    await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
     await page.evaluate(async () => {
       await window.__LP_TEST_HOOKS__?.flushPersistToIndexedDB?.();
     });
@@ -41,7 +41,6 @@ test.describe('FLOORPLAN-UNDERLAY autosave', () => {
         },
       }, { successMessage: false });
     });
-    await page.waitForTimeout(400);
     const toast = await page.locator('#global-notification-container').textContent().catch(() => '');
     expect(toast).toMatch(/底圖未備份|重新匯入/);
     await expect.poll(async () =>
@@ -54,13 +53,11 @@ test.describe('FLOORPLAN-UNDERLAY autosave', () => {
     await page.goto('/LP_LayoutPlanner.html', { waitUntil: 'domcontentloaded' });
     await page.locator('#bg-upload').setInputFiles(DEMO_PLAN);
     await page.waitForFunction(() => document.getElementById('bg-img')?.src?.startsWith('data:image'));
-    await page.waitForTimeout(300);
     const beforeOpacity = await page.inputValue('#bg-opacity-num');
     await page.locator('#bg-opacity').fill('0.35');
     await page.locator('#bg-opacity').dispatchEvent('input');
-    await page.waitForTimeout(400);
+    await expect.poll(async () => page.inputValue('#bg-opacity-num')).not.toBe(beforeOpacity);
     await page.locator('#undo-btn').click();
-    await page.waitForTimeout(300);
     await expect(page.locator('#bg-opacity-num')).toHaveValue(beforeOpacity);
     await expect.poll(async () =>
       page.evaluate(() => document.getElementById('bg-img')?.src?.startsWith('data:image')),

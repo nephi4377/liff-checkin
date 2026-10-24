@@ -119,7 +119,8 @@ function loadImage(src) {
     });
 }
 
-const PDFJS_CDN = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168';
+const PDFJS_MODULE_URL = new URL('./vendor/pdfjs-dist/build/pdf.mjs', import.meta.url);
+const PDFJS_WORKER_URL = new URL('./vendor/pdfjs-dist/build/pdf.worker.mjs', import.meta.url);
 
 /**
  * PDF 第一頁 → JPEG data URL（僅前端，不上傳）
@@ -129,9 +130,9 @@ export async function renderPdfFirstPageToDataUrl(arrayBuffer) {
     if (typeof window === 'undefined') {
         throw new Error('PDF 轉圖需在瀏覽器環境執行');
     }
-    const pdfjsLib = await import(/* @vite-ignore */ `${PDFJS_CDN}/build/pdf.mjs`);
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS_CDN}/build/pdf.worker.mjs`;
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    const pdfjsLib = await import(/* @vite-ignore */ PDFJS_MODULE_URL.href);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL.href;
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer, isEvalSupported: false }).promise;
     const page = await pdf.getPage(1);
     const viewport = page.getViewport({ scale: 2 });
     const canvas = document.createElement('canvas');
