@@ -26,6 +26,10 @@ const HUB_PRESENCE_COALESCE_MS = HUB_BOOT_COALESCE_MS;
 /** 同頁面內進行中的請求合併（避免 watch／重入再打一輪） */
 let hubAttendanceInflight = null;
 let hubProjectsInflight = null;
+/** F2：燈號／今日回報／款項待辦進行中合併（同頁連打共用同一個請求） */
+let hubPresenceInflight = null;
+let hubTodayReportsInflight = null;
+let hubPaymentTodosInflight = null;
 /** 核心剛寫入 todayPresence 的時間戳；供開頁燈號 coalesce */
 let hubPresenceFromCoreAt = 0;
 
@@ -431,8 +435,9 @@ const App = {
         };
 
         const refreshTodayPresenceInBackground = () => {
+            if (hubPresenceInflight) return hubPresenceInflight;
             presenceLoading.value = true;
-            return fetchTodayPresence().then((result) => {
+            hubPresenceInflight = fetchTodayPresence().then((result) => {
                 if (result && result.success && result.todayPresence) {
                     if (JSON.stringify(todayPresence.value) !== JSON.stringify(result.todayPresence)) {
                         todayPresence.value = result.todayPresence;
@@ -443,7 +448,9 @@ const App = {
                 console.warn('[Hub] 背景更新燈號失敗（維持快取）:', e);
             }).finally(() => {
                 presenceLoading.value = false;
+                hubPresenceInflight = null;
             });
+            return hubPresenceInflight;
         };
 
         let presencePollTimer = null;
@@ -519,12 +526,13 @@ const App = {
         };
 
         const refreshTodayReportsInBackground = () => {
+            if (hubTodayReportsInflight) return hubTodayReportsInflight;
             todayReportsLoading.value = true;
             const tryOnce = () => fetchTodayReports().then(applyTodayReportsPayload).catch((e) => {
                 console.warn('[Hub] 背景更新今日回報失敗（維持快取）:', e);
                 return false;
             });
-            return tryOnce().then((ok) => {
+            hubTodayReportsInflight = tryOnce().then((ok) => {
                 if (ok) return true;
                 return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
             }).then((ok) => {
@@ -533,7 +541,9 @@ const App = {
                 }
             }).finally(() => {
                 todayReportsLoading.value = false;
+                hubTodayReportsInflight = null;
             });
+            return hubTodayReportsInflight;
         };
 
         const accountingPost = async (body) => {
@@ -620,6 +630,7 @@ const App = {
                 paymentTodosError.value = '';
                 return Promise.resolve();
             }
+            if (hubPaymentTodosInflight) return hubPaymentTodosInflight;
             paymentTodosLoading.value = true;
             const applyResult = (result) => {
                 const merged = mergeHubPaymentTodosFetch(paymentTodos.value, result);
@@ -640,12 +651,14 @@ const App = {
                 });
                 return false;
             });
-            return tryOnce().then((ok) => {
+            hubPaymentTodosInflight = tryOnce().then((ok) => {
                 if (ok) return true;
                 return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
             }).finally(() => {
                 paymentTodosLoading.value = false;
+                hubPaymentTodosInflight = null;
             });
+            return hubPaymentTodosInflight;
         };
 
         const onTodayReportsUpdated = (list) => {
