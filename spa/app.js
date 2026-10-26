@@ -1,6 +1,6 @@
 import Dashboard from './Dashboard.js?v=26.10.26.2';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
-import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
+import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.10.22.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
 import { isValidSchedulePayload, mergeHubScheduleFetch } from './hubSchedule.js?v=26.10.26.5';
@@ -1258,6 +1258,7 @@ const App = {
                                      : 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100 hover:border-sky-400'
                              ]"><span aria-hidden="true">📖</span>使用教學</a>
                          </nav>
+                         <p v-if="currentView.name === 'dashboard'" class="text-sm text-gray-600 m-0">{{ welcomeMessage }}</p>
                      </div>
                 </div>
             </header>
@@ -1280,7 +1281,7 @@ const App = {
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
                         <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :scheduleError="scheduleError" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" @retry-schedule="refreshScheduleInBackground" />
-                        <!-- 暫時關閉：任務交辦中心 -->
+                        <!-- 暫時關閉：任務交辦中心（#224；整合分支保留 taskSender ALL→UID 修復於 shared/js） -->
                         <div v-if="false" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">

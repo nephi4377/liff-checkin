@@ -1,4 +1,4 @@
-# LayoutPlanner Vitest + Playwright（僅 PR / 手動；不部署、不碰 Pages）
+# LayoutPlanner Vitest + Playwright + 主控台 smoke（僅 PR / 手動；不部署、不碰 Pages）
 name: LayoutPlanner tests
 
 on:
@@ -48,3 +48,28 @@ jobs:
         env:
           CI: true
           LP_E2E_ARTIFACTS: ${{ runner.temp }}/lp-artifacts
+
+  console-e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Hub / project-console smoke (mocked GAS)
+        run: npm run test:console-e2e
+        env:
+          CI: true

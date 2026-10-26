@@ -13,6 +13,7 @@ function assert(cond, msg) {
   console.log('OK:', msg);
 }
 
+var cacheBust = require('./test-cache-bust-helper');
 var root = path.resolve(__dirname, '../../..');
 var review = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
 var pay = fs.readFileSync(path.join(root, 'modules/accounting/payment_request.html'), 'utf8');
@@ -22,7 +23,7 @@ assert(/ai-preaudit/.test(review), 'review has ai-preaudit styles');
 assert(/aiPreauditBannerHtml/.test(review), 'review banner helper');
 assert(/預審尚未完成，可直接審/.test(review), '123.1 missing copy');
 assert(/item\.ai_preaudit/.test(review), 'reads item.ai_preaudit');
-assert(/accounting_api\.js\?v=105/.test(review), 'review api v=105');
+cacheBust.assertNumericCacheBust(review, cacheBust.RE.accountingApi, 'ledger_review accounting_api.js cache bust', 105);
 assert(!/載入報價對應/.test(review), 'no #140 button-as-product UX');
 assert(!/btn-quote-audit/.test(review), 'no quote-audit button class');
 
