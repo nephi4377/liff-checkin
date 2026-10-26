@@ -38,10 +38,11 @@
 
     <!-- 引入 Vue 3 (生產版) 和我們的應用程式主腳本 -->
     <script>
-        var FRONTEND_VERSION = 'v26.10.26.7'; // Hub F5：排班頁先吃主控台／共用員工快取
+        var FRONTEND_VERSION = 'v26.10.26.8'; // Hub F6：主控台寫入操作者身分到本分頁記憶（OperatorContext）
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="./shared/js/operator_context.js?v=3"></script>
     <script src="./shared/js/hub_ref_cache.js?v=2"></script>
-    <script type="module" src="./spa/app.js?v=26.10.26.7"></script>
+    <script type="module" src="./spa/app.js?v=26.10.26.8"></script>
 </body>
 </html>

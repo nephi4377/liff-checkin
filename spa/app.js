@@ -152,6 +152,30 @@ const App = {
             if (op && String(op.userId) === String(uid)) return op;
             return null;
         });
+        /**
+         * F6：主控台把操作者身分寫入本分頁 sessionStorage（tanxin_operator_v1），
+         * 給只讀 session、沒帶齊 URL query 的子頁沿用。缺 userId 不寫；失敗略過。
+         */
+        const syncHubOperatorSession = () => {
+            try {
+                if (typeof OperatorContext === 'undefined' || typeof OperatorContext.write !== 'function') return;
+                const uid = String(userProfile.value?.userId || '').trim();
+                if (!uid) return;
+                const cu = currentUser.value;
+                const name = String(
+                    cu?.userName || cu?.displayName || userProfile.value?.displayName || ''
+                ).trim();
+                const permission = Number(cu?.permission ?? operatorProfile.value?.permission ?? 0) || 0;
+                OperatorContext.write({
+                    userId: uid,
+                    userName: name,
+                    displayName: name,
+                    permission,
+                    hubLiffId: CONFIG.HUB_LIFF_ID || '',
+                    source: 'hub'
+                });
+            } catch (e) { /* sessionStorage 不可用時略過 */ }
+        };
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
         /** 全員出勤燈號看板／右側今日燈號：權限 ≥ 3 可見（其餘管理功能仍 ≥ 4） */
         const canViewStaffStatusBoard = computed(() => Number(currentUser.value?.permission || 0) >= 3);
@@ -871,6 +895,7 @@ const App = {
                 saveHubPresenceCache(attendanceResult.todayPresence);
                 hubPresenceFromCoreAt = Date.now();
             }
+            syncHubOperatorSession();
             return true;
         };
 
@@ -983,6 +1008,8 @@ const App = {
                     refreshHubIdToken();
                     restoreHashAfterRelogin();
                 }
+                // F6：有快取員工時立刻寫本分頁操作者；核心回來後 applyAttendancePayload 會再覆寫一次
+                syncHubOperatorSession();
 
                 // 核心＋專案：
                 // - 有快取 → 先畫面、背景更新（不擋「正在驗證…」）
