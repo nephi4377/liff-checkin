@@ -17,10 +17,17 @@ const HUB_PRESENCE_POLL_MS = 30 * 60 * 1000;
 const HUB_BOOT_COALESCE_MS = 20 * 1000;
 const HUB_BOOT_FETCHED_AT_KEY = 'hub_boot_fetched_at';
 const HUB_BOOT_INFLIGHT_AT_KEY = 'hub_boot_inflight_at';
+/**
+ * 核心 get_hub_core_data 已內嵌今日燈號時，短時間內略過立刻再打 get_hub_today_presence
+ *（開頁後 sync／權限 watch 常會連打；儀表板 30 分輪詢不受影響）
+ */
+const HUB_PRESENCE_COALESCE_MS = HUB_BOOT_COALESCE_MS;
 
 /** 同頁面內進行中的請求合併（避免 watch／重入再打一輪） */
 let hubAttendanceInflight = null;
 let hubProjectsInflight = null;
+/** 核心剛寫入 todayPresence 的時間戳；供開頁燈號 coalesce */
+let hubPresenceFromCoreAt = 0;
 
 const App = {
     components: { Dashboard, ProjectBoard, StaffTodaySidebar, HubLeftSidebar, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
@@ -457,13 +464,20 @@ const App = {
         // 權限 2+ 可見「人員出席」燈號；不可只限權限 4+，否則一般員工會因無資料而誤顯示紅燈
         const canViewPresenceLights = computed(() => Number(currentUser.value?.permission || 0) >= 2);
 
+        /** 核心剛帶回今日燈號 → 略過立刻再打燈號 API（F1） */
+        const shouldSkipImmediatePresenceFetch = () => {
+            return hubPresenceFromCoreAt > 0
+                && (Date.now() - hubPresenceFromCoreAt) < HUB_PRESENCE_COALESCE_MS;
+        };
+
         const syncPresenceRefreshForView = (viewName) => {
+            const skipFetch = shouldSkipImmediatePresenceFetch();
             if (viewName === 'dashboard' && canViewPresenceLights.value) {
-                refreshTodayPresenceInBackground();
+                if (!skipFetch) refreshTodayPresenceInBackground();
                 startPresencePolling();
             } else {
                 stopPresencePolling();
-                if (canViewPresenceLights.value) {
+                if (canViewPresenceLights.value && !skipFetch) {
                     refreshTodayPresenceInBackground();
                 }
             }
@@ -794,6 +808,7 @@ const App = {
             if (attendanceResult.todayPresence && typeof attendanceResult.todayPresence === 'object') {
                 todayPresence.value = attendanceResult.todayPresence;
                 saveHubPresenceCache(attendanceResult.todayPresence);
+                hubPresenceFromCoreAt = Date.now();
             }
             return true;
         };
