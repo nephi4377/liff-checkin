@@ -337,30 +337,57 @@
         if (currentMode === 'create') refreshCustomerBindPanel();
       });
 
-      // 1. 頁面載入時，取得所有案場列表
+      // 1. 頁面載入：員工／案場先吃主控台 HubRefCache（父層／本機），沒有再打 API
+      function readHubRefList(kind) {
+        try {
+          if (typeof HubRefCache === 'undefined') return [];
+          const list = HubRefCache.read(kind) || [];
+          return Array.isArray(list) && list.length ? list : [];
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function normalizeCachedSites(rows) {
+        return (rows || []).map(function (p) {
+          if (!p || typeof p !== 'object') return null;
+          const code = p['案號'] != null && String(p['案號']).trim() !== ''
+            ? p['案號']
+            : (p.id != null ? p.id : p.project_no);
+          if (code == null || String(code).trim() === '') return null;
+          if (p['案號'] != null && String(p['案號']).trim() !== '') return p;
+          return Object.assign({}, p, { '案號': code });
+        }).filter(Boolean);
+      }
+
       window.onload = () => {
         if (typeof AccountingApi !== 'undefined' && AccountingApi.primeHubIdentityFromUrl) {
           AccountingApi.primeHubIdentityFromUrl();
         }
         refreshCustomerBindPanel();
-        // 【v110.4 偵錯強化】記錄前端的「輸入」，顯示要發送給後端的請求。
-        console.log('[NewSiteForm][Input] 準備向後端請求案場列表 (get_all_sites)...');
 
-        // 【v126.0 核心重構】改用 fetch API，並使用 Promise.all 並行請求，提升載入速度。
-        // 【v172.0 核心修正】為所有請求附上使用者資訊，以便後端日誌追蹤。
-        // 由於此頁面沒有 LIFF 認證，我們假設操作者是從其他地方跳轉過來的，
-        // 因此在 URL 中應該會有 uid 和 name 參數。
+        // 【v172.0】URL 帶 uid／name（從主控台 iframe 傳入）供 API 後備與後端日誌
         const urlParams = new URLSearchParams(window.location.search);
         const uid = urlParams.get('uid') || 'unknown_user';
         const name = urlParams.get('name') || 'Unknown User';
-
-        // 【v177.0 核心修正】如果 name 是預設的 'Unknown User'，則不要將其作為參數傳遞，讓後端日誌顯示為 N/A
         const userQueryString = `userId=${uid}` + (name !== 'Unknown User' ? `&userName=${encodeURIComponent(name)}` : '');
 
-        const sitesUrl = `${API_URL}?page=attendance_api&action=get_all_sites&${userQueryString}`;
-        const employeesUrl = `${API_URL}?page=attendance_api&action=get_employees&${userQueryString}`;
-        const sitesPromise = fetch(sitesUrl).then(res => res.json());
-        const employeesPromise = fetch(employeesUrl).then(res => res.json());
+        const cachedEmployees = readHubRefList('employees');
+        const cachedProjects = normalizeCachedSites(readHubRefList('projects'));
+        const empSource = cachedEmployees.length
+          ? (typeof HubRefCache !== 'undefined' ? HubRefCache.sourceLabel('employees') : 'cache')
+          : 'api';
+        const projSource = cachedProjects.length
+          ? (typeof HubRefCache !== 'undefined' ? HubRefCache.sourceLabel('projects') : 'cache')
+          : 'api';
+        console.log('[NewSiteForm] 員工來源=' + empSource + '；案場來源=' + projSource);
+
+        const employeesPromise = cachedEmployees.length
+          ? Promise.resolve({ success: true, data: cachedEmployees, source: empSource })
+          : fetch(`${API_URL}?page=attendance_api&action=get_employees&${userQueryString}`).then(res => res.json());
+        const sitesPromise = cachedProjects.length
+          ? Promise.resolve({ success: true, data: cachedProjects, source: projSource })
+          : fetch(`${API_URL}?page=attendance_api&action=get_all_sites&${userQueryString}`).then(res => res.json());
 
         Promise.all([sitesPromise, employeesPromise])
           .then(([sitesResponse, employeesResponse]) => {
@@ -394,9 +421,9 @@
           console.log(`[NewSiteForm] 從後端取得 ${activeSites.length} 個有效案場的完整資料。`);
 
           activeSites.forEach(site => {
-            // 【v127.5 全量修正】統一使用後端原始欄位名
-            const sName = site.siteName || site['案場名稱'] || '未命名案場';
-            const sCode = site['案號'] || 'N/A';
+            // 【v127.5】後端欄位名；Hub 快取另可能有 name／id
+            const sName = site.siteName || site['案場名稱'] || site.name || '未命名案場';
+            const sCode = site['案號'] || site.id || 'N/A';
             const option = new Option(`${sCode} - ${sName}`, sCode);
             projectSelector.add(option);
           });
@@ -460,7 +487,9 @@ ${notes || '無'}`;
         const selectedCode = this.value;
         if (selectedCode) {
           // 【v119.0 核心重構】不再發送 API 請求，直接從已載入的 allSitesData 中尋找資料
-          const siteDetails = allSitesData.find(site => String(site['案號']) === String(selectedCode));
+          const siteDetails = allSitesData.find(site =>
+            String(site['案號'] || site.id || '') === String(selectedCode)
+          );
           // 【v119.0 修正】將找到的資料包裝成與舊 API 相同的格式，以利 fillFormForUpdate 函式處理
           if (siteDetails) fillFormForUpdate({ success: true, data: siteDetails });
         } else {

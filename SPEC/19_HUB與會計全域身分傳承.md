@@ -143,6 +143,7 @@
 |------|------|------|
 | HUB `spa/app.js`：`get_hub_core_data` 成功 → `HubRefCache.set('employees'/'projects')` | 會計 iframe：`HubRefCache.read()` → 父層 `spaAll*` 優先 | iframe **不應**再各自打員工／案場 API |
 | 會計 `searchMasterList(official_customer)` 首次 `fetch_all` → `HubRefCache.set('customers')` | 各會計頁本地 keyword 篩選 | 綁定成功 `invalidate('customers')` |
+| HUB 寫入後 | **`NewSiteForm`**：開頁先 `HubRefCache.read` 員工／案場；沒有才 `get_employees`／`get_all_sites` | 案場 CRUD 成功仍 `invalidate`＋`spa_hub_invalidate_projects` |
 | `NewSiteForm` 等 postMessage `spa_hub_invalidate_projects` | HUB 重抓後 `HubRefCache.set('projects')` | 案場 CRUD 後清快取 |
 
 **與其他快取的分工**
@@ -338,6 +339,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-26 | v1.9.5：新增／修改案場（`NewSiteForm`）開頁先讀 `HubRefCache` 員工／案場；沒有才打 `get_employees`／`get_all_sites`。API 契約不變。 |
 | 2026-10-26 | v1.9.4：HUB 班表失敗維持先前畫面＋`scheduleError`／再試（接上既有 `hubSchedule.js`）；失敗不寫空快取。API 契約不變。 |
 | 2026-10-26 | v1.9.3：HUB 燈號／今日回報／款項待辦背景更新加**進行中合併**（同頁連打／watch 共用同一個進行中請求）；與核心／專案 single-flight 同招。API 契約不變。 |
 | 2026-10-26 | v1.9.2：HUB 開頁若 `get_hub_core_data` 已帶回今日燈號，**20 秒**內略過立刻再打 `get_hub_today_presence`（開頁 sync／權限 watch）；儀表板 **30 分**輪詢照舊。API 契約不變。 |
