@@ -283,7 +283,7 @@ const App = {
             '#/dashboard': { name: 'dashboard' },
             '#/project-board': { name: 'project-board' },
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
-            '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html', title: '新增／修改案場資料' }, // [v515.0 修正] 改為絕對路徑；標題與表單「可選既有案場更新」一致
+            '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html?v=26.10.26.6', title: '新增／修改案場資料' }, // Hub F4：先吃 HubRefCache
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
