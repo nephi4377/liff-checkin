@@ -338,6 +338,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-26 | v1.9.3：HUB 燈號／今日回報／款項待辦背景更新加**進行中合併**（同頁連打／watch 共用同一個進行中請求）；與核心／專案 single-flight 同招。API 契約不變。 |
 | 2026-10-26 | v1.9.2：HUB 開頁若 `get_hub_core_data` 已帶回今日燈號，**20 秒**內略過立刻再打 `get_hub_today_presence`（開頁 sync／權限 watch）；儀表板 **30 分**輪詢照舊。API 契約不變。 |
 | 2026-10-03 | v1.9.1：HUB 開頁 `get_hub_core_data`／`get_hub_projects_data` 同頁 single-flight；有快取改背景更新；session **20 秒**內剛成功或上一輪仍在飛且已有快取則略過本輪（手動重試／`spa_hub_invalidate_projects` 仍立刻重抓）。API 契約不變。 |
 | 2026-08-13 | v1.9：選材請求必帶員工編號；後端認 `uid`／`userId` |
