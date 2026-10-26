@@ -12,6 +12,18 @@
     authDomain: '',
     projectId: '',
   };
+
+  function qrFbPublicDefaults() {
+    try {
+      if (typeof FIREBASE_RTDB_WEB_PUBLIC !== 'undefined' && FIREBASE_RTDB_WEB_PUBLIC) {
+        return FIREBASE_RTDB_WEB_PUBLIC;
+      }
+      if (typeof globalThis !== 'undefined' && globalThis.FIREBASE_RTDB_WEB_PUBLIC) {
+        return globalThis.FIREBASE_RTDB_WEB_PUBLIC;
+      }
+    } catch (e) { /* ignore */ }
+    return {};
+  }
   var PING_TO_M2 = 3.305785124;
   var SCHEMA_V = 7;
 

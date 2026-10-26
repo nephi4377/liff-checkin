@@ -8,6 +8,8 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="../shared/js/firebase-rtdb-public-config.js"></script>
+    <script src="../shared/js/firebase-rtdb-auth-compat.js"></script>
     <!-- SheetJS (XLSX) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="budget-quote-parser-lib.js"></script>
@@ -327,6 +329,7 @@
         projectVerifyStatus.style.color = "#666";
 
         try {
+            await TanxinFirebaseRtdb.ensureAuth();
             const snap = await db.ref(`quotations/${no}`).once('value');
             if (snap.exists()) {
                 const data = snap.val();
@@ -497,44 +500,12 @@
     const sheetList = document.getElementById('sheetList');
     const processBtn = document.getElementById('processBtn');
 
-    // Firebase 配置：與 BudgetAuditor_Standalone 共用 localStorage「fb_audit_config」（apiKey 等選填）
-    const FB_CONFIG_DEFAULT = {
-        databaseURL: "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app",
-        apiKey: "",
-        authDomain: "",
-        projectId: ""
-    };
-    let fbConfig = { ...FB_CONFIG_DEFAULT, ...(JSON.parse(localStorage.getItem('fb_audit_config')) || {}) };
-
-    function firebaseAuthConfigured() {
-        const k = (fbConfig.apiKey != null ? String(fbConfig.apiKey) : '').trim();
-        const d = (fbConfig.authDomain != null ? String(fbConfig.authDomain) : '').trim();
-        const p = (fbConfig.projectId != null ? String(fbConfig.projectId) : '').trim();
-        return !!(k && d && p);
-    }
-
-    function buildFirebaseInitOptions() {
-        const o = { databaseURL: fbConfig.databaseURL || FB_CONFIG_DEFAULT.databaseURL };
-        if (firebaseAuthConfigured()) {
-            o.apiKey = String(fbConfig.apiKey).trim();
-            o.authDomain = String(fbConfig.authDomain).trim();
-            o.projectId = String(fbConfig.projectId).trim();
-        }
-        return o;
-    }
-
-    function tryAnonymousSignIn() {
-        if (!firebaseAuthConfigured() || !firebase.apps.length) return;
-        firebase.auth().signInAnonymously().catch(function (e) {
-            console.warn('[Auth] 匿名登入失敗:', e.message);
-        });
-    }
-
-    if (!firebase.apps.length) {
-        firebase.initializeApp(buildFirebaseInitOptions());
-        tryAnonymousSignIn();
-    }
-    const db = firebase.database();
+    // Firebase：內建 Web 公開設定 + localStorage「fb_audit_config」覆寫（與 BudgetAuditor V2 相同）
+    const _tanxinFb = TanxinFirebaseRtdb.init({
+        databaseURL: 'https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app',
+    });
+    const fbConfig = _tanxinFb.config;
+    const db = _tanxinFb.db;
 
     // 脫敏與分類規則
     const SENSITIVE_KEYWORDS = ['價格', '金額', '單價', '總價', '複價', '備註市價', '成本', '小計', '合計', '稅'];
@@ -863,6 +834,7 @@
         syncBtn.innerText = "⏳ 同步中...";
         syncBtn.disabled = true;
         try {
+            await TanxinFirebaseRtdb.ensureAuth();
             let existingData = null;
             try {
                 const snapshot = await db.ref(`quotations/${projectNo}`).once('value');

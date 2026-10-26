@@ -1,0 +1,9 @@
+{
+  "_NOTICE": "片段：禁止 firebase deploy / firebase deploy --only database。僅在 Firebase Console 手動合併進「完整匯出 rules」。合併前請確認上層無 .read:true 覆蓋 quotations（見 runbook）。",
+  "quotations": {
+    "$projectNo": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

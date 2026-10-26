@@ -1,9 +1,11 @@
 'use strict';
   function qrFbReadMergedConfig() {
+    var pub = typeof qrFbPublicDefaults === 'function' ? qrFbPublicDefaults() : {};
     try {
-      return Object.assign({}, FB_CONFIG_DEFAULT, JSON.parse(localStorage.getItem(FB_CONFIG_STORAGE_KEY)) || {});
+      var stored = JSON.parse(localStorage.getItem(FB_CONFIG_STORAGE_KEY)) || {};
+      return Object.assign({}, FB_CONFIG_DEFAULT, pub, stored);
     } catch (e) {
-      return Object.assign({}, FB_CONFIG_DEFAULT);
+      return Object.assign({}, FB_CONFIG_DEFAULT, pub);
     }
   }
 
@@ -26,7 +28,11 @@
   function qrFbEnsureApp() {
     if (typeof firebase === 'undefined') return null;
     try {
-      if (!firebase.apps.length) {
+      if (typeof TanxinFirebaseRtdb !== 'undefined' && TanxinFirebaseRtdb.init) {
+        if (!firebase.apps.length) {
+          TanxinFirebaseRtdb.init({ databaseURL: FB_CONFIG_DEFAULT.databaseURL });
+        }
+      } else if (!firebase.apps.length) {
         firebase.initializeApp(qrFbInitOptions());
       }
     } catch (e) {
@@ -34,13 +40,19 @@
       return null;
     }
     try {
-      if (qrFbAuthConfigured() && firebase.auth) {
+      if (firebase.auth) {
         firebase.auth().onAuthStateChanged(function (u) {
           state.fbAuthUid = u && u.uid ? u.uid : null;
         });
-        firebase.auth().signInAnonymously().catch(function (e2) {
-          console.warn('[QuickQuote Firebase] 匿名登入失敗', e2 && e2.message);
-        });
+        if (typeof TanxinFirebaseRtdb !== 'undefined' && TanxinFirebaseRtdb.ensureAuth) {
+          TanxinFirebaseRtdb.ensureAuth().catch(function (e2) {
+            console.warn('[QuickQuote Firebase] 匿名登入失敗', e2 && e2.message);
+          });
+        } else if (qrFbAuthConfigured() && firebase.auth) {
+          firebase.auth().signInAnonymously().catch(function (e2) {
+            console.warn('[QuickQuote Firebase] 匿名登入失敗', e2 && e2.message);
+          });
+        }
       }
     } catch (e3) {
       console.warn('[QuickQuote Firebase]', e3);
@@ -219,8 +231,12 @@
       if (!silent) alert('無法連線 Firebase（程式未載入或初始化失敗）。');
       return Promise.resolve(false);
     }
-    return qrFbSettingsRef(db)
-      .set(state.settings)
+    var pushChain = typeof TanxinFirebaseRtdb !== 'undefined' && TanxinFirebaseRtdb.ensureAuth
+      ? TanxinFirebaseRtdb.ensureAuth()
+      : Promise.resolve();
+    return pushChain.then(function () {
+      return qrFbSettingsRef(db).set(state.settings);
+    })
       .then(function () {
         qrFbSetSyncNote('已上傳至雲端（' + FB_RTDB_SETTINGS_PATH + '）。');
         if (!silent) alert('已上傳到 Firebase。');
@@ -244,8 +260,12 @@
       if (!silent) qrFbSetSyncNote('未載入 Firebase SDK 或無法初始化。');
       return Promise.resolve(false);
     }
-    return qrFbSettingsRef(db)
-      .once('value')
+    var pullChain = typeof TanxinFirebaseRtdb !== 'undefined' && TanxinFirebaseRtdb.ensureAuth
+      ? TanxinFirebaseRtdb.ensureAuth()
+      : Promise.resolve();
+    return pullChain.then(function () {
+      return qrFbSettingsRef(db).once('value');
+    })
       .then(function (snap) {
         var val = snap.val();
         if (val == null || typeof val !== 'object') {
