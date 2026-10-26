@@ -1,4 +1,4 @@
-import Dashboard from './Dashboard.js?v=26.10.03.1';
+import Dashboard from './Dashboard.js?v=26.10.26.1';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.07.24.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
@@ -6,8 +6,9 @@ import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
-import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
-import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
+// 暫時關閉：任務交辦中心 — 恢復時一併取消下行註解
+// import { request as apiRequest } from '../modules/projects/js/projectApi.js';
+// import { initializeTaskSender } from '../shared/js/taskSender.js';
 
 const { createApp, ref, onMounted, onUnmounted, computed, watch, nextTick } = Vue;
 
@@ -1069,26 +1070,20 @@ const App = {
             stopPresencePolling();
         });
 
-        // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
-        watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
-            // 只有當使用者有權限，且當前視圖是主控台時，才執行
-            if (isAdmin && view.name === 'dashboard' && employees.length > 0) {
-                // 使用 nextTick 確保 DOM 元素已準備就緒
-                nextTick(() => {
-                    const taskSenderContainer = document.getElementById('task-sender-container');
-                    if (taskSenderContainer) {
-                        const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
-                        // [v553.0 架構統一] 為了與 main.js 的行為一致，此處模擬 projectApi.js 的 postTask 流程。
-                        // [重構] 將請求函式直接指向 apiRequest，並固定 action 為 'sendNotification'。
-                        // taskSender 模組會自動將它的 payload 傳遞給這個函式。
-                        const sendRequestFunction = (payload) => apiRequest({ action: 'sendNotification', payload });
-                        const config = { state, api: { sendRequest: sendRequestFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
-                        // 【您的要求】傳入分組與收合設定
-                        initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
-                    }
-                });
-            }
-        }, { immediate: true }); // immediate: true 確保在初次載入時也會執行一次檢查
+        // 暫時關閉：任務交辦中心（主控台 UX；與假勤審核無關，後端 sendNotification 保留）
+        // watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
+        //     if (isAdmin && view.name === 'dashboard' && employees.length > 0) {
+        //         nextTick(() => {
+        //             const taskSenderContainer = document.getElementById('task-sender-container');
+        //             if (taskSenderContainer) {
+        //                 const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
+        //                 const sendRequestFunction = (payload) => apiRequest({ action: 'sendNotification', payload });
+        //                 const config = { state, api: { sendRequest: sendRequestFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
+        //                 initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
+        //             }
+        //         });
+        //     }
+        // }, { immediate: true });
 
         // [v411.0 SPA化] 監聽 URL hash 的變化
         window.addEventListener('hashchange', handleRouteChange);
@@ -1196,7 +1191,8 @@ const App = {
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
                         <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" />
-                        <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
+                        <!-- 暫時關閉：任務交辦中心 -->
+                        <div v-if="false" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
                                 <span class="font-semibold text-emerald-900">公開落地頁</span>

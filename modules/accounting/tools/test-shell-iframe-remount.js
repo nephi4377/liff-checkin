@@ -46,6 +46,6 @@ assert(iframeView.indexOf('about:blank') >= 0, 'IframeView blank-remount on src 
 assert(iframeView.indexOf('watch(') >= 0, 'IframeView watches src');
 assert(/:key="\(currentView\.src/.test(appJs) || appJs.indexOf(':key="(currentView.src') >= 0,
   'app.js keys IframeView by src+params');
-assert(hubIndex.indexOf('app.js?v=26.10.13.1') >= 0, 'hub app.js cache bust');
+assert(hubIndex.indexOf('app.js?v=26.10.26.1') >= 0, 'hub app.js cache bust');
 
 console.log('test-shell-iframe-remount: ok');

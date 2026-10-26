@@ -52,11 +52,11 @@
        以便後續的模組腳本 (main.js) 可以透過 window.API_BASE_URL 存取。 -->
   <script>
     var API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
-    var FRONTEND_VERSION = 'v26.07.01.1'; // SPEC19 HUB hubLiffId + index 快取破除
+    var FRONTEND_VERSION = 'v26.10.26.1'; // 暫時關閉專案協作中心分頁
   </script>
   <!-- [v2026.02.28 核心修正] 更新版本號以強制瀏覽器下載最新的 JavaScript 檔案。
        這可以解決因瀏覽器快取舊版 api.js，導致輪詢任務狀態時發送錯誤 POST 請求的問題。 -->
-  <script type="module" src="./js/main.js?v=26.09.22.1"></script>
+  <script type="module" src="./js/main.js?v=26.10.26.1"></script>
 </head>
 
 <body>
@@ -93,10 +93,12 @@
           <button class="nav-button nav-button--mobile-only-project" data-view="project-basic" type="button">
             <span>專案基本資料</span>
           </button>
-          <!-- [v213.0 新增][v244.0 重命名] 專案協作中心分頁按鈕 -->
+          <!-- 暫時關閉：專案協作中心（任務交辦／溝通紀錄；與假勤審核無關） -->
+          <!--
           <button class="nav-button" data-view="collaboration">
             <span>專案協作中心</span>
           </button>
+          -->
         </nav>
       </aside>
 
@@ -109,11 +111,13 @@
             <iframe id="auditor-iframe" class="auditor-embed-iframe" title="專案驗收表" src="about:blank" loading="lazy"></iframe>
           </div>
           <div id="schedule-container" style="display:none;"></div>
-          <!-- [v213.0 新增][v261.0 重構] 專案協作中心內容容器 -->
+          <!-- 暫時關閉：專案協作中心內容（任務交辦／溝通紀錄） -->
+          <!--
           <div id="collaboration-container" style="display: none;">
-            <div id="task-sender-container"></div> <!-- 任務交辦中心的容器 -->
+            <div id="task-sender-container"></div>
             <div id="communication-history-list"></div>
           </div>
+          -->
         </main>
 
         <!-- 右欄：專案資訊面板（手機預設隱藏，僅「專案基本資料」分頁顯示） -->

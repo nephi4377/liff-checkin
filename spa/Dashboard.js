@@ -551,8 +551,8 @@ export default {
                 </template>
             </div>
 
-            <!-- 智慧通知中心（預設摺疊；有事才亮燈） -->
-            <div class="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
+            <!-- 暫時關閉：智慧通知中心（任務交辦通知面板；與假勤審核無關，後端 API 保留） -->
+            <div v-if="false" class="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
                 <div class="flex justify-between items-center px-5 py-3 cursor-pointer select-none" @click="toggleNotifications">
                     <div class="flex items-center gap-2">
                         <h2 class="text-base font-bold text-gray-700">智慧通知中心</h2>
