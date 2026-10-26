@@ -610,6 +610,8 @@ const dependencyManager = {
  * [v292.0 新增] 封裝初始化任務交辦中心的邏輯。
  */
 function initializeTaskSenderForConsole() {
+  // 暫時關閉：任務交辦中心（專案工作區協作分頁；與假勤審核無關）
+  return;
   const taskSenderContainer = document.getElementById('task-sender-container');
   if (!taskSenderContainer || document.getElementById('task-sender-wrapper')) return;
   // [v602.0 重構] 移除對 window.API_BASE_URL 的依賴
