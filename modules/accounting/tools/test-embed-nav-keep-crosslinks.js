@@ -21,7 +21,16 @@ assert(navJs.indexOf('keepCount') >= 0 || navJs.indexOf('hasKeep') >= 0, 'keeps 
 assert(!/body\.acct-embed\s+\.nav\s*,/.test(css) && !/body\.acct-embed\s+\.nav\s*\{/.test(css),
   'CSS must not display:none all .nav in embed');
 
-['payment_request.html', 'accounting_ingest.html', 'ledger_history.html', 'submit_records.html'].forEach(function (name) {
+function cacheBustVer(html, assetRe) {
+  var m = html.match(assetRe);
+  return m ? m[1] : null;
+}
+
+var embedPages = ['payment_request.html', 'accounting_ingest.html', 'ledger_history.html', 'submit_records.html'];
+var navVers = [];
+var layoutVers = [];
+
+embedPages.forEach(function (name) {
   var html = fs.readFileSync(path.join(root, name), 'utf8');
   assert(html.indexOf('acct-nav-back') >= 0, name + ' marks menu back for embed hide');
   if (name === 'submit_records.html') {
@@ -29,9 +38,16 @@ assert(!/body\.acct-embed\s+\.nav\s*,/.test(css) && !/body\.acct-embed\s+\.nav\s
   } else {
     assert(html.indexOf('id="navSubmitRecordsLink"') >= 0, name + ' has 送出紀錄 cross-link');
   }
-  assert(/accounting_nav\.js\?v=4/.test(html), name + ' bumps accounting_nav cache');
-  assert(/accounting_layout\.css\?v=7/.test(html), name + ' bumps layout cache');
+  var navV = cacheBustVer(html, /accounting_nav\.js\?v=(\d+)/);
+  assert(navV, name + ' links accounting_nav.js with ?v= cache bust');
+  navVers.push(navV);
+  var layoutV = cacheBustVer(html, /accounting_layout\.css\?v=(\d+)/);
+  assert(layoutV, name + ' links accounting_layout.css with ?v= cache bust');
+  layoutVers.push(layoutV);
 });
+
+assert(new Set(navVers).size === 1, 'embed-nav pages share one accounting_nav.js ?v= (' + navVers.join(',') + ')');
+assert(new Set(layoutVers).size === 1, 'embed-nav pages share one accounting_layout.css ?v= (' + layoutVers.join(',') + ')');
 
 var pay = fs.readFileSync(path.join(root, 'payment_request.html'), 'utf8');
 assert(pay.indexOf('id="navSubmitRecordsLink"') >= 0, 'payment_request keeps 送出紀錄 id');
