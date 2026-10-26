@@ -73,7 +73,7 @@ export default {
             });
         };
 
-        /** FB 發文工作室：外部靜態工具（權限 ≥ 3） */
+        /** FB 發文工作室：外部靜態工具（暫不顯示卡片；tools/ 與後端保留） */
         const fbPostStudioPublicUrl = 'https://info.tanxin.space/tools/fb-post-studio/';
         const fbPostStudioUrlCopied = ref(false);
         let fbPostStudioCopyTimer = null;
@@ -676,8 +676,8 @@ export default {
                     </div>
                 </a>
 
-                <!-- 4b. 副本文字冒險（實驗中：僅權限 5 可見；外部網站：開啟＋複製連結，非 iframe） -->
-                <div v-if="currentUser && currentUser.permission >= 5"
+                <!-- 4b. 副本文字冒險（實驗中：須權限 ≥ 5；外部網站：開啟＋複製連結，非 iframe） -->
+                <div v-if="currentUser && Number(currentUser.permission) >= 5"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-violet-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xl">📖</div>
                     <div class="min-w-0 flex-1">
@@ -694,8 +694,8 @@ export default {
                     </div>
                 </div>
 
-                <!-- 4c. FB 發文工作室（外部工具；權限 ≥ 3） -->
-                <div v-if="currentUser && currentUser.permission >= 3"
+                <!-- 4c. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
+                <div v-if="false"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📣</div>
                     <div class="min-w-0 flex-1">
