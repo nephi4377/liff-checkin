@@ -292,7 +292,7 @@ const App = {
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
-            '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
+            '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html?v=26.10.26.7', title: '員工排班系統' }, // Hub F5：先吃 HubRefCache 員工
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
             '#/report': { name: 'iframe', src: 'modules/projects/reportV3.html', title: '施工回報' }, // [v605.3] 修正相容性後重新啟用 V3 版本
