@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "quotations": {
+      "$projectNo": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "_emulator_unrelated_public": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}

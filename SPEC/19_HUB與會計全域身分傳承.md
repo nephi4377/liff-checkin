@@ -121,6 +121,7 @@
 | 誰寫 | 誰讀 |
 |------|------|
 | `spa/app.js` iframe `src` 附加 `uid`／`name`／`permission`／`hub_liff_id` | 各 `modules/*` 靜態頁、`operator_context.js`、`accounting_api.js` |
+| **HUB 主控台**登入／核心就緒後 `OperatorContext.write`（`source: hub`）→ `tanxin_operator_v1` | 只讀本分頁記憶、URL query 不全的子頁 |
 | `operator_context.js` 首次帶 query 時寫 `tanxin_operator_v1`（並同步 legacy `acct_dev_*`） | 會計子頁 `initSession`、相對連結跳轉後仍讀 storage |
 | `spa/app.js` 回應 iframe `request_hub_liff_token` → `hub_liff_token` | `accounting_api.js` 在 iframe 內向父層要 token |
 | accounting-gas `resolveAccountingAuth_` | 所有會計 `action`；`dev_user_id` 時 `fetchEmployeeByUserId_` |
@@ -143,6 +144,8 @@
 |------|------|------|
 | HUB `spa/app.js`：`get_hub_core_data` 成功 → `HubRefCache.set('employees'/'projects')` | 會計 iframe：`HubRefCache.read()` → 父層 `spaAll*` 優先 | iframe **不應**再各自打員工／案場 API |
 | 會計 `searchMasterList(official_customer)` 首次 `fetch_all` → `HubRefCache.set('customers')` | 各會計頁本地 keyword 篩選 | 綁定成功 `invalidate('customers')` |
+| HUB 寫入後 | **`NewSiteForm`**：開頁先 `HubRefCache.read` 員工／案場；沒有才 `get_employees`／`get_all_sites` | 案場 CRUD 成功仍 `invalidate`＋`spa_hub_invalidate_projects` |
+| HUB 寫入後 | **`shift_schedule`**：開頁先 `HubRefCache.read('employees')`；沒有才 `get_employees`（班表仍另抓） | 獨立開頁（無快取）仍 API 後備 |
 | `NewSiteForm` 等 postMessage `spa_hub_invalidate_projects` | HUB 重抓後 `HubRefCache.set('projects')` | 案場 CRUD 後清快取 |
 
 **與其他快取的分工**
@@ -243,7 +246,7 @@
 | 項目 | 規格 |
 |------|------|
 | **壽命** | 到瀏覽器分頁關閉；不寫 `localStorage` |
-| **更新** | HUB iframe 帶新 query 時 `mergeFromUrl` 覆寫；`accounting_auth_me` 成功時 `applySession` |
+| **更新** | HUB 主控台登入後 `OperatorContext.write`（`source: hub`）；iframe 帶新 query 時 `mergeFromUrl` 覆寫；`accounting_auth_me` 成功時 `applySession` |
 | **清除** | 登出／LIFF 驗證失敗時 `OperatorContext.clear()` |
 | **相容** | 仍同步寫入 legacy `acct_dev_user`／`acct_dev_perm`，舊頁可過渡讀取 |
 
@@ -258,6 +261,7 @@
 | HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**，避免 `permission` 更新整頁重載 |
 | HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js`（`refreshHubIdToken` 須與 `handleIframeMessage` **同 setup 作用域**） |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
+| HUB 主控台種子寫入 `OperatorContext` | ✅ `index.html` 載入＋`spa/app.js` `syncHubOperatorSession`（F6） |
 | **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
 | 會計讀 operator；從主控台進**不借通行證** | ✅ `accounting_api.js` v49（本分頁 `user_id`；後端查員工表） |
 | 選材從主控台進：請求必帶員工編號（網址／本分頁） | ✅ `accounting_api.js` v53；project-console 認 `user_id`／`uid`／`userId` |
@@ -338,6 +342,12 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-26 | v1.9.7：HUB 主控台載入 `operator_context.js`，登入／核心就緒後寫入 `tanxin_operator_v1`（`source: hub`），供子頁讀本分頁記憶。API 契約不變；前端 only，無 clasp。 |
+| 2026-10-26 | v1.9.6：排班頁（`shift_schedule`）開頁先讀 `HubRefCache` 員工；沒有才打 `get_employees`（班表仍另抓）。API 契約不變。 |
+| 2026-10-26 | v1.9.5：新增／修改案場（`NewSiteForm`）開頁先讀 `HubRefCache` 員工／案場；沒有才打 `get_employees`／`get_all_sites`。API 契約不變。 |
+| 2026-10-26 | v1.9.4：HUB 班表失敗維持先前畫面＋`scheduleError`／再試（接上既有 `hubSchedule.js`）；失敗不寫空快取。API 契約不變。 |
+| 2026-10-26 | v1.9.3：HUB 燈號／今日回報／款項待辦背景更新加**進行中合併**（同頁連打／watch 共用同一個進行中請求）；與核心／專案 single-flight 同招。API 契約不變。 |
+| 2026-10-26 | v1.9.2：HUB 開頁若 `get_hub_core_data` 已帶回今日燈號，**20 秒**內略過立刻再打 `get_hub_today_presence`（開頁 sync／權限 watch）；儀表板 **30 分**輪詢照舊。API 契約不變。 |
 | 2026-10-03 | v1.9.1：HUB 開頁 `get_hub_core_data`／`get_hub_projects_data` 同頁 single-flight；有快取改背景更新；session **20 秒**內剛成功或上一輪仍在飛且已有快取則略過本輪（手動重試／`spa_hub_invalidate_projects` 仍立刻重抓）。API 契約不變。 |
 | 2026-08-13 | v1.9：選材請求必帶員工編號；後端認 `uid`／`userId` |
 | 2026-07-12 | v1.5.1：GAS Tier1 `warmHotMasterCaches_`（CheckinSystem 員工；project-console 案場／顧客／員工）；前端 HubRefCache |

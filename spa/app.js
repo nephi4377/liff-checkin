@@ -1,14 +1,15 @@
-import Dashboard from './Dashboard.js?v=26.10.03.1';
+import Dashboard from './Dashboard.js?v=26.10.26.2';
 import ProjectBoard from './ProjectBoard.js?v=26.08.30.1';
 import StaffTodaySidebar from './StaffTodaySidebar.js?v=26.10.22.1';
 import HubLeftSidebar from './HubLeftSidebar.js?v=26.08.31.2';
 import { mergeHubPaymentTodosFetch } from './hubPaymentTodos.js?v=26.08.29.1';
-import { isValidSchedulePayload, mergeHubScheduleFetch } from './hubSchedule.js?v=26.10.22.1';
+import { isValidSchedulePayload, mergeHubScheduleFetch } from './hubSchedule.js?v=26.10.26.5';
 import IframeView from './IframeView.js'; // [v411.0 SPA化] 引入 Iframe 元件
 import { CONFIG } from '../shared/js/config.js'; // [v602.0 重構] 引入統一設定檔
 import { saveCache, loadCache, loadHubPresenceCache, saveHubPresenceCache, loadDailyCache, saveDailyCache, purgeStaleDailyCaches, hubSidebarDailyCacheKey, hubPresenceTodayStr } from '../shared/js/utils.js?v=26.07.24.1';
-import { request as apiRequest } from '../modules/projects/js/projectApi.js'; // [重構] 改為引入統一的 projectApi 模組
-import { initializeTaskSender } from '../shared/js/taskSender.js'; // [v509.0 修正] 更新共用模組路徑
+// 暫時關閉：任務交辦中心 — 恢復時一併取消下行註解
+// import { request as apiRequest } from '../modules/projects/js/projectApi.js';
+// import { initializeTaskSender } from '../shared/js/taskSender.js';
 
 const { createApp, ref, onMounted, onUnmounted, computed, watch, nextTick } = Vue;
 
@@ -17,10 +18,21 @@ const HUB_PRESENCE_POLL_MS = 30 * 60 * 1000;
 const HUB_BOOT_COALESCE_MS = 20 * 1000;
 const HUB_BOOT_FETCHED_AT_KEY = 'hub_boot_fetched_at';
 const HUB_BOOT_INFLIGHT_AT_KEY = 'hub_boot_inflight_at';
+/**
+ * 核心 get_hub_core_data 已內嵌今日燈號時，短時間內略過立刻再打 get_hub_today_presence
+ *（開頁後 sync／權限 watch 常會連打；儀表板 30 分輪詢不受影響）
+ */
+const HUB_PRESENCE_COALESCE_MS = HUB_BOOT_COALESCE_MS;
 
 /** 同頁面內進行中的請求合併（避免 watch／重入再打一輪） */
 let hubAttendanceInflight = null;
 let hubProjectsInflight = null;
+/** F2：燈號／今日回報／款項待辦進行中合併（同頁連打共用同一個請求） */
+let hubPresenceInflight = null;
+let hubTodayReportsInflight = null;
+let hubPaymentTodosInflight = null;
+/** 核心剛寫入 todayPresence 的時間戳；供開頁燈號 coalesce */
+let hubPresenceFromCoreAt = 0;
 
 const App = {
     components: { Dashboard, ProjectBoard, StaffTodaySidebar, HubLeftSidebar, IframeView }, // [v411.0 SPA化] 註冊 Iframe 元件
@@ -140,6 +152,30 @@ const App = {
             if (op && String(op.userId) === String(uid)) return op;
             return null;
         });
+        /**
+         * F6：主控台把操作者身分寫入本分頁 sessionStorage（tanxin_operator_v1），
+         * 給只讀 session、沒帶齊 URL query 的子頁沿用。缺 userId 不寫；失敗略過。
+         */
+        const syncHubOperatorSession = () => {
+            try {
+                if (typeof OperatorContext === 'undefined' || typeof OperatorContext.write !== 'function') return;
+                const uid = String(userProfile.value?.userId || '').trim();
+                if (!uid) return;
+                const cu = currentUser.value;
+                const name = String(
+                    cu?.userName || cu?.displayName || userProfile.value?.displayName || ''
+                ).trim();
+                const permission = Number(cu?.permission ?? operatorProfile.value?.permission ?? 0) || 0;
+                OperatorContext.write({
+                    userId: uid,
+                    userName: name,
+                    displayName: name,
+                    permission,
+                    hubLiffId: CONFIG.HUB_LIFF_ID || '',
+                    source: 'hub'
+                });
+            } catch (e) { /* sessionStorage 不可用時略過 */ }
+        };
         const hasAdminRights = computed(() => Number(currentUser.value?.permission || 0) >= 4);
         /** 全員出勤燈號看板／右側今日燈號：權限 ≥ 3 可見（其餘管理功能仍 ≥ 4） */
         const canViewStaffStatusBoard = computed(() => Number(currentUser.value?.permission || 0) >= 3);
@@ -271,7 +307,7 @@ const App = {
             '#/dashboard': { name: 'dashboard' },
             '#/project-board': { name: 'project-board' },
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
-            '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html', title: '新增／修改案場資料' }, // [v515.0 修正] 改為絕對路徑；標題與表單「可選既有案場更新」一致
+            '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html?v=26.10.26.6', title: '新增／修改案場資料' }, // Hub F4：先吃 HubRefCache
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
@@ -280,7 +316,7 @@ const App = {
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
-            '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html', title: '員工排班系統' }, // [v515.0 修正] 改為絕對路徑
+            '#/shift-schedule': { name: 'iframe', src: 'modules/attendance/shift_schedule.html?v=26.10.26.7', title: '員工排班系統' }, // Hub F5：先吃 HubRefCache 員工
             // [v424.0 架構優化] 將專案工作區與施工回報改為內嵌 iframe
             '#/project-console': { name: 'iframe', src: 'modules/projects/managementconsole.html', title: '專案工作區' }, // [v543.0 修正] 改為正確的模組路徑
             '#/report': { name: 'iframe', src: 'modules/projects/reportV3.html', title: '施工回報' }, // [v605.3] 修正相容性後重新啟用 V3 版本
@@ -322,6 +358,7 @@ const App = {
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
         // 公司知識庫（注意：#/knowledge 已被 index.html 轉去公開 FAQ 頁，故用 #/kb）
         routes['#/kb'] = { name: 'iframe', src: 'modules/kb/index.html', title: '公司知識庫' };
+        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html', title: '總監人事筆記' };
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
@@ -425,8 +462,9 @@ const App = {
         };
 
         const refreshTodayPresenceInBackground = () => {
+            if (hubPresenceInflight) return hubPresenceInflight;
             presenceLoading.value = true;
-            return fetchTodayPresence().then((result) => {
+            hubPresenceInflight = fetchTodayPresence().then((result) => {
                 if (result && result.success && result.todayPresence) {
                     if (JSON.stringify(todayPresence.value) !== JSON.stringify(result.todayPresence)) {
                         todayPresence.value = result.todayPresence;
@@ -437,7 +475,9 @@ const App = {
                 console.warn('[Hub] 背景更新燈號失敗（維持快取）:', e);
             }).finally(() => {
                 presenceLoading.value = false;
+                hubPresenceInflight = null;
             });
+            return hubPresenceInflight;
         };
 
         let presencePollTimer = null;
@@ -459,13 +499,20 @@ const App = {
         // 權限 2+ 可見「人員出席」燈號；不可只限權限 4+，否則一般員工會因無資料而誤顯示紅燈
         const canViewPresenceLights = computed(() => Number(currentUser.value?.permission || 0) >= 2);
 
+        /** 核心剛帶回今日燈號 → 略過立刻再打燈號 API（F1） */
+        const shouldSkipImmediatePresenceFetch = () => {
+            return hubPresenceFromCoreAt > 0
+                && (Date.now() - hubPresenceFromCoreAt) < HUB_PRESENCE_COALESCE_MS;
+        };
+
         const syncPresenceRefreshForView = (viewName) => {
+            const skipFetch = shouldSkipImmediatePresenceFetch();
             if (viewName === 'dashboard' && canViewPresenceLights.value) {
-                refreshTodayPresenceInBackground();
+                if (!skipFetch) refreshTodayPresenceInBackground();
                 startPresencePolling();
             } else {
                 stopPresencePolling();
-                if (canViewPresenceLights.value) {
+                if (canViewPresenceLights.value && !skipFetch) {
                     refreshTodayPresenceInBackground();
                 }
             }
@@ -506,12 +553,13 @@ const App = {
         };
 
         const refreshTodayReportsInBackground = () => {
+            if (hubTodayReportsInflight) return hubTodayReportsInflight;
             todayReportsLoading.value = true;
             const tryOnce = () => fetchTodayReports().then(applyTodayReportsPayload).catch((e) => {
                 console.warn('[Hub] 背景更新今日回報失敗（維持快取）:', e);
                 return false;
             });
-            return tryOnce().then((ok) => {
+            hubTodayReportsInflight = tryOnce().then((ok) => {
                 if (ok) return true;
                 return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
             }).then((ok) => {
@@ -520,7 +568,9 @@ const App = {
                 }
             }).finally(() => {
                 todayReportsLoading.value = false;
+                hubTodayReportsInflight = null;
             });
+            return hubTodayReportsInflight;
         };
 
         const accountingPost = async (body) => {
@@ -607,6 +657,7 @@ const App = {
                 paymentTodosError.value = '';
                 return Promise.resolve();
             }
+            if (hubPaymentTodosInflight) return hubPaymentTodosInflight;
             paymentTodosLoading.value = true;
             const applyResult = (result) => {
                 const merged = mergeHubPaymentTodosFetch(paymentTodos.value, result);
@@ -627,12 +678,14 @@ const App = {
                 });
                 return false;
             });
-            return tryOnce().then((ok) => {
+            hubPaymentTodosInflight = tryOnce().then((ok) => {
                 if (ok) return true;
                 return new Promise((resolve) => setTimeout(resolve, 800)).then(tryOnce);
             }).finally(() => {
                 paymentTodosLoading.value = false;
+                hubPaymentTodosInflight = null;
             });
+            return hubPaymentTodosInflight;
         };
 
         const onTodayReportsUpdated = (list) => {
@@ -840,7 +893,9 @@ const App = {
             if (attendanceResult.todayPresence && typeof attendanceResult.todayPresence === 'object') {
                 todayPresence.value = attendanceResult.todayPresence;
                 saveHubPresenceCache(attendanceResult.todayPresence);
+                hubPresenceFromCoreAt = Date.now();
             }
+            syncHubOperatorSession();
             return true;
         };
 
@@ -953,6 +1008,8 @@ const App = {
                     refreshHubIdToken();
                     restoreHashAfterRelogin();
                 }
+                // F6：有快取員工時立刻寫本分頁操作者；核心回來後 applyAttendancePayload 會再覆寫一次
+                syncHubOperatorSession();
 
                 // 核心＋專案：
                 // - 有快取 → 先畫面、背景更新（不擋「正在驗證…」）
@@ -1100,26 +1157,20 @@ const App = {
             stopPresencePolling();
         });
 
-        // 【您的要求】核心修正：監聽權限與當前視圖，確保任務交辦中心能被正確初始化
-        watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
-            // 只有當使用者有權限，且當前視圖是主控台時，才執行
-            if (isAdmin && view.name === 'dashboard' && employees.length > 0) {
-                // 使用 nextTick 確保 DOM 元素已準備就緒
-                nextTick(() => {
-                    const taskSenderContainer = document.getElementById('task-sender-container');
-                    if (taskSenderContainer) {
-                        const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
-                        // [v553.0 架構統一] 為了與 main.js 的行為一致，此處模擬 projectApi.js 的 postTask 流程。
-                        // [重構] 將請求函式直接指向 apiRequest，並固定 action 為 'sendNotification'。
-                        // taskSender 模組會自動將它的 payload 傳遞給這個函式。
-                        const sendRequestFunction = (payload) => apiRequest({ action: 'sendNotification', payload });
-                        const config = { state, api: { sendRequest: sendRequestFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
-                        // 【您的要求】傳入分組與收合設定
-                        initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
-                    }
-                });
-            }
-        }, { immediate: true }); // immediate: true 確保在初次載入時也會執行一次檢查
+        // 暫時關閉：任務交辦中心（主控台 UX；與假勤審核無關，後端 sendNotification 保留）
+        // watch([hasAdminRights, currentView, allEmployees], ([isAdmin, view, employees]) => {
+        //     if (isAdmin && view.name === 'dashboard' && employees.length > 0) {
+        //         nextTick(() => {
+        //             const taskSenderContainer = document.getElementById('task-sender-container');
+        //             if (taskSenderContainer) {
+        //                 const state = { allEmployees: allEmployees.value, currentUserId: userProfile.value.userId, currentUserName: userProfile.value.displayName };
+        //                 const sendRequestFunction = (payload) => apiRequest({ action: 'sendNotification', payload });
+        //                 const config = { state, api: { sendRequest: sendRequestFunction }, callbacks: { onSuccess: fetchHubProjectsData } };
+        //                 initializeTaskSender(taskSenderContainer, config, { style: 'hub', collapsible: true, groupBy: 'group' });
+        //             }
+        //         });
+        //     }
+        // }, { immediate: true });
 
         // [v411.0 SPA化] 監聽 URL hash 的變化
         window.addEventListener('hashchange', handleRouteChange);
@@ -1230,7 +1281,8 @@ const App = {
                 <main :class="['flex-grow overflow-y-auto min-w-0', { 'container mx-auto max-w-2xl px-4 sm:px-6 lg:px-8': currentView.name !== 'iframe' }]">
                     <div v-if="currentView.name === 'dashboard'" class="py-6">
                         <Dashboard :userProfile="userProfile" :notifications="notifications" :pendingApprovals="pendingApprovals" :allEmployees="allEmployees" :monthSchedule="monthSchedule" :scheduleLoading="scheduleLoading" :scheduleError="scheduleError" :presenceLoading="presenceLoading" :pendingRequestsRaw="pendingRequestsRaw" :todayPresence="todayPresence" :hasAdminRights="hasAdminRights" :canViewStaffStatusBoard="canViewStaffStatusBoard" :currentUser="currentUser" @notification-action="handleNotificationAction" @clear-notifications="clearAllNotifications" @retry-schedule="refreshScheduleInBackground" />
-                        <div v-if="hasAdminRights" id="task-sender-container" class="mt-4"></div>
+                        <!-- 暫時關閉：任務交辦中心（#224；整合分支保留 taskSender ALL→UID 修復於 shared/js） -->
+                        <div v-if="false" id="task-sender-container" class="mt-4"></div>
                         <div class="mt-4 bg-emerald-50/90 px-4 py-3 rounded-lg border border-emerald-200 flex flex-wrap items-center justify-between gap-3">
                             <p class="text-sm text-gray-800 m-0 max-w-full">
                                 <span class="font-semibold text-emerald-900">公開落地頁</span>

@@ -1,5 +1,5 @@
-# 前端 PR 測試：LayoutPlanner（Vitest + Playwright）與主控台 smoke（mock GAS）
-name: Frontend PR tests
+# LayoutPlanner Vitest + Playwright + 主控台 smoke（僅 PR / 手動；不部署、不碰 Pages）
+name: LayoutPlanner tests
 
 on:
   pull_request:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: frontend-pr-tests-${{ github.event.pull_request.number || github.run_id }}
+  group: layout-planner-tests-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  layout-planner:
+  unit-and-e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -47,6 +47,7 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+          LP_E2E_ARTIFACTS: ${{ runner.temp }}/lp-artifacts
 
   console-e2e-smoke:
     runs-on: ubuntu-latest

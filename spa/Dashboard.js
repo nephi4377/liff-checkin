@@ -46,6 +46,7 @@ export default {
         const myPersonalUrl = computed(() => `#/my-personal`);
         const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
+        const directorHrNotesUrl = computed(() => `#/director-hr-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
@@ -73,7 +74,7 @@ export default {
             });
         };
 
-        /** FB 發文工作室：外部靜態工具（權限 ≥ 3） */
+        /** FB 發文工作室：外部靜態工具（暫不顯示卡片；tools/ 與後端保留） */
         const fbPostStudioPublicUrl = 'https://info.tanxin.space/tools/fb-post-studio/';
         const fbPostStudioUrlCopied = ref(false);
         let fbPostStudioCopyTimer = null;
@@ -440,6 +441,7 @@ export default {
             presenceTitle,
             presenceDotClass,
             employeeEditorUrl,
+            directorHrNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -551,8 +553,8 @@ export default {
                 </template>
             </div>
 
-            <!-- 智慧通知中心（預設摺疊；有事才亮燈） -->
-            <div class="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
+            <!-- 暫時關閉：智慧通知中心（任務交辦通知面板；與假勤審核無關，後端 API 保留） -->
+            <div v-if="false" class="bg-white rounded-lg shadow-md border border-gray-200 mb-6">
                 <div class="flex justify-between items-center px-5 py-3 cursor-pointer select-none" @click="toggleNotifications">
                     <div class="flex items-center gap-2">
                         <h2 class="text-base font-bold text-gray-700">智慧通知中心</h2>
@@ -676,8 +678,8 @@ export default {
                     </div>
                 </a>
 
-                <!-- 4b. 副本文字冒險（實驗中：僅權限 5 可見；外部網站：開啟＋複製連結，非 iframe） -->
-                <div v-if="currentUser && currentUser.permission >= 5"
+                <!-- 4b. 副本文字冒險（實驗中：須權限 ≥ 5；外部網站：開啟＋複製連結，非 iframe） -->
+                <div v-if="currentUser && Number(currentUser.permission) >= 5"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-violet-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center text-xl">📖</div>
                     <div class="min-w-0 flex-1">
@@ -694,8 +696,8 @@ export default {
                     </div>
                 </div>
 
-                <!-- 4c. FB 發文工作室（外部工具；權限 ≥ 3） -->
-                <div v-if="currentUser && currentUser.permission >= 3"
+                <!-- 4c. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
+                <div v-if="false"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📣</div>
                     <div class="min-w-0 flex-1">
@@ -830,6 +832,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">員工資料編輯</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">管理基本資料、權限與班表。</p>
+                    </div>
+                </a>
+
+                <!-- 12b. 總監人事筆記（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorHrNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">📓</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">總監人事筆記</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">私人人事紀錄：事件、觀察、面談，可改可分類。</p>
                     </div>
                 </a>
 

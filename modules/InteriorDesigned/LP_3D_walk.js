@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import { clampPointToWalkRings } from './LP_3D_scene.js';
+import {
+    moveWithWalkCollision,
+    resolveWalkBodyRadiusCm,
+    WALK_BODY_RADIUS_CM,
+} from './LP_3D_walk_collision.js';
 
 const MOVE_SPEED_CM_S = 220;
 const LOOK_SENS = 0.0022;
@@ -10,10 +15,10 @@ const WALK_KEY_CODES = new Set([
 ]);
 
 /**
- * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { rings?: {x:number,z:number}[][] }|null }} opts
+ * @param {{ camera: import('three').PerspectiveCamera, domElement: HTMLElement, eyeHeightCm: number, getWalkBounds: () => { rings?: {x:number,z:number}[][] }|null, getWalkCollision?: () => { segments?: object[], obbs?: object[] }|null, getWalkBodyRadiusCm?: () => number }} opts
  */
 export function createWalkController(opts) {
-    const { camera, domElement, eyeHeightCm, getWalkBounds } = opts;
+    const { camera, domElement, eyeHeightCm, getWalkBounds, getWalkCollision, getWalkBodyRadiusCm } = opts;
     let active = false;
     let yaw = 0;
     let pitch = 0;
@@ -30,10 +35,23 @@ export function createWalkController(opts) {
         return clampPointToWalkRings(x, z, bounds?.rings);
     }
 
+    function applyPositionDelta(dx, dz) {
+        const x0 = camera.position.x;
+        const z0 = camera.position.z;
+        const collision = getWalkCollision?.() ?? null;
+        const bodyR = getWalkBodyRadiusCm?.() ?? WALK_BODY_RADIUS_CM;
+        const moved = moveWithWalkCollision(x0, z0, dx, dz, collision, bodyR);
+        const clamped = clampInsideBounds(moved.x, moved.z);
+        camera.position.x = clamped.x;
+        camera.position.z = clamped.z;
+    }
+
     function applyCameraRotation() {
+        camera.up.set(0, 1, 0);
         camera.rotation.order = 'YXZ';
-        camera.rotation.y = yaw;
         camera.rotation.x = pitch;
+        camera.rotation.y = yaw;
+        camera.rotation.z = 0;
     }
 
     function swallowWalkKey(e) {
@@ -110,8 +128,10 @@ export function createWalkController(opts) {
                 forward.normalize();
                 right.normalize();
                 const step = 0.35;
-                camera.position.addScaledVector(forward, -dy * step);
-                camera.position.addScaledVector(right, dx * step);
+                applyPositionDelta(
+                    forward.x * (-dy * step) + right.x * (dx * step),
+                    forward.z * (-dy * step) + right.z * (dx * step),
+                );
             } else if (t.identifier === touchLookId) {
                 yaw -= (t.clientX - lastX) * LOOK_SENS * 1.4;
                 pitch -= (t.clientY - lastY) * LOOK_SENS * 1.4;
@@ -152,12 +172,11 @@ export function createWalkController(opts) {
             moveX /= len;
             moveZ /= len;
             const dist = MOVE_SPEED_CM_S * deltaSec;
-            camera.position.addScaledVector(forward, moveZ * dist);
-            camera.position.addScaledVector(right, moveX * dist);
+            applyPositionDelta(
+                forward.x * moveZ * dist + right.x * moveX * dist,
+                forward.z * moveZ * dist + right.z * moveX * dist,
+            );
         }
-        const clamped = clampInsideBounds(camera.position.x, camera.position.z);
-        camera.position.x = clamped.x;
-        camera.position.z = clamped.z;
         camera.position.y = eyeHeightCm;
     }
 
@@ -178,21 +197,43 @@ export function createWalkController(opts) {
         },
         isActive: () => active,
         syncFromCamera() {
+            camera.up.set(0, 1, 0);
             const e = new THREE.Euler(0, 0, 0, 'YXZ');
-            e.setFromQuaternion(camera.quaternion);
+            e.setFromQuaternion(camera.quaternion, 'YXZ');
             yaw = e.y;
             pitch = e.x;
+            applyCameraRotation();
+        },
+        resetLevelOrientation() {
+            camera.up.set(0, 1, 0);
+            applyCameraRotation();
+        },
+        getRollRadians() {
+            return camera.rotation.z;
+        },
+        getCameraUp() {
+            return { x: camera.up.x, y: camera.up.y, z: camera.up.z };
         },
         setPosition(x, z) {
             const c = clampInsideBounds(x, z);
             camera.position.set(c.x, eyeHeightCm, c.z);
+            camera.up.set(0, 1, 0);
+            applyCameraRotation();
         },
         lookAt(x, z) {
-            const dx = x - camera.position.x;
-            const dz = z - camera.position.z;
-            yaw = Math.atan2(-dx, -dz);
-            pitch = 0;
+            camera.up.set(0, 1, 0);
+            camera.lookAt(x, eyeHeightCm, z);
+            const e = new THREE.Euler(0, 0, 0, 'YXZ');
+            e.setFromQuaternion(camera.quaternion, 'YXZ');
+            yaw = e.y;
+            pitch = e.x;
+            camera.rotation.z = 0;
+        },
+        setPitch(rad) {
+            pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, rad));
             applyCameraRotation();
+            camera.up.set(0, 1, 0);
+            camera.rotation.z = 0;
         },
         update,
         dispose() {

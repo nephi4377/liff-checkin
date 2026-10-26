@@ -22,6 +22,10 @@ import { resolveHubStaffRecipientIds } from './taskSenderRecipients.js';
  * @param {object} [options={}] - 外觀與行為選項 { style?, defaultAction?, collapsible?, groupBy? }
  */
 export function initializeTaskSender(container, config, options = {}) {
+    // 暫時關閉：任務交辦中心 UI（主控台／專案協作；與假勤審核無關，後端 API 保留）
+    if (true) {
+        return;
+    }
     if (!container) return;
 
     // [v290.0 核心重構] 建立 RecipientSelector 子元件實例

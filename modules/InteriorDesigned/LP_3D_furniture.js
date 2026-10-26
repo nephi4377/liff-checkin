@@ -81,6 +81,41 @@ function addBox(group, THREE, w, h, d, material, y, zOff = 0) {
     return m;
 }
 
+function addBoxAt(group, THREE, w, h, d, material, x, y, z) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    m.position.set(x, y + h / 2, z);
+    group.add(m);
+    return m;
+}
+
+/**
+ * 俯視貼地門／窗標記（立體 mesh 在斜視／walk 時顯示）
+ * @param {typeof import('three')} THREE
+ * @param {THREE.Group} group
+ * @param {{ displayCategory?: string, widthCm: number, depthCm: number }} fix
+ */
+export function attachDoorWindowPlanMarker(THREE, group, fix) {
+    const cat = fix.displayCategory;
+    if (cat !== 'door' && cat !== 'window') return;
+    const w = fix.widthCm;
+    const d = fix.depthCm;
+    const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.door;
+    const material = new THREE.MeshBasicMaterial({
+        color,
+        transparent: cat === 'window',
+        opacity: cat === 'window' ? 0.55 : 0.92,
+    });
+    const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.92, 1.8, Math.max(d, 6)),
+        material,
+    );
+    mesh.position.set(0, 1.0, 0);
+    mesh.renderOrder = 7;
+    mesh.visible = false;
+    mesh.userData.lp3dPlanMarker = true;
+    group.add(mesh);
+}
+
 /**
  * @param {typeof import('three')} THREE
  * @param {object} fix — descriptor fixture（含 displayCategory）
@@ -94,23 +129,38 @@ export function buildFixtureMeshGroup(THREE, fix) {
     const base = fix.baseYCm;
 
     if (cat === 'door') {
-        const frame = mat(THREE, 0x57534e);
         const leaf = mat(THREE, LP_3D_CATEGORY_COLORS.door);
-        addBox(group, THREE, w, h, Math.min(d, 4), frame, base, 0);
-        addBox(group, THREE, w * 0.92, h * 0.96, Math.max(d * 0.35, 2), leaf, base, d * 0.15);
+        const leafMesh = addBox(
+            group,
+            THREE,
+            w * 0.94,
+            h * 0.98,
+            Math.max(d * 0.55, 3),
+            leaf,
+            base,
+            0,
+        );
+        leafMesh.userData.lp3dDoorLeaf = true;
         return group;
     }
 
     if (cat === 'window') {
+        const depth = Math.max(d, 4);
         const sill = mat(THREE, 0xe7e5e4);
-        addBox(group, THREE, w, 4, d, sill, base - 2);
-        const glass = mat(THREE, LP_3D_CATEGORY_COLORS.window, { roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.45 });
-        addBox(group, THREE, w * 0.94, h * 0.88, Math.max(d * 0.25, 2), glass, base + h * 0.06);
+        addBoxAt(group, THREE, w, 4, depth, sill, 0, base - 2, 0);
+        const glass = mat(THREE, LP_3D_CATEGORY_COLORS.window, {
+            roughness: 0.15,
+            metalness: 0.2,
+            transparent: true,
+            opacity: 0.45,
+        });
+        const glassDepth = Math.max(depth * 0.35, 2);
+        addBoxAt(group, THREE, w * 0.9, h * 0.88, glassDepth, glass, 0, base + h * 0.06, 0);
         const frame = mat(THREE, 0x94a3b8);
-        const fw = Math.max(3, w * 0.04);
-        addBox(group, THREE, fw, h, d, frame, base, -w / 2 + fw / 2);
-        addBox(group, THREE, fw, h, d, frame, base, w / 2 - fw / 2);
-        addBox(group, THREE, w, fw, d, frame, base + h - fw / 2);
+        const fw = Math.max(2, Math.min(w * 0.08, 8));
+        addBoxAt(group, THREE, fw, h, depth, frame, -w / 2 + fw / 2, base, 0);
+        addBoxAt(group, THREE, fw, h, depth, frame, w / 2 - fw / 2, base, 0);
+        addBoxAt(group, THREE, w, fw, depth, frame, 0, base + h - fw / 2, 0);
         return group;
     }
 
@@ -186,7 +236,24 @@ export function buildFixtureMeshGroup(THREE, fix) {
     }
 
     const color = LP_3D_CATEGORY_COLORS[cat] ?? LP_3D_CATEGORY_COLORS.cabinet;
-    addBox(group, THREE, w, h, d, mat(THREE, color), base);
+    const body = new THREE.MeshBasicMaterial({ color });
+    const mesh = addBox(group, THREE, w, h, d, body, base);
+    mesh.renderOrder = 3;
+    const topCap = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 6, d),
+        new THREE.MeshBasicMaterial({ color }),
+    );
+    topCap.position.set(0, base + h - 3, 0);
+    topCap.renderOrder = 8;
+    topCap.userData.lp3dCabinetTop = true;
+    group.add(topCap);
+    const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d));
+    const edgeMat = new THREE.LineBasicMaterial({ color: 0x3f1f08 });
+    const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+    edges.position.set(0, base + h / 2, 0);
+    edges.renderOrder = 6;
+    group.add(edges);
+    mesh.userData.lp3dCabinetBody = true;
     return group;
 }
 
@@ -194,33 +261,47 @@ export function buildFixtureMeshGroup(THREE, fix) {
  * @param {typeof import('three')} THREE
  * @param {string} text
  */
-export function createLabelSprite(THREE, text) {
+/**
+ * @param {typeof import('three')} THREE
+ * @param {string} text
+ * @param {number} [accentHex]
+ */
+export function createLabelSprite(THREE, text, accentHex = 0xb45309) {
     const label = String(text || '').slice(0, 24);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    const fontSize = 22;
-    ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
+    const fontSize = 30;
+    ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
     const metrics = ctx.measureText(label);
-    const pad = 10;
+    const pad = 14;
     canvas.width = Math.ceil(metrics.width + pad * 2);
     canvas.height = fontSize + pad * 2;
-    ctx.font = `600 ${fontSize}px system-ui, sans-serif`;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
-    const r = 6;
+    ctx.font = `700 ${fontSize}px system-ui, sans-serif`;
+    const accent = `#${(accentHex >>> 0).toString(16).padStart(6, '0')}`;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    const r = 8;
     const w = canvas.width;
     const h = canvas.height;
     ctx.beginPath();
     ctx.roundRect(0, 0, w, h, r);
     ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 4;
+    ctx.stroke();
     ctx.fillStyle = '#f8fafc';
     ctx.fillText(label, pad, fontSize + pad / 2 - 2);
 
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
-    const matSprite = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+    const matSprite = new THREE.SpriteMaterial({
+        map: tex,
+        depthTest: false,
+        transparent: true,
+        sizeAttenuation: true,
+    });
     const sprite = new THREE.Sprite(matSprite);
-    const scale = 0.35;
-    sprite.scale.set(canvas.width * scale * 0.08, canvas.height * scale * 0.08, 1);
+    sprite.scale.set(1, 1, 1);
     sprite.renderOrder = 999;
+    sprite.userData.lp3dCabinetLabel = true;
     return sprite;
 }

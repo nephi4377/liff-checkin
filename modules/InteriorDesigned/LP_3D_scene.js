@@ -60,6 +60,74 @@ export function resolvePlacedCabinet3DKind(cab) {
 }
 
 /** 畫布座標 → 以工作區中心為原點的 XZ（cm） */
+/** 場景 XZ 環的軸對齊外框（cm） */
+export function axisAlignedBoundsXZ(ring) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    if (!ring?.length) {
+        return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+    }
+    for (const p of ring) {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minZ = Math.min(minZ, p.z);
+        maxZ = Math.max(maxZ, p.z);
+    }
+    return { minX, maxX, minZ, maxZ };
+}
+
+/** 兩個 XZ 外框是否在容差內一致 */
+/** 室內預覽：距南牆 standoffCm、朝北牆看過整間（cm／場景 XZ） */
+export function computeWalkRoomPreviewPose(ring, standoffCm = 150) {
+    if (!ring?.length) return null;
+    const bounds = axisAlignedBoundsXZ(ring);
+    const c = ringCentroidXZ(ring);
+    const spanX = bounds.maxX - bounds.minX;
+    const spanZ = bounds.maxZ - bounds.minZ;
+    return {
+        x: c.x,
+        z: bounds.maxZ - standoffCm,
+        lookX: c.x - spanX * 0.12,
+        lookZ: c.z - spanZ * 0.18,
+        pitch: -0.22,
+    };
+}
+
+/** 地板略向外擴以貼齊牆內圈（Extrude 與 offset 誤差補償，cm） */
+export function expandFloorRingToInnerFace(ring, epsilonCm = 1.2) {
+    if (!ring?.length) return ring;
+    const pts = ring.map((p) => ({ x: p.x, y: p.z }));
+    const signed = signedPolygonArea(pts);
+    const dist = signed < 0 ? -epsilonCm : epsilonCm;
+    const out = offsetPolygon(pts, dist);
+    return out.map((p) => ({ x: p.x, z: p.y }));
+}
+
+export function boundsXZDelta(a, b) {
+    return {
+        minX: Math.abs(a.minX - b.minX),
+        maxX: Math.abs(a.maxX - b.maxX),
+        minZ: Math.abs(a.minZ - b.minZ),
+        maxZ: Math.abs(a.maxZ - b.maxZ),
+        maxEdge: Math.max(
+            Math.abs(a.minX - b.minX),
+            Math.abs(a.maxX - b.maxX),
+            Math.abs(a.minZ - b.minZ),
+            Math.abs(a.maxZ - b.maxZ),
+        ),
+    };
+}
+
+export function boundsXZMatch(a, b, toleranceCm = 2) {
+    const t = toleranceCm;
+    return Math.abs(a.minX - b.minX) <= t
+        && Math.abs(a.maxX - b.maxX) <= t
+        && Math.abs(a.minZ - b.minZ) <= t
+        && Math.abs(a.maxZ - b.maxZ) <= t;
+}
+
 export function ringCentroidXZ(ring) {
     if (!ring?.length) return { x: 0, z: 0 };
     let x = 0;
@@ -79,7 +147,7 @@ function nearestPointOnSegmentXZ(x, z, a, b) {
     const px = a.x + t * abx;
     const pz = a.z + t * abz;
     const d2 = (x - px) ** 2 + (z - pz) ** 2;
-    return { x: px, z: pz, d2 };
+    return { x: px, z: pz, d2, t };
 }
 
 /**
@@ -157,6 +225,58 @@ export function pointInPolygonXZ(x, z, ring) {
 /** 是否在牆環帶內（外圈內、內圈外） */
 export function pointInWallBand(x, z, wall) {
     return pointInPolygonXZ(x, z, wall.outer) && !pointInPolygonXZ(x, z, wall.inner);
+}
+
+export function fixtureFootprintSamplePointsXZ(fixture) {
+    const w = fixture.widthCm || 80;
+    const d = fixture.depthCm || 15;
+    const rad = ((fixture.rotationDeg || 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const pts = [{ x: fixture.centerX, z: fixture.centerZ }];
+    for (const [lx, lz] of [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+    ]) {
+        pts.push({
+            x: fixture.centerX + lx * cos - lz * sin,
+            z: fixture.centerZ + lx * sin + lz * cos,
+        });
+    }
+    return pts;
+}
+
+function estimateWallThicknessFromRings(wall) {
+    if (!wall?.inner?.length || !wall?.outer?.length) return 15;
+    const a = wall.inner[0];
+    const o = wall.outer[0];
+    return Math.max(8, Math.hypot(o.x - a.x, o.z - a.z));
+}
+
+const OPENING_WALL_EDGE_MARGIN_CM = 8;
+
+/** 門／窗是否屬於此牆（牆帶內或貼齊此牆 inner 邊，非任意遠距牆邊） */
+export function openingAssociatesWithWall(wall, fixture) {
+    if (!fixture || (fixture.kind !== 'door' && fixture.kind !== 'window')) return false;
+    for (const p of fixtureFootprintSamplePointsXZ(fixture)) {
+        if (pointInWallBand(p.x, p.z, wall)) return true;
+    }
+    const thickness = estimateWallThicknessFromRings(wall);
+    const maxPerp = Math.max(thickness, fixture.depthCm || 15) + OPENING_WALL_EDGE_MARGIN_CM;
+    const maxPerp2 = maxPerp * maxPerp;
+    const inner = wall.inner;
+    if (!inner || inner.length < 3) return false;
+    for (const p of fixtureFootprintSamplePointsXZ(fixture)) {
+        for (let i = 0; i < inner.length; i++) {
+            const a = inner[i];
+            const b = inner[(i + 1) % inner.length];
+            const hit = nearestPointOnSegmentXZ(p.x, p.z, a, b);
+            if (hit.d2 <= maxPerp2) return true;
+        }
+    }
+    return false;
 }
 
 export function openingCutsWall(wall, fixture) {
@@ -263,7 +383,8 @@ export function buildLayout3DDescriptor(layout, options = {}) {
         const thickness = area.thickness || 15;
         const signed = signedPolygonArea(area.points);
         const dist = signed < 0 ? -thickness : thickness;
-        const outer = offsetPolygon(area.points, dist);
+        // 2D SVG evenodd 與 calculateWallPath 用 dist 畫「內圈外偏」；Three.js Shape 需真正向外擴一圈。
+        const outer = offsetPolygon(area.points, -dist);
         walls.push({
             id: area.id,
             heightCm: defaults.WALL_HEIGHT_CM,
@@ -312,5 +433,30 @@ export function buildLayout3DDescriptor(layout, options = {}) {
     }
     const walkBounds = walkRings.length ? { rings: walkRings } : null;
 
-    return { workspaceSize, walls, fixtures, floors, ceilings, walkBounds };
+    /** 兩點直線隔間牆（中心線＋厚度），供漫遊碰撞 */
+    const partitionWalls = [];
+    for (const area of layout.drawnAreas || []) {
+        if (area.type !== 'wall' || !area.points || area.points.length !== 2) continue;
+        const thickness = area.thickness || 15;
+        const p0 = canvasToSceneXZ(area.points[0].x, area.points[0].y, workspaceSize);
+        const p1 = canvasToSceneXZ(area.points[1].x, area.points[1].y, workspaceSize);
+        partitionWalls.push({
+            id: area.id,
+            ax: p0.x,
+            az: p0.z,
+            bx: p1.x,
+            bz: p1.z,
+            thicknessCm: thickness,
+        });
+    }
+
+    return {
+        workspaceSize,
+        walls,
+        fixtures,
+        floors,
+        ceilings,
+        walkBounds,
+        partitionWalls,
+    };
 }

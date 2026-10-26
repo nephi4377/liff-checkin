@@ -236,6 +236,8 @@
         </div>
     </div>
 
+    <!-- Hub F5：與主控台共用員工參考主檔（父層 spaAllEmployees／本機 HubRefCache） -->
+    <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
     <!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
     <script type="module">
         import { showGlobalNotification } from '../../shared/js/utils.js';
@@ -438,17 +440,48 @@
             return false; // 回傳 false 表示沒有可用的快取
         }
 
+        // Hub F5：員工先吃父層／HubRefCache；沒有才打 get_employees（班表仍另抓）
+        function readHubRefEmployees() {
+            try {
+                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+                if (!Hub || typeof Hub.read !== 'function') return [];
+                const list = Hub.read('employees') || [];
+                return Array.isArray(list) && list.length ? list : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function applyLoggedInPermission() {
+            const loggedInEmployee = allEmployees.find(emp => emp.userId === currentUser.userId);
+            if (loggedInEmployee) {
+                currentUser.permission = loggedInEmployee.permission || 1;
+            }
+        }
+
         // 【您的要求】核心重構：調整員工載入邏輯，改為「快取優先，背景驗證」
         async function fetchEmployees() {
             const cacheKey = 'shiftSchedule_employees';
             const cachedEmployees = loadCache(cacheKey);
 
-            // 步驟 1: 如果有快取，先用快取資料賦值
+            // 步驟 0（Hub F5）：主控台已暖過 → 直接用共用員工快取，不再打 API
+            const hubEmployees = readHubRefEmployees();
+            if (hubEmployees.length) {
+                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+                const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
+                console.log('[shift_schedule] 員工來源=' + src + '（略過 get_employees）');
+                allEmployees = hubEmployees;
+                saveCache(cacheKey, allEmployees, 1);
+                applyLoggedInPermission();
+                return;
+            }
+
+            // 步驟 1: 如果有本頁快取，先用快取資料賦值
             if (cachedEmployees) {
                 allEmployees = cachedEmployees;
             }
 
-            // 步驟 2: 無論如何，都向後端請求最新資料
+            // 步驟 2: 無共用快取時，向後端請求最新資料
             try {
                 const response = await fetchApi({
                     page: 'attendance_api',
@@ -466,17 +499,15 @@
                         allEmployees = newEmployees;
                         saveCache(cacheKey, allEmployees, 1); // 員工資料快取 1 天
                     }
+                    try {
+                        const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+                        if (Hub && typeof Hub.set === 'function') Hub.set('employees', newEmployees);
+                    } catch (e) { /* ignore */ }
                 } else {
                     throw new Error("從後端取得的員工資料格式不正確。");
                 }
                 // [v15.0 改造] 權限設定邏輯移至此處，確保每次都有最新的員工資料
-
-                // [核心改造] 在取得員工資料後，才設定權限與介面
-                // 尋找當前登入者的完整資料
-                const loggedInEmployee = allEmployees.find(emp => emp.userId === currentUser.userId);
-                if (loggedInEmployee) {
-                    currentUser.permission = loggedInEmployee.permission || 1;
-                }
+                applyLoggedInPermission();
 
             } catch (error) {
                 console.error("載入員工列表失敗:", error);

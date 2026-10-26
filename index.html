@@ -38,10 +38,11 @@
 
     <!-- 引入 Vue 3 (生產版) 和我們的應用程式主腳本 -->
     <script>
-        var FRONTEND_VERSION = 'v26.10.22.2'; // 主控台班表失敗再接到畫面
+        var FRONTEND_VERSION = 'v26.10.26.9'; // LIFF-INTEGRATE-1 rebase：P0 失敗可見＋測試／e2e
     </script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="./shared/js/operator_context.js?v=3"></script>
     <script src="./shared/js/hub_ref_cache.js?v=2"></script>
-    <script type="module" src="./spa/app.js?v=26.10.22.2"></script>
+    <script type="module" src="./spa/app.js?v=26.10.26.9"></script>
 </body>
 </html>

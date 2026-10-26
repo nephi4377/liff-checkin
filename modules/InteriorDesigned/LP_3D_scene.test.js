@@ -9,6 +9,11 @@ import {
     offsetPolygon,
     clampPointToWalkRings,
     pointInPolygonXZ,
+    axisAlignedBoundsXZ,
+    boundsXZMatch,
+    boundsXZDelta,
+    expandFloorRingToInnerFace,
+    computeWalkRoomPreviewPose,
 } from './LP_3D_scene.js';
 
 describe('canvasToSceneXZ', () => {
@@ -187,6 +192,107 @@ describe('clampPointToWalkRings', () => {
             pointInPolygonXZ(outside.x, outside.z, roomA)
             || pointInPolygonXZ(outside.x, outside.z, roomB),
         ).toBe(true);
+    });
+});
+
+describe('lp-3d-spec-demo fixture', () => {
+    it('門窗中心可對牆開洞、櫃體在內圈內', () => {
+        const layout = {
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'area-demo-wall',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [
+                {
+                    id: 'cab-demo-1',
+                    x: 400,
+                    y: 600,
+                    rotation: 0,
+                    currentW: 120,
+                    currentH: 60,
+                    data: { name: '範例矮櫃', group: '系統櫃', width: 120, depth: 60 },
+                },
+                {
+                    id: 'door-demo-1',
+                    x: 500,
+                    y: 285,
+                    rotation: 0,
+                    currentW: 90,
+                    currentH: 15,
+                    data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+                },
+                {
+                    id: 'win-demo-1',
+                    x: 700,
+                    y: 285,
+                    rotation: 0,
+                    currentW: 150,
+                    currentH: 15,
+                    data: { name: '落地窗', group: '門窗工程', width: 150, depth: 15 },
+                },
+            ],
+        };
+        const desc = buildLayout3DDescriptor(layout);
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        const window = desc.fixtures.find((f) => f.kind === 'window');
+        const cab = desc.fixtures.find((f) => f.kind === 'cabinet');
+        expect(openingCutsWall(wall, door)).toBe(true);
+        expect(openingCutsWall(wall, window)).toBe(true);
+        const ring = wall.inner;
+        expect(pointInPolygonXZ(cab.centerX, cab.centerZ, ring)).toBe(true);
+    });
+});
+
+describe('computeWalkRoomPreviewPose', () => {
+    it('距南牆 standoff 並朝北看', () => {
+        const ring = [
+            { x: -300, z: -250 },
+            { x: 300, z: -250 },
+            { x: 300, z: 250 },
+            { x: -300, z: 250 },
+        ];
+        const pose = computeWalkRoomPreviewPose(ring, 150);
+        expect(pose.x).toBe(0);
+        expect(pose.z).toBe(100);
+        expect(pose.lookX).toBe(-72);
+        expect(pose.lookZ).toBe(-90);
+        expect(pose.pitch).toBeLessThan(0);
+    });
+});
+
+describe('expandFloorRingToInnerFace', () => {
+    it('略外擴仍落在 2cm 容差內', () => {
+        const ring = [
+            { x: -100, z: -100 },
+            { x: 100, z: -100 },
+            { x: 100, z: 100 },
+            { x: -100, z: 100 },
+        ];
+        const expanded = expandFloorRingToInnerFace(ring, 1.2);
+        const a = axisAlignedBoundsXZ(ring);
+        const b = axisAlignedBoundsXZ(expanded);
+        expect(boundsXZDelta(a, b).maxEdge).toBeLessThanOrEqual(2);
+    });
+});
+
+describe('boundsXZMatch', () => {
+    it('容差內判定外框一致', () => {
+        const a = axisAlignedBoundsXZ([
+            { x: -10, z: -20 },
+            { x: 10, z: 20 },
+        ]);
+        const b = { minX: -10.5, maxX: 10.5, minZ: -19.5, maxZ: 20.5 };
+        expect(boundsXZMatch(a, b, 1)).toBe(true);
+        expect(boundsXZMatch(a, b, 0.2)).toBe(false);
     });
 });
 
