@@ -90,6 +90,55 @@ export function openingSpanOnEdge(op, a, b, edgeLen, wallThicknessCm = 15) {
 }
 
 /**
+ * 牆體 CSG 開洞中心：與漫遊 openingSpanOnEdge 一致，避免旋轉門中心在室內時挖不到牆。
+ * @param {object} wall
+ * @param {object} op
+ * @returns {{ centerX: number, centerZ: number }}
+ */
+export function resolveOpeningCutterCenterOnWall(wall, op) {
+    const inner = wall?.inner;
+    if (!inner || inner.length < 3) {
+        return { centerX: op.centerX, centerZ: op.centerZ };
+    }
+    const wallThicknessCm = estimateWallThicknessCm(wall);
+    let bestDist2 = Infinity;
+    let best = { centerX: op.centerX, centerZ: op.centerZ };
+    for (let i = 0; i < inner.length; i += 1) {
+        const a = inner[i];
+        const b = inner[(i + 1) % inner.length];
+        const edx = b.x - a.x;
+        const edz = b.z - a.z;
+        const edgeLen = Math.hypot(edx, edz);
+        if (edgeLen < 1e-6) continue;
+        const span = openingSpanOnEdge(op, a, b, edgeLen, wallThicknessCm);
+        if (!span) continue;
+        const tMid = (span.t0 + span.t1) / 2;
+        const cx = a.x + edx * tMid;
+        const cz = a.z + edz * tMid;
+        const oa = wall.outer?.[i] ?? wall.outer?.[0];
+        let nx = (oa?.x ?? a.x) - a.x;
+        let nz = (oa?.z ?? a.z) - a.z;
+        const nLen = Math.hypot(nx, nz);
+        if (nLen > 1e-6) {
+            nx /= nLen;
+            nz /= nLen;
+        } else {
+            nx = -edz / edgeLen;
+            nz = edx / edgeLen;
+        }
+        const inset = wallThicknessCm / 2;
+        const cutX = cx + nx * inset;
+        const cutZ = cz + nz * inset;
+        const d2 = (cutX - op.centerX) ** 2 + (cutZ - op.centerZ) ** 2;
+        if (d2 < bestDist2) {
+            bestDist2 = d2;
+            best = { centerX: cutX, centerZ: cutZ };
+        }
+    }
+    return best;
+}
+
+/**
  * @param {object} wall
  * @param {object[]} fixtures
  * @returns {{ ax: number, az: number, bx: number, bz: number, passable: boolean }[]}
@@ -177,6 +226,11 @@ export function partitionSegmentToObb(ax, az, bx, bz, thicknessCm) {
         cos: Math.cos(ang),
         sin: Math.sin(ang),
     };
+}
+
+/** 隔間牆 mesh 與 partitionSegmentToObb 共用的 Y 軸旋轉（弧度） */
+export function partitionRotationY(obb) {
+    return -Math.atan2(obb.sin, obb.cos);
 }
 
 /**
