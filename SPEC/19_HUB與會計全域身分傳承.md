@@ -258,7 +258,7 @@
 
 | 能力 | 狀態 |
 |------|------|
-| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**，避免 `permission` 更新整頁重載 |
+| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**（勿用「僅有員工名單」先以 permission=1 掛上），避免 query 變更觸發 `about:blank` 重掛變成空白；等待時顯示「準備會計模組」；`IframeView` 改 overlay＋load 安全逾時（勿 `hidden` 整顆 iframe） |
 | HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js`（`refreshHubIdToken` 須與 `handleIframeMessage` **同 setup 作用域**） |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | HUB 主控台種子寫入 `OperatorContext` | ✅ `index.html` 載入＋`spa/app.js` `syncHubOperatorSession`（F6） |

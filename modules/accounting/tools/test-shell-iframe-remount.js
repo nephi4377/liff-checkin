@@ -32,7 +32,7 @@ assert(shell.indexOf("if (frameEl.getAttribute('src') !== src) frameEl.setAttrib
 assert(shell.indexOf('bustQuickReviewListCache_') >= 0, 'busts quick_review list cache on remount');
 assert(shell.indexOf("removeItem('acct_quick_review_list_v2')") >= 0, 'clears acct_quick_review_list_v2');
 
-assert(index.indexOf('accounting_shell.js?v=11') >= 0, 'shell cache bust v=11');
+assert(index.indexOf('accounting_shell.js?v=12') >= 0, 'shell cache bust v=12');
 
 assert(pay.indexOf("sessionStorage.removeItem('acct_quick_review_list_v2')") >= 0,
   'payment success clears quick_review list cache');
@@ -46,6 +46,7 @@ assert(iframeView.indexOf('about:blank') >= 0, 'IframeView blank-remount on src 
 assert(iframeView.indexOf('watch(') >= 0, 'IframeView watches src');
 assert(/:key="\(currentView\.src/.test(appJs) || appJs.indexOf(':key="(currentView.src') >= 0,
   'app.js keys IframeView by src+params');
-assert(hubIndex.indexOf('app.js?v=26.10.26.2') >= 0, 'hub app.js cache bust');
+assert(/app\.js\?v=26\.10\.27\.\d+/.test(hubIndex) || hubIndex.indexOf('app.js?v=26.10.27.1') >= 0,
+  'hub app.js cache bust');
 
 console.log('test-shell-iframe-remount: ok');

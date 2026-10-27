@@ -290,15 +290,18 @@ const App = {
             } catch (e) { /* ignore */ }
         };
 
-        /** 會計 iframe 須等員工名單就緒再掛載，避免 permission 更新導致整頁重載 */
+        /**
+         * 會計 iframe：等 currentUser（真 permission）再掛。
+         * 舊邏輯「有員工名單即可」會先以 permission=1 掛上，真值到達後改 query →
+         * IframeView about:blank 重掛，LINE 內常變成「點開空白、重開才有」。
+         */
         const iframeMountReady = computed(() => {
             if (!userProfile.value?.userId) return false;
             const view = currentView.value;
             if (view?.name !== 'iframe') return false;
             const src = String(view.src || '');
             if (src.indexOf('modules/accounting/') < 0) return true;
-            if (currentUser.value) return true;
-            return allEmployees.value.length > 0;
+            return !!currentUser.value;
         });
 
         // [v411.0 SPA化] 簡易路由系統
@@ -1301,6 +1304,10 @@ const App = {
                          <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser"
                             :projectsLoading="projectsLoading" :projectsError="projectsError"
                             @retry="refreshHubProjects" />
+                    </div>
+                    <div v-else-if="currentView.name === 'iframe' && !iframeMountReady" class="h-full min-h-[70vh] flex flex-col items-center justify-center gap-2 bg-gray-50">
+                        <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full"></div>
+                        <p class="text-sm text-gray-500 m-0">準備會計模組…</p>
                     </div>
                     <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
                         <!-- :key 含 route params：會計多頁共用 index.html，僅改 route= 也必須整顆重掛 -->
