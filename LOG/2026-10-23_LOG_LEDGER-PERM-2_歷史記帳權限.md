@@ -6,4 +6,4 @@
 | 前端 | `ledger_entry_map.js?v=4`、`ledger_history.html`、`accounting_api.js?v=110`（伺服器 can_*／dup 欄位） |
 | 後端 | Backend_GAS PR #218（契約假設寫在 map 檔頭） |
 | 驗證 | `node modules/accounting/tools/test-ledger-perm-2.js` 等 |
-| 預覽 | raw.githack @ `c1f7c585ea4a8558b374ebd01788ee464c15cf9e`（見 PR #98；需 LIFF／主控台） |
+| 預覽 | raw.githack @ `4a1b5002f75a8dd15429d6292a3e3344cc970504`（見 PR #98；需 LIFF／主控台） |
