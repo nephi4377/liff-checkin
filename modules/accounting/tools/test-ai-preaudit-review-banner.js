@@ -14,6 +14,7 @@ function assert(cond, msg) {
 }
 
 var root = path.resolve(__dirname, '../../..');
+var cacheBust = require('./lib/read-cache-bust');
 var review = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
 var pay = fs.readFileSync(path.join(root, 'modules/accounting/payment_request.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, 'shared/js/accounting_api.js'), 'utf8');
@@ -22,7 +23,9 @@ assert(/ai-preaudit/.test(review), 'review has ai-preaudit styles');
 assert(/aiPreauditBannerHtml/.test(review), 'review banner helper');
 assert(/預審尚未完成，可直接審/.test(review), '123.1 missing copy');
 assert(/item\.ai_preaudit/.test(review), 'reads item.ai_preaudit');
-assert(/accounting_api\.js\?v=105/.test(review), 'review api v=105');
+var apiVer = cacheBust.readCacheBustVersion(review, 'accounting_api.js');
+assert(apiVer, 'review api cache bust present');
+assert(parseInt(apiVer, 10) >= 105, 'review api cache bust >= v105 (got v=' + apiVer + ')');
 assert(!/載入報價對應/.test(review), 'no #140 button-as-product UX');
 assert(!/btn-quote-audit/.test(review), 'no quote-audit button class');
 
@@ -43,6 +46,6 @@ assert(/skipOverridePrompt/.test(review), 'avoid double prompt');
 
 assert(/VENDOR_PAYMENT_APPROVE_MIN_PERMISSION/.test(pay), 'finance gate uses approve min');
 assert(/略過 AI／人審/.test(pay), 'finance button copy mentions skip AI');
-assert(/v=105（AI 預審 123\.2／123\.3）/.test(api), 'api cache-bust comment');
+assert(/cache-bust companions:.*\?v=\d+/.test(api), 'api cache-bust comment');
 
 console.log('\nAll ai-preaudit review UX smoke checks passed.');
