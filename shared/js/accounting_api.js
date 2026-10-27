@@ -15,6 +15,11 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
+  /** LEDGER-PERM-2：歷史記帳查「全部人」與老闆級審核（對齊 Backend_GAS #218） */
+  var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
+  /** 歷史記帳：權限 ≥1 可查／作廢本人；≥5 看全部 */
+  var LEDGER_MIN_VIEW_PERMISSION = 1;
+  var LEDGER_VIEW_DENIED_MSG = '權限不足（歷史記帳需權限 ≥ 1）';
   /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
   var PAYMENT_REQUEST_MIN_PERMISSION = 1;
   var PERM_DENIED_MSG = '權限不足（需財務／老闆，權限 ≥ 4）';
@@ -543,6 +548,9 @@ var AccountingApi = (function () {
     CUSTOMER_FINANCE_MIN_PERMISSION: CUSTOMER_FINANCE_MIN_PERMISSION,
     SUPERVISOR_MIN_PERMISSION: SUPERVISOR_MIN_PERMISSION,
     VENDOR_PAYMENT_APPROVE_MIN_PERMISSION: VENDOR_PAYMENT_APPROVE_MIN_PERMISSION,
+    LEDGER_VIEW_ALL_MIN_PERMISSION: LEDGER_VIEW_ALL_MIN_PERMISSION,
+    LEDGER_MIN_VIEW_PERMISSION: LEDGER_MIN_VIEW_PERMISSION,
+    LEDGER_VIEW_DENIED_MSG: LEDGER_VIEW_DENIED_MSG,
     PERM_DENIED_MSG: PERM_DENIED_MSG,
     PAYMENT_REQUEST_DENIED_MSG: PAYMENT_REQUEST_DENIED_MSG,
     INGEST_PERM_DENIED_MSG: INGEST_PERM_DENIED_MSG,
@@ -1233,18 +1241,23 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥3；mine_only 預設 false＝全部人；日期窗＝記帳時間／送出時間，不是交易日）
-     * 預設近 30 天；可自訂更早區間（無 7／30 天硬上限）。逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
-     * 排序契約：後端 sort_basis=recorded_at；前端亦只依 recorded_at 渲染（v85+）。
-     * record_kind：all（預設＝待付款請款＋收支登錄）｜ledger｜payment_request。
-     * 暫緩強制僅限個人（老闆：已用 ≥3 閘門，勿再強制 mine_only）。 */
+    /** 歷史記帳紀錄查詢（權限 ≥1 本人；≥5 可選全部；日期窗＝記帳時間／送出時間，不是交易日）
+     * LEDGER-PERM-2／#218：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(5) 一律 mine_only；≥5 可選全部、可選本人。
+     * 預設近 30 天；逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
+     * record_kind：all｜ledger｜payment_request。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
       opts = opts || {};
+      var authPerm = 0;
+      if (sessionOrToken && sessionOrToken.auth) {
+        authPerm = Number(sessionOrToken.auth.permission || 0);
+      }
+      var mineOnly = authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION
+        ? true
+        : (opts.mine_only === undefined ? false : !!opts.mine_only);
       var body = {
         action: 'accounting_ledger_recent',
         limit: opts.limit != null ? opts.limit : 40,
-        // 預設全部（≥3）；僅當頁面明確開啟「只看我記的」才傳 true
-        mine_only: opts.mine_only === undefined ? false : !!opts.mine_only
+        mine_only: mineOnly
       };
       // 不預設傳 months：分頁依交易日；掃月數由後端依記帳時間窗決定（避免日曆跨月誤縮）
       if (opts.months != null) body.months = opts.months;
@@ -1290,7 +1303,7 @@ var AccountingApi = (function () {
       // 前端維持 90s Abort；歷史查詢不重試 GAS HTML 404（見 postToUrl_）。
       return post(body, 90000);
     },
-    /** 歷史記帳單筆詳情（權限 ≥3；sheet+row 或 ingest_id；預設略過附件索引） */
+    /** 歷史記帳單筆詳情（權限 ≥1 本人；≥5 他人；sheet+row 或 ingest_id；預設略過附件索引） */
     accountingLedgerDetail: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
@@ -1398,7 +1411,52 @@ var AccountingApi = (function () {
       }
       return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
     },
-    /** 刪除已標註錯誤記帳（權限 ≥4） */
+    /** 作廢收支登錄列（本人或權限 ≥5；可選 void_reason）— LEDGER-PERM-2／#218 */
+    accountingLedgerVoid: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_void' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      var reason = String(opts.void_reason || opts.reason || '').trim();
+      if (reason) {
+        body.void_reason = reason;
+        body.reason = reason;
+      }
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
+    },
+    /** 疑重待審：權限 ≥5 清除標記 — LEDGER_PERM_API */
+    accountingLedgerDupReviewClear: function (sessionOrToken, opts) {
+      opts = opts || {};
+      var body = { action: 'accounting_ledger_dup_review_clear' };
+      if (opts.sheet) body.sheet = opts.sheet;
+      if (opts.row != null && opts.row !== '') body.row = opts.row;
+      if (opts.ingest_id) body.ingest_id = opts.ingest_id;
+      if (sessionOrToken && typeof resolveAuth === 'function') {
+        try {
+          var auth = resolveAuth(sessionOrToken);
+          if (auth) body.auth = auth;
+          if (sessionOrToken.idToken) body.liff_id_token = sessionOrToken.idToken;
+          if (sessionOrToken.auth && sessionOrToken.auth.user_id) {
+            body.user_id = sessionOrToken.auth.user_id;
+            body.auth = body.auth || { user_id: sessionOrToken.auth.user_id };
+          }
+        } catch (eAuth) {}
+      }
+      return post(body, opts.timeoutMs != null ? opts.timeoutMs : 30000);
+    },
+    /** @deprecated 改用 accountingLedgerVoid；保留相容舊版後端 */
     accountingLedgerDeleteFlagged: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = { action: 'accounting_ledger_delete_flagged' };

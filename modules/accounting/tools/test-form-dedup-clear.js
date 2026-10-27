@@ -5,6 +5,7 @@ var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
 
+var cacheBust = require('./lib/read-cache-bust');
 var html = fs.readFileSync(
   path.join(__dirname, '..', 'accounting_ingest.html'),
   'utf8'
@@ -19,7 +20,9 @@ assert(
 assert(html.indexOf('duplicate_prior') >= 0, 'uses prior detail for confirm');
 assert(html.indexOf('askDupConfirm') >= 0, 'uses in-page dup confirm helper');
 assert(html.indexOf('dupConfirmOverlay') >= 0, 'has page modal overlay');
-assert(html.indexOf('accounting_api.js?v=102') >= 0, 'cache-bust api v=102');
+var apiVer = cacheBust.readCacheBustVersion(html, 'accounting_api.js');
+assert(apiVer, 'cache-bust api present');
+assert(parseInt(apiVer, 10) >= 102, 'cache-bust api >= v102 (got v=' + apiVer + ')');
 assert(
   /needs_dup_confirm[\s\S]*softDupConfirm|softDupConfirm[\s\S]*needs_dup_confirm/.test(
     fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'js', 'accounting_api.js'), 'utf8')

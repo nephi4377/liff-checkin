@@ -30,8 +30,11 @@ assert(/isInHubIframe_\(\)[\s\S]{0,200}HUB_RELOGIN_MSG/.test(api)
 assert(api.indexOf('POLICY_TIMEOUT_MS') >= 0, 'policy timeout so UI fails fast');
 assert(api.indexOf("body.action === 'accounting_policy'") >= 0, 'policy uses short timeout');
 
-assert(html.indexOf('accounting_api.js?v=108') >= 0, 'payment_request cache bust v=108');
-assert(indexHtml.indexOf('accounting_api.js?v=108') >= 0, 'index cache bust v=108');
+var cacheBust = require('./lib/read-cache-bust');
+var payVer = cacheBust.readCacheBustVersion(html, 'accounting_api.js');
+var idxVer = cacheBust.readCacheBustVersion(indexHtml, 'accounting_api.js');
+assert(payVer && idxVer && payVer === idxVer, 'payment_request and index share api v=' + payVer);
+assert(parseInt(payVer, 10) >= 109, 'api cache bust >= v109');
 assert(html.indexOf('本機測試（勿當正式稽核）') >= 0, 'legacy bypass label string may remain for dead branch');
 assert(html.indexOf('先進門再補員工名單') >= 0, 'showApp before waitForHubData');
 
