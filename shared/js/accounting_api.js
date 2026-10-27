@@ -125,9 +125,11 @@ var AccountingApi = (function () {
       var text = '';
       var attempt = 0;
       var maxAttempts = 3;
-      // 歷史記帳：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
-      // cache-bust companions: ledger_review.html loads this as ?v=105（AI 預審 123.2／123.3）
-      if (actionName === 'accounting_ledger_recent') maxAttempts = 1;
+      // 歷史記帳／審核包：GAS 慢／404 時重試只會把 Abort 疊滿 90s；一次失敗即可（後端已有軟截止）
+      // cache-bust companions: ledger_review.html loads this as ?v=106（審核包 lean／截斷）
+      if (actionName === 'accounting_ledger_recent' || actionName === 'ledger_review_bundle') {
+        maxAttempts = 1;
+      }
       while (attempt < maxAttempts) {
         attempt += 1;
         res = await fetch(apiUrl, opts);
@@ -170,6 +172,8 @@ var AccountingApi = (function () {
           err = new Error('等太久了。請重新整理列表，確認是否已完成，先不要再按一次。');
         } else if (actionName === 'accounting_form_submit') {
           err = new Error('等太久了。請先看進出群有沒有「記好了」、或到試算表確認是否已入帳，先不要再按一次。');
+        } else if (actionName === 'ledger_review_bundle') {
+          err = new Error('讀取審核包逾時。請改回「待審」、或加關鍵字後再載；先不要連按重新載入。');
         } else {
           err = new Error('連線逾時，請再試一次');
         }
