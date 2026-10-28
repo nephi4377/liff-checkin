@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>WEB-CAT-1 分類 v2 — 暫時預覽｜添心商城</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "PingFang TC", "Noto Sans TC", sans-serif; background: #f5f3f0; color: #222; }
+    .banner { background: #3d3d3d; color: #fff; padding: 10px 16px; font-size: 13px; line-height: 1.5; }
+    .banner.interim { background: #7a1f1f; font-weight: 500; }
+    .banner.accent { background: #5c4a1f; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 8px; }
+    .sub { color: #666; font-size: 14px; margin-bottom: 16px; }
+    h2 { font-size: 1rem; margin: 20px 0 10px; font-weight: 600; }
+    .cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+    @media (max-width: 800px) { .cards { grid-template-columns: repeat(5, minmax(64px, 1fr)); overflow-x: auto; } }
+    .card {
+      position: relative; aspect-ratio: 1; border-radius: 4px; overflow: hidden;
+      border: 2px solid #e0e0e0; cursor: pointer; min-width: 0;
+    }
+    .card.active { border-color: #8b6914; box-shadow: 0 0 0 1px #8b6914; }
+    .card .label {
+      position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: rgba(255,255,255,.92); margin: 12%; border-radius: 2px;
+    }
+    .card .name { font-weight: 700; font-size: 13px; }
+    .card .count { font-size: 11px; color: #888; margin-top: 2px; }
+    .card.jiaju { background: linear-gradient(135deg,#e8e4df,#c9c4bc); }
+    .card.wujin { background: linear-gradient(135deg,#6b6b6b,#9a9a9a); }
+    .card.chuju { background: linear-gradient(135deg,#4a5568,#718096); }
+    .card.jingshui { background: linear-gradient(135deg,#5c7a8a,#8aa4b4); }
+    .card.weiyu { background: linear-gradient(135deg,#f0f0f0,#d0d0d0); }
+    .subnav { display: none; margin-top: 8px; padding: 12px; background: #fff; border: 1px solid #e8e8e8; border-radius: 4px; }
+    .subnav.visible { display: block; }
+    .subnav .layer { font-size: 12px; color: #8b6914; font-weight: 600; margin: 0 0 6px; text-transform: none; }
+    .subnav .hint { font-size: 13px; color: #666; margin: 0 0 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .row button {
+      border: 1px solid #ccc; background: #fff; padding: 8px 14px; border-radius: 4px;
+      font-size: 14px; cursor: pointer;
+    }
+    .row button.active { border-color: #8b6914; background: #fffaf0; font-weight: 600; }
+    .row.optional .tag { font-size: 11px; color: #888; align-self: center; margin-right: 4px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chips span, .chips button {
+      font-size: 13px; padding: 6px 12px; background: #fff; border: 1px solid #ddd; border-radius: 20px;
+      cursor: pointer; font-family: inherit;
+    }
+    .chips button.active { border-color: #8b6914; background: #fffaf0; font-weight: 600; }
+    .plain-note {
+      display: none; padding: 12px; background: #fff; border: 1px dashed #ccc; font-size: 14px; color: #444; margin-top: 8px;
+    }
+    .plain-note.visible { display: block; }
+    .search { width: 100%; max-width: 400px; padding: 10px 12px; border: 1px solid #ccc; border-radius: 4px; margin: 12px 0; }
+    .layout { display: grid; grid-template-columns: 200px 1fr; gap: 16px; margin-top: 12px; }
+    @media (max-width: 700px) { .layout { grid-template-columns: 1fr; } }
+    .sidebar { background: #fff; padding: 12px; border: 1px solid #e5e5e5; font-size: 13px; }
+    .sort { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; }
+    .sort b { padding: 6px 12px; background: #8b6914; color: #fff; border-radius: 3px; }
+    .sort span { padding: 6px 12px; background: #fff; border: 1px solid #ddd; border-radius: 3px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .product { background: #fff; border: 1px solid #eee; padding: 8px; font-size: 12px; cursor: pointer; }
+    .product.selected { outline: 2px solid #8b6914; }
+    .product .ph { aspect-ratio: 1; background: #eee center/contain no-repeat; margin-bottom: 6px; }
+    .product .price { color: #c00; font-weight: 600; }
+    .product .ship-note { font-size: 11px; color: #888; }
+    .detail { margin-top: 20px; padding: 16px; background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; display: none; }
+    .detail.visible { display: block; }
+    .detail h3 { margin: 0 0 8px; font-size: 1.1rem; }
+    .detail .gallery .ph { width: 100%; max-width: 320px; aspect-ratio: 4/3; background: #eee center/contain no-repeat; margin-bottom: 8px; }
+    .detail .meta { font-size: 14px; color: #666; margin: 8px 0; }
+    .detail .cta { display: inline-block; margin-top: 12px; padding: 12px 24px; background: #c62828; color: #fff; border: none; border-radius: 4px; font-size: 15px; cursor: pointer; }
+    .detail .line-note { margin-top: 12px; padding: 10px; background: #faf6ef; border-left: 3px solid #8b6914; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="banner interim">暫時預覽，非審查站密碼頁；正式驗收仍以 webcat-review-sdixy163 為準</div>
+  <div class="banner accent">分類 <strong>v2 示意</strong>（2026-10-27 更新）— 第一層五品類；官網版需小幅改 WP。本頁由 info.tanxin.space 靜態預覽。</div>
+  <div class="banner">家具：類別／必要時空間｜五金／淨水器／衛浴：依品項或品牌，不強制空間｜廚具：品牌→細分｜詳情在列表下方、運費另計</div>
+  <div class="wrap">
+    <h1>添心商城 — 分類 v2 預覽</h1>
+    <p class="sub">第一層：<strong>家具｜五金｜廚具｜淨水器｜衛浴</strong>。點大類後出現對應第二層（家具可再加選用空間）。</p>
+
+    <h2>第一層 · 商品大類</h2>
+    <div class="cards" id="main-cats">
+      <div class="card jiaju active" data-cat="jiaju" role="button" tabindex="0"><div class="label"><div class="name">家具</div><div class="count">7,392 項</div></div></div>
+      <div class="card wujin" data-cat="wujin" role="button" tabindex="0"><div class="label"><div class="name">五金</div><div class="count">145 項</div></div></div>
+      <div class="card chuju" data-cat="chuju" role="button" tabindex="0"><div class="label"><div class="name">廚具</div><div class="count">247 項</div></div></div>
+      <div class="card jingshui" data-cat="jingshui" role="button" tabindex="0"><div class="label"><div class="name">淨水器</div><div class="count">76 項</div></div></div>
+      <div class="card weiyu" data-cat="weiyu" role="button" tabindex="0"><div class="label"><div class="name">衛浴</div><div class="count">243 項</div></div></div>
+    </div>
+
+    <div class="subnav visible" id="subnav-jiaju">
+      <p class="layer">第二層 · 家具類別／空間</p>
+      <p class="hint">先選家具類別；必要時再選空間分项（示意）。</p>
+      <div class="row" id="jiaju-type">
+        <button type="button" class="active" data-type="bed">床架、床頭櫃</button>
+        <button type="button" data-type="other">化妝台、其他家具</button>
+      </div>
+      <div class="row optional" id="jiaju-space">
+        <span class="tag">選用空間</span>
+        <button type="button" data-space="all" class="active">不限</button>
+        <button type="button" data-space="bedroom">臥室</button>
+        <button type="button" data-space="living">客廳</button>
+        <button type="button" data-space="study">書房</button>
+      </div>
+      <div class="chips" id="jiaju-chips"><span>床架</span><span>床頭櫃</span></div>
+    </div>
+
+    <div class="subnav" id="subnav-wujin">
+      <p class="layer">第二層 · 五金分類</p>
+      <p class="hint">依實際五金品項分類，不強制選擇空間。</p>
+      <div class="chips" id="wujin-chips">
+        <button type="button" class="active">把手</button>
+        <button type="button">滑軌</button>
+        <button type="button">鉸鏈</button>
+        <button type="button">崁燈／開關</button>
+        <button type="button">其他五金</button>
+      </div>
+    </div>
+
+    <div class="subnav" id="subnav-chuju">
+      <p class="layer">第二層 · 品牌／品類</p>
+      <p class="hint">例：櫻花相關商品，再依實際產品細分。</p>
+      <div class="row" id="chuju-brand">
+        <button type="button" class="active" data-brand="sakura">櫻花</button>
+      </div>
+      <div class="chips" id="chuju-chips">
+        <button type="button" class="active">瓦斯爐</button>
+        <button type="button">排油煙機</button>
+        <button type="button">烘碗機</button>
+      </div>
+    </div>
+
+    <div class="subnav" id="subnav-jingshui">
+      <p class="layer">第二層 · 淨水器分類</p>
+      <p class="hint">依型號／品項分類（例：淨水、淨熱飲），不強制選擇空間。</p>
+      <div class="chips" id="jingshui-chips">
+        <button type="button" class="active">淨水器</button>
+        <button type="button">淨熱飲</button>
+        <button type="button">濾芯／配件</button>
+      </div>
+    </div>
+
+    <div class="subnav" id="subnav-weiyu">
+      <p class="layer">第二層 · 衛浴分類</p>
+      <p class="hint">依品牌、產品類別細分，不強制套用空間分類。</p>
+      <div class="row" id="weiyu-brand">
+        <button type="button" class="active">櫻花衛浴</button>
+        <button type="button">其他品牌</button>
+      </div>
+      <div class="chips" id="weiyu-chips">
+        <button type="button" class="active">面盆／龍頭</button>
+        <button type="button">馬桶</button>
+        <button type="button">浴櫃</button>
+        <button type="button">淋浴設備</button>
+      </div>
+    </div>
+
+    <div class="plain-note" id="plain-note"></div>
+
+    <h2>商品列表</h2>
+    <input class="search" type="search" placeholder="搜尋商品名稱" aria-label="搜尋商品" />
+    <div class="layout">
+      <aside class="sidebar" id="sidebar"></aside>
+      <div>
+        <div class="sort"><b>最新</b><span>價格</span></div>
+        <div class="grid" id="products"></div>
+      </div>
+    </div>
+
+    <section class="detail" id="detail" aria-live="polite">
+      <button type="button" id="detail-close" style="float:right;border:none;background:#eee;border-radius:50%;width:28px;height:28px;cursor:pointer" aria-label="收起">×</button>
+      <h3 id="detail-title"></h3>
+      <div class="gallery"><div class="ph"></div></div>
+      <p class="meta"><strong id="detail-price"></strong> · 運費另計</p>
+      <button type="button" class="cta">加入購物車</button>
+      <p class="line-note">運費另計。下單後以 LINE 告知運費、付款方式與寄送方式。</p>
+    </section>
+  </div>
+  <script>
+    const productsByCat = {
+      jiaju: [
+        { id: "j1", title: "床架組（示意）", price: "NT$12,800" },
+        { id: "j2", title: "床頭櫃（示意）", price: "NT$3,200" }
+      ],
+      wujin: [
+        { id: "w1", title: "K&B 觸控開關組 H0070", price: "NT$490" },
+        { id: "w2", title: "K&B LED 超迷你崁燈", price: "NT$595" }
+      ],
+      chuju: [
+        { id: "c1", title: "櫻花瓦斯爐（示意）", price: "NT$12,000" }
+      ],
+      jingshui: [
+        { id: "js1", title: "HF6260 淨水器（示意）", price: "NT$18,800" }
+      ],
+      weiyu: [
+        { id: "y1", title: "櫻花面盆龍頭組（示意）", price: "NT$6,500" }
+      ]
+    };
+    const jiajuChips = {
+      bed: ["床架", "床頭櫃"],
+      other: ["化妝台", "茶几", "其他家具"]
+    };
+    const sidebarText = {
+      jiaju: "家具 · 床架、床頭櫃<br />（可再加選用空間）",
+      wujin: "五金 · 把手<br />無空間強制篩選",
+      chuju: "廚具 · 櫻花 · 瓦斯爐<br />再依 SKU 細分",
+      jingshui: "淨水器 · 淨水<br />無空間強制篩選",
+      weiyu: "衛浴 · 櫻花 · 面盆／龍頭<br />依品牌與品類"
+    };
+    const noSpaceNote = {
+      wujin: "五金",
+      jingshui: "淨水器",
+      weiyu: "衛浴"
+    };
+    let currentCat = "jiaju";
+    let openId = null;
+    const catalog = {};
+
+    function updateJiajuChips(type) {
+      const wrap = document.getElementById("jiaju-chips");
+      wrap.innerHTML = jiajuChips[type].map(t => `<span>${t}</span>`).join("");
+      document.getElementById("sidebar").innerHTML = type === "bed"
+        ? "家具 · 床架、床頭櫃<br />（可再加選用空間）"
+        : "家具 · 化妝台、其他家具<br />（可再加選用空間）";
+    }
+
+    function renderProducts(cat) {
+      const grid = document.getElementById("products");
+      grid.innerHTML = "";
+      Object.keys(catalog).forEach(k => delete catalog[k]);
+      (productsByCat[cat] || []).forEach(p => {
+        catalog[p.id] = p;
+        const el = document.createElement("div");
+        el.className = "product";
+        el.dataset.id = p.id;
+        el.tabIndex = 0;
+        el.innerHTML = `<div class="ph"></div>${p.title}<div class="price">${p.price}</div><div class="ship-note">運費另計</div>`;
+        grid.appendChild(el);
+      });
+      hideDetail();
+    }
+
+    function selectCat(cat) {
+      currentCat = cat;
+      document.querySelectorAll("#main-cats .card").forEach(c => c.classList.toggle("active", c.dataset.cat === cat));
+      ["jiaju", "wujin", "chuju", "jingshui", "weiyu"].forEach(id => {
+        document.getElementById("subnav-" + id).classList.toggle("visible", cat === id);
+      });
+      const plain = document.getElementById("plain-note");
+      if (noSpaceNote[cat]) {
+        plain.classList.add("visible");
+        plain.innerHTML = `目前：<strong>${noSpaceNote[cat]}</strong> — 依品項／品牌分類，<em>不強制</em>空間分類。`;
+      } else {
+        plain.classList.remove("visible");
+      }
+      if (cat !== "jiaju") {
+        document.getElementById("sidebar").innerHTML = sidebarText[cat] || "";
+      }
+      renderProducts(cat);
+    }
+
+    function hideDetail() {
+      openId = null;
+      document.querySelectorAll(".product").forEach(el => el.classList.remove("selected"));
+      document.getElementById("detail").classList.remove("visible");
+    }
+    function showDetail(id) {
+      const p = catalog[id];
+      if (!p) return;
+      if (openId === id && document.getElementById("detail").classList.contains("visible")) {
+        hideDetail();
+        return;
+      }
+      openId = id;
+      document.querySelectorAll(".product").forEach(el => el.classList.toggle("selected", el.dataset.id === id));
+      document.getElementById("detail-title").textContent = p.title;
+      document.getElementById("detail-price").textContent = p.price;
+      document.getElementById("detail").classList.add("visible");
+      document.getElementById("detail").scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    document.getElementById("main-cats").addEventListener("click", e => {
+      const card = e.target.closest(".card");
+      if (card) selectCat(card.dataset.cat);
+    });
+    document.getElementById("products").addEventListener("click", e => {
+      const card = e.target.closest(".product");
+      if (card) showDetail(card.dataset.id);
+    });
+    document.getElementById("detail-close").addEventListener("click", hideDetail);
+
+    document.getElementById("jiaju-type").addEventListener("click", e => {
+      const btn = e.target.closest("button[data-type]");
+      if (!btn) return;
+      document.querySelectorAll("#jiaju-type button").forEach(b => b.classList.toggle("active", b === btn));
+      updateJiajuChips(btn.dataset.type);
+    });
+    document.getElementById("jiaju-space").addEventListener("click", e => {
+      const btn = e.target.closest("button[data-space]");
+      if (!btn) return;
+      document.querySelectorAll("#jiaju-space button").forEach(b => b.classList.toggle("active", b === btn));
+    });
+    ["wujin-chips", "chuju-chips", "jingshui-chips", "weiyu-chips"].forEach(id => {
+      document.getElementById(id).addEventListener("click", e => {
+        const btn = e.target.closest("button");
+        if (!btn) return;
+        btn.parentElement.querySelectorAll("button").forEach(b => b.classList.toggle("active", b === btn));
+      });
+    });
+
+    updateJiajuChips("bed");
+    selectCat("jiaju");
+  </script>
+</body>
+</html>
