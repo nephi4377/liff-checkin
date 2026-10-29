@@ -13,6 +13,7 @@
 
 ## 驗證
 
-- [ ] CI employee-todo e2e 綠
-- [ ] merge main 後 live 資產含 `sheet-bridge.js`／`index-B0wpJKiW`
-- [ ] 正式 URL 截圖＝Mantle 版面（非 LINE Login 400）
+- [x] CI employee-todo e2e 綠
+- [x] merge main 後 live 資產含 `sheet-bridge.js`／`index-B0wpJKiW`（Pages 2026-10-29 06:44Z）
+- [x] 正式 URL 截圖＝Mantle 版面（非 LINE Login 400）→ media/live-modules-paigong-mantle.png
+- 線上：main `34f9dde`；舊 `/employee-todo/` 仍 Mantle 只讀
