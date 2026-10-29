@@ -71,6 +71,7 @@
           pinned: true,
           completed: false,
           detail: '車位要保護',
+          workerNote: '明天上午先量車位再做保護',
           assigner: '雯姐',
           createdAt: now - 86400000,
         },
@@ -84,6 +85,7 @@
           order: 1,
           completed: false,
           detail: '現場確認邊界',
+          workerNote: '缺黑布 2 卷，下午補',
           assigner: '豪哥',
           createdAt: now - 80000000,
         },
@@ -97,7 +99,20 @@
           order: 0,
           completed: false,
           assigner: '豪哥',
+          workerNote: '已跟廠商約週三送',
           createdAt: now - 70000000,
+        },
+        {
+          id: 'preview-self-1',
+          title: '自己記：帶修邊刀',
+          assigneeId: 'ops-ende',
+          category: 'todo',
+          urgency: 'normal',
+          order: 2,
+          completed: false,
+          assigner: '工務自建',
+          detail: '樓下白色抽屜',
+          createdAt: now - 65000000,
         },
         {
           id: 'preview-4',
@@ -242,10 +257,10 @@
       el.textContent = '用 LINE 登入同步試算表';
       el.setAttribute(
         'style',
-        'position:fixed;z-index:9999;left:50%;bottom:max(1rem,env(safe-area-inset-bottom));' +
-          'transform:translateX(-50%);border:0;border-radius:999px;padding:.75rem 1.1rem;' +
-          'font:700 .9rem/1 "Noto Sans TC",sans-serif;color:#fff;background:#06c755;' +
-          'box-shadow:0 8px 24px #00000033;cursor:pointer;',
+        'position:fixed;z-index:40;left:50%;top:max(.65rem,env(safe-area-inset-top));' +
+          'transform:translateX(-50%);border:0;border-radius:999px;padding:.55rem 1rem;' +
+          'font:700 .82rem/1 "Noto Sans TC",sans-serif;color:#fff;background:#06c755;' +
+          'box-shadow:0 6px 18px #00000033;cursor:pointer;max-width:min(92vw,22rem);',
       );
       el.addEventListener('click', function () {
         if (!window.liff || typeof window.liff.login !== 'function') {
@@ -255,6 +270,13 @@
         window.liff.login({ redirectUri: buildLoginRedirectUri() });
       });
       document.body.appendChild(el);
+      try {
+        document.documentElement.style.setProperty('--et-login-hint-pad', '3.25rem');
+        if (document.body) {
+          document.body.style.paddingTop =
+            'max(3.25rem, calc(env(safe-area-inset-top) + 2.6rem))';
+        }
+      } catch (e) {}
     }
     if (document.body) mount();
     else document.addEventListener('DOMContentLoaded', mount);
@@ -274,6 +296,9 @@
               if (window.liff.isLoggedIn()) {
                 var hint = document.getElementById('et-sheet-login-hint');
                 if (hint) hint.remove();
+                try {
+                  if (document.body) document.body.style.paddingTop = '';
+                } catch (e) {}
                 resolve(window.liff.getIDToken() || null);
                 return;
               }
@@ -306,11 +331,25 @@
     return liffReady;
   }
 
+  function clientRoleFromUrl() {
+    try {
+      var role = new URLSearchParams(window.location.search).get('role') || '';
+      if (role === 'paigong' || role === 'dispatch') return 'dispatch';
+      if (role === 'ende' || role === 'ayong' || role.indexOf('ops-') === 0) return 'worker';
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   function postGas(body) {
+    var payload = Object.assign({}, body);
+    var cr = clientRoleFromUrl();
+    if (cr && !payload.clientRole) payload.clientRole = cr;
     return fetch(GAS_WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
       cache: 'no-store',
     }).then(function (res) {
       return res.text().then(function (text) {
