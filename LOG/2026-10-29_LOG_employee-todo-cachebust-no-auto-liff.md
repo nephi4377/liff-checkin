@@ -12,6 +12,6 @@
 
 ## 驗證
 
-- [ ] push／merge main 後 live HTML 含 `et-build`／`20261029c`
-- [ ] 外開 `?role=paigong`（無 preview）可見 Mantle＋登入按鈕，非 LINE Login 白頁
-- [ ] 截圖存 artifacts／media
+- [x] merge #238 → main `31455f0`；live HTML 含 `et-build=20261029c`（Pages 07:02Z）
+- [x] 外開 `?role=paigong` 可見 Mantle「開始派工」＋綠鈕「用 LINE 登入同步試算表」，非 LINE Login
+- [x] 點「開始」進指派區（阿勇／恩德、優先／待處理）；截圖 `/opt/cursor/artifacts/live-paigong-20261029c-*.png`
