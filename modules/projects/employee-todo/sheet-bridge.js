@@ -224,6 +224,42 @@
     return ensureWorkers(doc);
   }
 
+  function buildLoginRedirectUri() {
+    var u = new URL('https://info.tanxin.space/modules/projects/employee-todo/');
+    var role = new URLSearchParams(window.location.search).get('role');
+    if (role) u.searchParams.set('role', role);
+    return u.href.split('#')[0];
+  }
+
+  /** 外開瀏覽器勿自動導向 LINE Login（否則整頁被蓋掉，看起來像「沒有變」） */
+  function showLoginHint() {
+    if (document.getElementById('et-sheet-login-hint')) return;
+    function mount() {
+      if (document.getElementById('et-sheet-login-hint')) return;
+      var el = document.createElement('button');
+      el.id = 'et-sheet-login-hint';
+      el.type = 'button';
+      el.textContent = '用 LINE 登入同步試算表';
+      el.setAttribute(
+        'style',
+        'position:fixed;z-index:9999;left:50%;bottom:max(1rem,env(safe-area-inset-bottom));' +
+          'transform:translateX(-50%);border:0;border-radius:999px;padding:.75rem 1.1rem;' +
+          'font:700 .9rem/1 "Noto Sans TC",sans-serif;color:#fff;background:#06c755;' +
+          'box-shadow:0 8px 24px #00000033;cursor:pointer;',
+      );
+      el.addEventListener('click', function () {
+        if (!window.liff || typeof window.liff.login !== 'function') {
+          window.alert('LINE 登入尚未就緒，請稍後再試或用 LINE 內建瀏覽器開啟');
+          return;
+        }
+        window.liff.login({ redirectUri: buildLoginRedirectUri() });
+      });
+      document.body.appendChild(el);
+    }
+    if (document.body) mount();
+    else document.addEventListener('DOMContentLoaded', mount);
+  }
+
   function waitForLiff() {
     if (isPreview()) return Promise.resolve(null);
     if (liffReady) return liffReady;
@@ -235,24 +271,31 @@
           window.liff
             .init({ liffId: LIFF_ID })
             .then(function () {
-              if (!window.liff.isLoggedIn()) {
-                var u = new URL(
-                  'https://info.tanxin.space/modules/projects/employee-todo/',
-                );
-                var role = new URLSearchParams(window.location.search).get('role');
-                if (role) u.searchParams.set('role', role);
-                window.liff.login({ redirectUri: u.href.split('#')[0] });
+              if (window.liff.isLoggedIn()) {
+                var hint = document.getElementById('et-sheet-login-hint');
+                if (hint) hint.remove();
+                resolve(window.liff.getIDToken() || null);
+                return;
+              }
+              // 已在 LINE App 內可自動登入；外開只顯示按鈕，不整頁跳轉
+              var inClient =
+                typeof window.liff.isInClient === 'function' && window.liff.isInClient();
+              if (inClient) {
+                window.liff.login({ redirectUri: buildLoginRedirectUri() });
                 resolve(null);
                 return;
               }
-              resolve(window.liff.getIDToken() || null);
+              showLoginHint();
+              resolve(null);
             })
             .catch(function () {
+              showLoginHint();
               resolve(null);
             });
           return;
         }
         if (tries > 80) {
+          showLoginHint();
           resolve(null);
           return;
         }

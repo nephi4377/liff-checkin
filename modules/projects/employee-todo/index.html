@@ -16,6 +16,8 @@
     <meta name="apple-mobile-web-app-title" content="員工待辦" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
+    <!-- cache-bust 2026-10-29c：強制換 Mantle＋bridge（勿自動外開 LINE Login） -->
+    <meta name="et-build" content="20261029c" />
     <title>員工待辦事項</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -25,13 +27,38 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&family=Syne:wght@600;700;800&display=swap"
       rel="stylesheet"
     />
+    <script>
+      /* 清掉舊 stub／Workbox 快取，避免卡在 #236 或未換 bridge 的包 */
+      (function () {
+        var BUILD = '20261029c';
+        try {
+          if (localStorage.getItem('et-build') !== BUILD) {
+            localStorage.setItem('et-build', BUILD);
+            if (window.caches && caches.keys) {
+              caches.keys().then(function (keys) {
+                keys.forEach(function (k) {
+                  caches.delete(k);
+                });
+              });
+            }
+            if ('serviceWorker' in navigator) {
+              navigator.serviceWorker.getRegistrations().then(function (regs) {
+                regs.forEach(function (r) {
+                  r.update();
+                });
+              });
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <!-- Mantle UI 資料橋：mantledb → Sheet todo_*（不寫 Mantle） -->
-    <script src="./sheet-bridge.js"></script>
-    <script type="module" crossorigin src="./assets/index-B0wpJKiW.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CTl_-N1Z.css" />
+    <script src="./sheet-bridge.js?v=20261029c"></script>
+    <script type="module" crossorigin src="./assets/index-B0wpJKiW.js?v=20261029c"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CTl_-N1Z.css?v=20261029c" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script>
+    <script id="vite-plugin-pwa:register-sw" src="./registerSW.js?v=20261029c"></script>
   </head>
   <body>
     <div id="root"></div>
