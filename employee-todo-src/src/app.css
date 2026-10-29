@@ -100,3 +100,30 @@ header h1 {
 .office h2 {
   font-size: 1rem;
 }
+
+.list-skeleton {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+
+.sk-row {
+  height: 2.75rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #243038 25%, #2f3f4a 50%, #243038 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.2s ease-in-out infinite;
+}
+
+.sk-row.short {
+  width: 70%;
+}
+
+@keyframes sk-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}

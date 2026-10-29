@@ -7,8 +7,8 @@ describe('startSyncLoop', () => {
     vi.useRealTimers();
   });
 
-  it('uses 12 second default interval', () => {
-    expect(SYNC_INTERVAL_MS).toBe(12_000);
+  it('uses 45 second default interval', () => {
+    expect(SYNC_INTERVAL_MS).toBe(45_000);
   });
 
   it('calls sync on start and on interval', async () => {
@@ -23,5 +23,28 @@ describe('startSyncLoop', () => {
     stop();
     vi.advanceTimersByTime(5000);
     expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it('pauses while hidden and refreshes when visible', async () => {
+    vi.useFakeTimers();
+    let hidden = false;
+    Object.defineProperty(document, 'hidden', {
+      configurable: true,
+      get: () => hidden,
+    });
+    const fn = vi.fn();
+    const stop = startSyncLoop(fn, 1000);
+    expect(fn).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1000);
+    expect(fn).toHaveBeenCalledTimes(2);
+    hidden = true;
+    document.dispatchEvent(new Event('visibilitychange'));
+    vi.advanceTimersByTime(5000);
+    expect(fn).toHaveBeenCalledTimes(2);
+    hidden = false;
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(fn).toHaveBeenCalledTimes(3);
+    expect(fn.mock.calls[2][0]).toBe('visible');
+    stop();
   });
 });

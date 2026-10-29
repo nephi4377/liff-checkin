@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import path from 'node:path';
 
-const OUT_DIR = path.resolve(import.meta.dirname, '../modules/projects/employee-todo');
+/** 正式站產物為 Mantle bundle（modules/projects/employee-todo/）；勿用此 stub build 覆寫 */
+const OUT_DIR = path.resolve(import.meta.dirname, 'dist-stub');
 const BASE = '/modules/projects/employee-todo/';
 const CANONICAL_START = '/modules/projects/employee-todo/';
 
@@ -16,8 +17,8 @@ export default defineConfig({
       manifest: {
         name: '員工待辦事項',
         short_name: '員工待辦',
-        theme_color: '#1e2a32',
-        background_color: '#1e2a32',
+        theme_color: '#e7ecea',
+        background_color: '#e7ecea',
         display: 'standalone',
         lang: 'zh-Hant',
         scope: BASE,
@@ -32,7 +33,7 @@ export default defineConfig({
   ],
   build: {
     outDir: OUT_DIR,
-    emptyOutDir: true,
+    emptyOutDir: true, // only clears dist-stub, not production Mantle port
     rollupOptions: {
       output: {
         entryFileNames: 'assets/index-[hash].js',
