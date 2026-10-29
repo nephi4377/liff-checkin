@@ -14,6 +14,7 @@
 
 ## 驗證
 
-- [ ] live HTML 含 `20261029d`
-- [ ] `?role=ende&preview=1`：＋新增工作、派自工務自建、編輯鎖定
-- [ ] `?role=paigong&preview=1`：可見工務說明；綠鈕在頂不擋加入
+- [x] live HTML 含 `20261029d`（#240）；GAS #262 clasp 綠
+- [x] ende preview：＋新增工作、派自工務自建、僅自建有「編輯」
+- [x] paigong 恩德：任務卡可見「工務說明」；綠鈕在頂、`加入` 不重疊
+- 截圖：`/opt/cursor/artifacts/tx15-*.png` → store `media/`
