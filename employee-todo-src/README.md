@@ -1,23 +1,30 @@
-# 員工待辦／派工
+# 員工待辦／派工（SEC-1）
 
 ## 正式站現況（2026-10-29）
 
-**正式靜態包已緊急回滾**至 MantleDB 版（`employee-todo/assets/index-B0wpJKiW.js`，對應 `284e22e`）。
+- **`/employee-todo/`**：PR #235 Mantle 回滾（`index-B0wpJKiW.js`），**勿** build 覆蓋、**本 PR 不加轉址**。
+- **SEC-1**：獨立 LIFF app（與主控台 LIFF `7yKM9EqL` 分開），Endpoint  
+  `https://info.tanxin.space/modules/projects/employee-todo/`
 
-SEC-1（LIFF + `todo_*` GAS）因 LINE LIFF Endpoint／Callback **未**納入 `https://info.tanxin.space/employee-todo/`，外開會 400 `invalid url`，故暫時不可建置覆蓋正式目錄。
+### LIFF ID（待 Nephi 建立）
 
-**在 LINE Developers 為 LIFF（或獨立 LIFF）登記 Endpoint＝`https://info.tanxin.space/employee-todo/` 並驗證登入前，請勿執行 `npm run build`。**
+在 `src/config.js` 設定 `EMPLOYEE_TODO_LIFF_ID`（同 channel `2007974938-*`）。  
+留空時頁面顯示設定說明，不呼叫 `liff.init`。
 
----
+建置輸出：`modules/projects/employee-todo/`（Vite `base` 同上 path）。
 
-## SEC-1 源碼（尚未可上線）
-
-React 源碼在本目錄；建置輸出至 `../employee-todo/`。設計為寫入走 project-console GAS（`liff_id_token`），不含 mantledb 金鑰或 PIN。
+## 開發
 
 ```bash
 npm ci
-npm test          # unit
-# npm run build   # 禁止覆寫正式包，直到 LIFF Endpoint 就緒
+npm test
+npm run build          # 不寫入 repo 根 /employee-todo/
+npm run test:e2e
+npm run migration:plan
 ```
 
-預覽（無 LIFF）：`?preview=1`（僅本機／測試包）
+預覽：`?preview=1`（**不**對 GAS 寫入；僅 UI  smoke）。
+
+## 資料切換
+
+Mantle room `yang-employee-todo-v2-1792379200` 可能比 Sheet 新；切換前見 `scripts/mantle-to-sheet-migration.mjs`。
