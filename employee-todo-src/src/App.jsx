@@ -32,12 +32,30 @@ export default function App() {
       try {
         const session = await ensureLiffSession();
         if (session.pendingLogin) return;
+        if (session.configMissing) {
+          setAuth({
+            ready: true,
+            error: session.error || '',
+            displayName: '',
+            canWrite: false,
+          });
+          return;
+        }
+        if (session.preview) {
+          setAuth({
+            ready: true,
+            error: '',
+            displayName: session.displayName,
+            canWrite: false,
+            preview: true,
+          });
+          return;
+        }
         setAuth({
           ready: true,
           error: '',
           displayName: session.displayName,
           canWrite: true,
-          preview: session.preview,
         });
         cancelSync = startSyncLoop(async () => {
           try {
@@ -117,7 +135,7 @@ export default function App() {
         {auth.error && <p className="error">{auth.error}</p>}
       </header>
 
-      {role === 'assistant' && (
+      {role === 'assistant' && auth.canWrite && (
         <section className="composer">
           <input
             value={newTitle}
@@ -139,7 +157,10 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={!!t.completed}
-                onChange={() => toggleComplete(t)}
+                disabled={!auth.canWrite}
+                onChange={() => {
+                  if (auth.canWrite) toggleComplete(t);
+                }}
               />
               <span>
                 {t.caseNo ? `${t.caseNo} ` : ''}
