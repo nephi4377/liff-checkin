@@ -6,10 +6,9 @@
 - **SEC-1**：獨立 LIFF app（與主控台 LIFF `7yKM9EqL` 分開），Endpoint  
   `https://info.tanxin.space/modules/projects/employee-todo/`
 
-### LIFF ID（待 Nephi 建立）
+### LIFF
 
-在 `src/config.js` 設定 `EMPLOYEE_TODO_LIFF_ID`（同 channel `2007974938-*`）。  
-留空時頁面顯示設定說明，不呼叫 `liff.init`。
+`EMPLOYEE_TODO_LIFF_ID` = `2007974938-U374uwei`（Endpoint `…/modules/projects/employee-todo/`）
 
 建置輸出：`modules/projects/employee-todo/`（Vite `base` 同上 path）。
 

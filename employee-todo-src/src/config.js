@@ -6,11 +6,10 @@ export const GAS_WEB_APP_URL =
 export const TANXIN_LINE_LOGIN_CHANNEL_PREFIX = '2007974938';
 
 /**
- * TODO（Nephi）：在同一 LINE Login channel 新增「派工待辦」LIFF app。
- * Endpoint URL：https://info.tanxin.space/modules/projects/employee-todo/
- * 建立後將下方 ID 換成 `2007974938-xxxxxxxx`；留空則前端只顯示設定提示、不呼叫 liff.init。
+ * 派工待辦專用 LIFF（同 channel 2007974938，Endpoint 見下）。
+ * @see LINE Developers → LIFF app 2007974938-U374uwei
  */
-export const EMPLOYEE_TODO_LIFF_ID = '';
+export const EMPLOYEE_TODO_LIFF_ID = '2007974938-U374uwei';
 
 /**
  * 新 LIFF 在 LINE Developers 登記的 Endpoint（liff.login redirectUri 須以此字串為前綴）。

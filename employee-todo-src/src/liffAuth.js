@@ -4,7 +4,7 @@ import {
 } from './config.js';
 import {
   assertAllowedLoginRedirectUri,
-  buildLoginRedirectUri,
+  buildEmployeeTodoLoginRedirectUri,
 } from './liffRedirectUri.js';
 
 const TEST_TOKEN = 'test-liff-token-for-vitest';
@@ -43,7 +43,7 @@ export async function ensureLiffSession() {
 
   await liff.init({ liffId });
   if (!liff.isLoggedIn()) {
-    const redirectUri = assertAllowedLoginRedirectUri(buildLoginRedirectUri());
+    const redirectUri = buildEmployeeTodoLoginRedirectUri(window.location);
     liff.login({ redirectUri });
     return { idToken: '', displayName: '', loggedIn: false, pendingLogin: true };
   }

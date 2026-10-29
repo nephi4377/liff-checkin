@@ -3,10 +3,14 @@
  * MantleDB v2 → SEC-1 Google Sheet 匯入計畫（預設 dry-run，不寫入 Mantle、不寫 Sheet）。
  *
  * 用法：
- *   node scripts/mantle-to-sheet-migration.mjs              # dry-run，僅印步驟
- *   node scripts/mantle-to-sheet-migration.mjs --export path.json  # 驗證匯出 JSON 欄位
+ *   npm run migration:plan
+ *   node scripts/mantle-to-sheet-migration.mjs --export mantle.json
+ *   node scripts/mantle-to-sheet-migration.mjs --export mantle.json --sheet-snapshot sheet.json
  *
- * 取得 Mantle 匯出需在本機以既有 Mantle 工具／PIN 匯出 JSON；此腳本不含金鑰、不呼叫 Mantle API。
+ * --export：Mantle room 匯出 JSON（tasks 陣列）。腳本只讀檔案，不呼叫 Mantle API。
+ * --sheet-snapshot：Sheet 側匯出／快照 JSON（同 tasks 結構），用於 diff；仍不寫入。
+ *
+ * --apply：未實作（永遠 exit 2）。
  */
 import fs from 'node:fs';
 
@@ -14,8 +18,49 @@ const SHEET_ID = '1QfVtsf7Pr9Nmn7wOmC-xYceNq7ChFclM2aoh5JvJ01Q';
 const MANTLE_ROOM = 'yang-employee-todo-v2-1792379200';
 
 const args = process.argv.slice(2);
+
+function readTasks(filePath) {
+  const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  return raw.tasks || raw.data?.tasks || [];
+}
+
+function summarizeTasks(tasks, label) {
+  const open = tasks.filter((t) => t && !t.completed && !t.trashedAt);
+  const completed = tasks.filter((t) => t && t.completed && !t.trashedAt);
+  const trashed = tasks.filter((t) => t && t.trashedAt);
+  console.log(`--- ${label} ---`);
+  console.log('  total tasks:', tasks.length);
+  console.log('  open:', open.length);
+  console.log('  completed:', completed.length);
+  console.log('  trashed:', trashed.length);
+  if (open.length) {
+    console.log(
+      '  open titles:',
+      open.slice(0, 8).map((t) => t.title || t.id),
+    );
+  }
+  return { open, completed, trashed, all: tasks };
+}
+
+function taskKey(t) {
+  return String(t.id || t.title || '').trim();
+}
+
+function diffOpen(mantleOpen, sheetOpen) {
+  const mKeys = new Set(mantleOpen.map(taskKey).filter(Boolean));
+  const sKeys = new Set(sheetOpen.map(taskKey).filter(Boolean));
+  const onlyMantle = [...mKeys].filter((k) => !sKeys.has(k));
+  const onlySheet = [...sKeys].filter((k) => !mKeys.has(k));
+  console.log('--- diff (open tasks, by id/title key) ---');
+  console.log('  only in Mantle export:', onlyMantle.length, onlyMantle.slice(0, 10));
+  console.log('  only in Sheet snapshot:', onlySheet.length, onlySheet.slice(0, 10));
+  console.log('  open count delta (Mantle − Sheet):', mantleOpen.length - sheetOpen.length);
+}
+
 const exportIdx = args.indexOf('--export');
 const exportPath = exportIdx >= 0 ? args[exportIdx + 1] : null;
+const sheetIdx = args.indexOf('--sheet-snapshot');
+const sheetPath = sheetIdx >= 0 ? args[sheetIdx + 1] : null;
 const dryRun = !args.includes('--apply');
 
 console.log('=== 員工待辦 Mantle → Sheet 匯入（計畫）===');
@@ -24,33 +69,31 @@ console.log('Target Sheet:', SHEET_ID);
 console.log('Mode:', dryRun ? 'DRY-RUN（預設）' : 'APPLY 未實作 — 請勿使用');
 console.log('');
 
-const steps = [
-  '1. 凍結 Mantle 正式寫入：通知使用者暫時只用 Mantle 唯讀或停更。',
-  '2. 自 Mantle room 匯出 tasks／officeTasks／assigners JSON（公司既有流程）。',
-  '3. 執行本腳本 --export file.json 做欄位對照與筆數摘要（仍不寫 Sheet）。',
-  '4. 由負責人在 project-console GAS 後端執行一次性 import（需另開維護窗；本 PR 不含 GAS 改動）。',
-  '5. 比對 Sheet open 列與 Mantle 匯出；確認 SEC-1 新 URL 可 todo_list。',
-  '6. 公告新 URL（/modules/projects/employee-todo/）；舊 /employee-todo/ 轉址＋SW 卸載見 cut-over checklist（另 PR）。',
-  '7. 禁止任何 SEC-1 或腳本寫回 MantleDB。',
-];
-
-steps.forEach((s) => console.log(s));
+[
+  '1. 凍結 Mantle 正式寫入（cut-over 前）。',
+  '2. 匯出 Mantle JSON → 本腳本 --export。',
+  '3. （選）匯出 Sheet 快照 → --sheet-snapshot，看 diff。',
+  '4. GAS 一次性 import（另 PR／維護窗）；禁止寫回 Mantle。',
+  '5. 部署 SEC-1 URL 後 todo_list 驗證。',
+  '6. 舊 /employee-todo/ 轉址 + SW 卸載：cut-over checklist（本 PR 不做）。',
+].forEach((s) => console.log(s));
 
 if (exportPath) {
   if (!fs.existsSync(exportPath)) {
     console.error('Export file not found:', exportPath);
     process.exit(1);
   }
-  const raw = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
-  const tasks = raw.tasks || raw.data?.tasks || [];
-  const open = tasks.filter((t) => t && !t.completed && !t.trashedAt);
+  const mantle = summarizeTasks(readTasks(exportPath), 'Mantle export');
+  if (sheetPath) {
+    if (!fs.existsSync(sheetPath)) {
+      console.error('Sheet snapshot not found:', sheetPath);
+      process.exit(1);
+    }
+    const sheet = summarizeTasks(readTasks(sheetPath), 'Sheet snapshot');
+    diffOpen(mantle.open, sheet.open);
+  }
   console.log('');
-  console.log('Export summary:');
-  console.log('  tasks:', tasks.length);
-  console.log('  open (not completed, not trashed):', open.length);
-  console.log('  sample titles:', open.slice(0, 5).map((t) => t.title));
-  console.log('');
-  console.log('DRY-RUN: no Sheet write performed.');
+  console.log('DRY-RUN: no Mantle or Sheet write performed.');
 }
 
 if (!dryRun) {

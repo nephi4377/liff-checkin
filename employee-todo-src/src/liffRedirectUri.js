@@ -12,8 +12,20 @@ export function isAllowedLiffRedirectUri(
   return stripHash(redirectUri).startsWith(stripHash(endpointUrl));
 }
 
+/** @deprecated prefer buildEmployeeTodoLoginRedirectUri */
 export function buildLoginRedirectUri(loc = window.location) {
   return loc.href.split('#')[0];
+}
+
+/**
+ * 登入後回到 Endpoint 下的 app URL，保留 ?role=（不帶 preview 等測試參數）。
+ */
+export function buildEmployeeTodoLoginRedirectUri(loc = window.location) {
+  const u = new URL(EMPLOYEE_TODO_LIFF_ENDPOINT_URL);
+  const role = new URLSearchParams(loc.search || '').get('role');
+  if (role) u.searchParams.set('role', role);
+  const redirectUri = u.href.split('#')[0];
+  return assertAllowedLoginRedirectUri(redirectUri);
 }
 
 export function assertAllowedLoginRedirectUri(

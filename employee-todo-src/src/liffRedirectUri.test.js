@@ -4,10 +4,48 @@ import {
   EMPLOYEE_TODO_LIFF_ENDPOINT_URL,
 } from './config.js';
 import {
-  assertAllowedLoginRedirectUri,
-  buildLoginRedirectUri,
+  buildEmployeeTodoLoginRedirectUri,
   isAllowedLiffRedirectUri,
 } from './liffRedirectUri.js';
+
+describe('buildEmployeeTodoLoginRedirectUri', () => {
+  const endpoint = EMPLOYEE_TODO_LIFF_ENDPOINT_URL;
+
+  it('builds paigong redirect on endpoint prefix', () => {
+    expect(
+      buildEmployeeTodoLoginRedirectUri({
+        search: '?role=paigong&preview=1',
+        href: `${endpoint}?role=paigong&preview=1`,
+      }),
+    ).toBe(`${endpoint}?role=paigong`);
+  });
+
+  it('builds ende redirect on endpoint prefix', () => {
+    expect(
+      buildEmployeeTodoLoginRedirectUri({
+        search: '?role=ende',
+        href: `${endpoint}?role=ende`,
+      }),
+    ).toBe(`${endpoint}?role=ende`);
+  });
+
+  it('omits preview from redirectUri', () => {
+    const uri = buildEmployeeTodoLoginRedirectUri({
+      search: '?role=paigong&preview=1',
+      href: `${endpoint}?role=paigong&preview=1`,
+    });
+    expect(uri).not.toContain('preview');
+  });
+
+  it('rejects legacy employee-todo path if forced', () => {
+    expect(
+      isAllowedLiffRedirectUri(
+        'https://info.tanxin.space/employee-todo/?role=paigong',
+        endpoint,
+      ),
+    ).toBe(false);
+  });
+});
 
 describe('isAllowedLiffRedirectUri (employee-todo LIFF endpoint)', () => {
   const endpoint = EMPLOYEE_TODO_LIFF_ENDPOINT_URL;
@@ -18,42 +56,20 @@ describe('isAllowedLiffRedirectUri (employee-todo LIFF endpoint)', () => {
     ).toBe(true);
   });
 
-  it('accepts app root with role=ende', () => {
-    expect(isAllowedLiffRedirectUri(`${endpoint}?role=ende`, endpoint)).toBe(
-      true,
-    );
-  });
-
-  it('rejects legacy /employee-todo/', () => {
-    expect(
-      isAllowedLiffRedirectUri(
-        'https://info.tanxin.space/employee-todo/?role=paigong',
-        endpoint,
-      ),
-    ).toBe(false);
-  });
-
   it('rejects main console LIFF endpoint as redirect target', () => {
     expect(
       isAllowedLiffRedirectUri(
-        'https://info.tanxin.space/modules/projects/managementconsole.html?employeeTodo=1',
+        'https://info.tanxin.space/modules/projects/managementconsole.html',
         endpoint,
       ),
     ).toBe(false);
   });
+});
 
-  it('buildLoginRedirectUri keeps role query for liff.login', () => {
-    const loc = {
-      href: `${endpoint}?role=ende`,
-      search: '?role=ende',
-    };
-    expect(buildLoginRedirectUri(loc)).toBe(`${endpoint}?role=ende`);
-    expect(() =>
-      assertAllowedLoginRedirectUri(buildLoginRedirectUri(loc), endpoint),
-    ).not.toThrow();
-  });
+describe('buildEmployeeTodoAppUrl', () => {
+  const endpoint = EMPLOYEE_TODO_LIFF_ENDPOINT_URL;
 
-  it('buildEmployeeTodoAppUrl matches allowed redirect targets', () => {
+  it('matches allowed redirect targets for paigong and ende', () => {
     for (const role of ['paigong', 'ende']) {
       const url = buildEmployeeTodoAppUrl(role);
       expect(isAllowedLiffRedirectUri(url, endpoint)).toBe(true);
