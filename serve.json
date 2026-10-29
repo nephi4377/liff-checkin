@@ -4,6 +4,14 @@
     {
       "source": "/modules/projects/designer-material-selection",
       "destination": "/modules/projects/designer-material-selection.html"
+    },
+    {
+      "source": "/modules/projects/employee-todo",
+      "destination": "/modules/projects/employee-todo/index.html"
+    },
+    {
+      "source": "/modules/projects/employee-todo/",
+      "destination": "/modules/projects/employee-todo/index.html"
     }
   ]
 }
