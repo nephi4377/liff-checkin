@@ -12,5 +12,6 @@
 ## 驗證
 
 - [x] 本機 preview：鎖定 `button.task-detail-btn=0`；點「編輯」後出現說明按鈕／標題／限期／緊急度
-- [ ] live HTML 含 `20261029e`（部署後勾）
+- [x] live HTML 含 `20261029e`（#241 → main `0c72acd`）
 - 截圖：`/opt/cursor/artifacts/tx15-paigong-locked-e.png`、`tx15-paigong-editing-e.png`
+- [x] live preview：鎖定無「＋ 派工說明」；點編輯可改
