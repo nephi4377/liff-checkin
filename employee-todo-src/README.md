@@ -1,29 +1,25 @@
-# 員工待辦／派工（SEC-1）
+# 員工待辦／派工
 
-## 正式站現況（2026-10-29）
+## 正式站（2026-10-29 起）
 
-- **`/employee-todo/`**：PR #235 Mantle 回滾（`index-B0wpJKiW.js`），**勿** build 覆蓋、**本 PR 不加轉址**。
-- **SEC-1**：獨立 LIFF app（與主控台 LIFF `7yKM9EqL` 分開），Endpoint  
-  `https://info.tanxin.space/modules/projects/employee-todo/`
+| 路徑 | 說明 |
+|------|------|
+| **`/modules/projects/employee-todo/`** | **正式**：Mantle 晨霧 UI（`index-B0wpJKiW.js`）＋`sheet-bridge.js`→Sheet `todo_*` |
+| `/employee-todo/` | Mantle 只讀回滾（#235）；**勿寫 Mantle**、勿 build 覆蓋 |
 
 ### LIFF
 
-`EMPLOYEE_TODO_LIFF_ID` = `2007974938-U374uwei`（Endpoint `…/modules/projects/employee-todo/`）
+`EMPLOYEE_TODO_LIFF_ID` = `2007974938-U374uwei`  
+Endpoint：`https://info.tanxin.space/modules/projects/employee-todo/`
 
-建置輸出：`modules/projects/employee-todo/`（Vite `base` 同上 path）。
+## 本目錄（employee-todo-src）
 
-## 開發
+SEC-1 stub／單元測試與 LIFF redirect 測試。**`npm run build` 只輸出到 `dist-stub/`**，不會覆寫正式 Mantle 產物。
 
 ```bash
 npm ci
 npm test
-npm run build          # 不寫入 repo 根 /employee-todo/
-npm run test:e2e
-npm run migration:plan
+npm run test:e2e   # 測 modules/projects/employee-todo/（Mantle＋bridge）
 ```
 
-預覽：`?preview=1`（**不**對 GAS 寫入；僅 UI  smoke）。
-
-## 資料切換
-
-Mantle room `yang-employee-todo-v2-1792379200` 可能比 Sheet 新；切換前見 `scripts/mantle-to-sheet-migration.mjs`。
+預覽：`?preview=1`（bridge 示範資料，不打 GAS）。
