@@ -2,8 +2,8 @@ import {
   missingEmployeeTodoLiffMessage,
   resolveEmployeeTodoLiffId,
 } from './config.js';
+import { waitForLiffSdk } from './liffSdk.js';
 import {
-  assertAllowedLoginRedirectUri,
   buildEmployeeTodoLoginRedirectUri,
 } from './liffRedirectUri.js';
 
@@ -38,7 +38,7 @@ export async function ensureLiffSession() {
     };
   }
 
-  const liff = window.liff;
+  const liff = await waitForLiffSdk();
   if (!liff) throw new Error('LIFF SDK 未載入');
 
   await liff.init({ liffId });
@@ -63,6 +63,7 @@ export async function refreshIdToken() {
   if (import.meta.env?.MODE === 'test' || import.meta.env?.VITEST) return TEST_TOKEN;
   if (new URLSearchParams(window.location.search).get('preview') === '1') return '';
   if (!resolveEmployeeTodoLiffId()) return '';
+  await waitForLiffSdk().catch(() => null);
   const liff = window.liff;
   if (!liff || !liff.isLoggedIn()) return '';
   return liff.getIDToken() || '';

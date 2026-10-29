@@ -24,8 +24,8 @@ export const EMPLOYEE_TODO_SHEET_ID = '1QfVtsf7Pr9Nmn7wOmC-xYceNq7ChFclM2aoh5JvJ
 /** MantleDB v2 room（正式回滾仍讀寫此處；SEC-1 不寫回） */
 export const MANTLE_EMPLOYEE_TODO_ROOM = 'yang-employee-todo-v2-1792379200';
 
-/** 與舊版 bundle `_a=12e3` 相同 */
-export const SYNC_INTERVAL_MS = 12_000;
+/** 輪詢間隔（舊 Mantle bundle 為 12e3；改 45s 減 GAS 負載） */
+export const SYNC_INTERVAL_MS = 45_000;
 
 export function resolveEmployeeTodoLiffId() {
   const id = (EMPLOYEE_TODO_LIFF_ID || '').trim();
