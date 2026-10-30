@@ -407,6 +407,10 @@
 <!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
+    import {
+        filterAttendanceActiveWithRecentResigned,
+        shouldUseFilteredHubRoster
+    } from '/shared/js/hub_employee_roster_filters.js';
     import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
     import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js?v=20260723';
     import { initLeaveYearStatsPanel } from '/modules/attendance/leave_year_stats_panel.js?v=20260723';
@@ -1042,30 +1046,18 @@
             }
         }
 
-        /** 對齊後端出勤名單：排除廠商、權限 ≥5（與 attendance_* filter 一致） */
-        function filterAttendanceRoster(list) {
-            return (list || []).filter((emp) => {
-                if (!emp) return false;
-                const status = String(emp.status || '員工').trim();
-                if (status === '廠商') return false;
-                const perm = parseInt(emp.permission, 10) || 1;
-                if (perm >= 5) return false;
-                return true;
-            });
-        }
-
         function loadAndRenderEmployees() {
             const showAll = document.getElementById('show-all-employees-checkbox').checked;
             const filter = showAll ? 'attendance_all' : 'attendance_active_with_recent_resigned';
             const cacheKey = `employees_cache_${filter}`;
 
-            // 步驟 0（Hub）：主控台已暖過且非「全部歷史」→ 直接用共用員工快取，不再打 API
+            // 步驟 0（Hub）：主控台已暖過且非「全部歷史」→ 套用與後端相同篩選後再用快取；篩完為空則打 API
             if (!showAll) {
-                const hubRoster = filterAttendanceRoster(readHubRefEmployees());
-                if (hubRoster.length) {
+                const hubRoster = filterAttendanceActiveWithRecentResigned(readHubRefEmployees());
+                if (shouldUseFilteredHubRoster(hubRoster)) {
                     const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
                     const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
-                    console.log('[attendance_report] 員工來源=' + src + '（略過 get_employees）');
+                    console.log('[attendance_report] 員工來源=' + src + '（略過 get_employees；已套用在職+60天內離職）');
                     saveCache(cacheKey, hubRoster, 1);
                     renderEmployeeSelect(hubRoster);
                     return;

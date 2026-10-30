@@ -146,7 +146,7 @@
 | 會計 `searchMasterList(official_customer)` 首次 `fetch_all` → `HubRefCache.set('customers')` | 各會計頁本地 keyword 篩選 | 綁定成功 `invalidate('customers')` |
 | HUB 寫入後 | **`NewSiteForm`**：開頁先 `HubRefCache.read` 員工／案場；沒有才 `get_employees`／`get_all_sites` | 案場 CRUD 成功仍 `invalidate`＋`spa_hub_invalidate_projects` |
 | HUB 寫入後 | **`shift_schedule`**：開頁先 `HubRefCache.read('employees')`；沒有才 `get_employees`（班表仍另抓） | 獨立開頁（無快取）仍 API 後備 |
-| HUB 寫入後 | **`attendance_report`（出勤儀表）**：開頁先 `HubRefCache.read('employees')`（前端排除廠商／權限≥5）；沒有才 `get_employees`；勾「顯示所有歷史員工」仍走 API | 獨立開頁（無快取）仍 API 後備 |
+| HUB 寫入後 | **`attendance_report`（出勤儀表）**：開頁先 `HubRefCache.read('employees')`，前端套用與後端相同之 `attendance_active_with_recent_resigned`（在職＋60 天內離職；排除廠商／權限≥5）；篩完空則打 API；勾「顯示所有歷史員工」仍走 API | 獨立開頁（無快取）仍 API 後備 |
 | `NewSiteForm` 等 postMessage `spa_hub_invalidate_projects` | HUB 重抓後 `HubRefCache.set('projects')` | 案場 CRUD 後清快取 |
 
 **與其他快取的分工**
@@ -343,6 +343,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-30 | v1.9.9：出勤儀表讀 `HubRefCache` 後套用與後端相同之「在職＋60 天內離職」篩選（`hub_employee_roster_filters.js`）；篩完空則後備 API。 |
 | 2026-10-30 | v1.9.8：出勤儀表（`attendance_report`）開頁先讀 `HubRefCache` 員工（前端排除廠商／權限≥5）；沒有才打 `get_employees`；勾「顯示所有歷史員工」仍走 API。API 契約不變。 |
 | 2026-10-26 | v1.9.7：HUB 主控台載入 `operator_context.js`，登入／核心就緒後寫入 `tanxin_operator_v1`（`source: hub`），供子頁讀本分頁記憶。API 契約不變；前端 only，無 clasp。 |
 | 2026-10-26 | v1.9.6：排班頁（`shift_schedule`）開頁先讀 `HubRefCache` 員工；沒有才打 `get_employees`（班表仍另抓）。API 契約不變。 |

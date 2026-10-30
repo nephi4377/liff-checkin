@@ -314,8 +314,8 @@ const App = {
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
-            '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.1', title: '出勤儀表板' }, // Hub：先吃 HubRefCache 員工
-            '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.1', title: '我的出勤與假勤', params: '&mode=personal' },
+            '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.3', title: '出勤儀表板' }, // Hub：快取套用在職+60天內離職
+            '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.3', title: '我的出勤與假勤', params: '&mode=personal' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
