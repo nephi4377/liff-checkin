@@ -162,6 +162,8 @@
         </div>
     </div>
 
+<!-- Hub F7：與主控台共用員工參考主檔（父層 spaAllEmployees／本機 HubRefCache） -->
+<script src="../../shared/js/hub_ref_cache.js?v=2"></script>
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
 
@@ -563,9 +565,32 @@
         el.formSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
+    function readHubRefEmployees() {
+        try {
+            const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+            if (!Hub || typeof Hub.read !== 'function') return [];
+            const list = Hub.read('employees') || [];
+            return Array.isArray(list) && list.length ? list : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    // Hub F7：員工先吃父層／HubRefCache；沒有才打 get_employees（筆記仍另抓）
     async function loadEmployees() {
         setStatus('更新中', 'is-busy');
         try {
+            const hubEmployees = readHubRefEmployees();
+            if (hubEmployees.length) {
+                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+                const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
+                console.log('[director_hr_notes] 員工來源=' + src + '（略過 get_employees）');
+                allEmployees = hubEmployees.filter((emp) => emp && emp.status !== '離職');
+                renderEmployeeOptions(el.empSearch.value);
+                setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
+                return;
+            }
+
             const res = await fetchApi({
                 action: 'get_employees',
                 filter: 'attendance_active',
@@ -576,6 +601,10 @@
                 throw new Error((res && res.message) || '讀取員工名單失敗');
             }
             allEmployees = Array.isArray(res.data) ? res.data : [];
+            try {
+                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+                if (Hub && typeof Hub.set === 'function') Hub.set('employees', allEmployees);
+            } catch (e) { /* ignore */ }
             renderEmployeeOptions(el.empSearch.value);
             setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
         } catch (e) {

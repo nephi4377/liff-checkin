@@ -361,7 +361,7 @@ const App = {
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
         // 公司知識庫（注意：#/knowledge 已被 index.html 轉去公開 FAQ 頁，故用 #/kb）
         routes['#/kb'] = { name: 'iframe', src: 'modules/kb/index.html', title: '公司知識庫' };
-        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html', title: '總監人事筆記' };
+        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html?v=26.10.30.2', title: '總監人事筆記' }; // Hub F7：先吃 HubRefCache 員工
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
