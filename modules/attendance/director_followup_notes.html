@@ -181,6 +181,13 @@
     let doneCache = [];
     let showDone = false;
     let saving = false;
+    /** 進行中存檔對應的表單 noteId（新建為 ''）；成功時只清同一份草稿 */
+    let savingFormNoteId = null;
+
+    function notify(message, type) {
+        const duration = type === 'error' ? 8000 : 5000;
+        showGlobalNotification(message, duration, type || 'info');
+    }
 
     let demoNotes = [
         {
@@ -423,6 +430,10 @@
     }
 
     function hideForm() {
+        if (saving) {
+            notify('正在處理中，請稍候再關表單', 'info');
+            return;
+        }
         el.formSection.classList.add('hidden');
         el.form.reset();
         el.formNoteId.value = '';
@@ -435,6 +446,10 @@
     }
 
     function openNewForm() {
+        if (saving) {
+            notify('正在處理中，請稍候再開新的待跟進', 'info');
+            return;
+        }
         el.formSection.classList.remove('hidden');
         el.formHeading.textContent = '要跟進';
         el.formNoteId.value = '';
@@ -448,9 +463,13 @@
     }
 
     function openEditForm(noteId) {
+        if (saving) {
+            notify('正在處理中，請稍候再改其他筆', 'info');
+            return;
+        }
         const n = openCache.find((x) => x.noteId === noteId) || doneCache.find((x) => x.noteId === noteId);
         if (!n) {
-            showGlobalNotification('找不到這筆待跟進，請重新整理', 'error');
+            notify('找不到這筆待跟進，請重新整理', 'error');
             return;
         }
         el.formSection.classList.remove('hidden');
@@ -501,7 +520,7 @@
             el.openEmpty.classList.remove('hidden');
             el.openEmpty.textContent = (e && e.message) || '讀取失敗，請按「重新整理」再試';
             setStatus('讀取失敗', 'is-err');
-            showGlobalNotification(el.openEmpty.textContent, 'error');
+            notify(el.openEmpty.textContent, 'error');
         }
     }
 
@@ -517,15 +536,19 @@
         }
         el.formSummaryErr.classList.add('hidden');
 
+        const noteId = el.formNoteId.value.trim();
         saving = true;
+        savingFormNoteId = noteId;
         el.btnSave.disabled = true;
         el.btnSave.textContent = '處理中…';
         el.btnDelete.disabled = true;
+        el.btnNew.disabled = true;
+        el.formSummary.readOnly = true;
+        el.formDue.disabled = true;
         el.formMsg.textContent = '處理中，請稍候';
         el.formMsg.className = 'text-sm text-indigo-700 min-h-[1.25rem]';
         setStatus('處理中', 'is-busy');
 
-        const noteId = el.formNoteId.value.trim();
         const payload = {
             action: 'director_followup_notes',
             op: noteId ? 'update' : 'create',
@@ -544,26 +567,42 @@
             }
             el.formMsg.textContent = res.message || '已存';
             el.formMsg.className = 'text-sm text-emerald-700 min-h-[1.25rem]';
-            showGlobalNotification(res.message || '已存', 'success');
-            hideForm();
+            notify(res.message || '已存', 'success');
+            // 只清「同一份」草稿；請求中也鎖了表單切換
+            const stillSameDraft = el.formNoteId.value.trim() === savingFormNoteId;
+            saving = false;
+            savingFormNoteId = null;
+            el.formSummary.readOnly = false;
+            el.formDue.disabled = false;
+            el.btnNew.disabled = false;
+            if (stillSameDraft) hideForm();
+            else {
+                el.btnSave.disabled = false;
+                el.btnSave.textContent = '存';
+                el.btnDelete.disabled = false;
+            }
             await loadNotes();
             setStatus('已存', 'is-ok');
         } catch (e) {
             el.formMsg.textContent = (e && e.message) || '存檔失敗，請再試一次';
             el.formMsg.className = 'text-sm text-red-600 min-h-[1.25rem]';
-            showGlobalNotification(el.formMsg.textContent, 'error');
+            notify(el.formMsg.textContent, 'error');
             setStatus('存檔失敗', 'is-err');
-        } finally {
             saving = false;
+            savingFormNoteId = null;
             el.btnSave.disabled = false;
             el.btnSave.textContent = '存';
             el.btnDelete.disabled = false;
+            el.btnNew.disabled = false;
+            el.formSummary.readOnly = false;
+            el.formDue.disabled = false;
         }
     }
 
     async function completeNote(noteId) {
         if (!noteId || saving) return;
         saving = true;
+        el.btnNew.disabled = true;
         setStatus('處理中', 'is-busy');
         try {
             const res = await postNotes({
@@ -574,21 +613,26 @@
                 noteId: noteId
             });
             if (!res || !res.success) throw new Error((res && res.message) || '標記失敗');
-            showGlobalNotification(res.message || '已勾做完', 'success');
-            if (el.formNoteId.value === noteId) hideForm();
+            notify(res.message || '已勾做完', 'success');
+            if (el.formNoteId.value === noteId) {
+                saving = false;
+                hideForm();
+            }
             await loadNotes();
             setStatus('已勾做完', 'is-ok');
         } catch (e) {
-            showGlobalNotification((e && e.message) || '標記失敗', 'error');
+            notify((e && e.message) || '標記失敗', 'error');
             setStatus('失敗', 'is-err');
         } finally {
             saving = false;
+            el.btnNew.disabled = false;
         }
     }
 
     async function restoreNote(noteId) {
         if (!noteId || saving) return;
         saving = true;
+        el.btnNew.disabled = true;
         setStatus('處理中', 'is-busy');
         try {
             const res = await postNotes({
@@ -599,14 +643,15 @@
                 noteId: noteId
             });
             if (!res || !res.success) throw new Error((res && res.message) || '還原失敗');
-            showGlobalNotification(res.message || '已還原', 'success');
+            notify(res.message || '已還原', 'success');
             await loadNotes();
             setStatus('已還原', 'is-ok');
         } catch (e) {
-            showGlobalNotification((e && e.message) || '還原失敗', 'error');
+            notify((e && e.message) || '還原失敗', 'error');
             setStatus('失敗', 'is-err');
         } finally {
             saving = false;
+            el.btnNew.disabled = false;
         }
     }
 
@@ -614,6 +659,7 @@
         if (!noteId || saving) return;
         if (!window.confirm('確定刪除這筆待跟進？刪除後列表就看不到了。')) return;
         saving = true;
+        el.btnNew.disabled = true;
         setStatus('處理中', 'is-busy');
         try {
             const res = await postNotes({
@@ -624,15 +670,19 @@
                 noteId: noteId
             });
             if (!res || !res.success) throw new Error((res && res.message) || '刪除失敗，請再試一次');
-            showGlobalNotification(res.message || '已刪除', 'success');
-            if (el.formNoteId.value === noteId) hideForm();
+            notify(res.message || '已刪除', 'success');
+            if (el.formNoteId.value === noteId) {
+                saving = false;
+                hideForm();
+            }
             await loadNotes();
             setStatus('已刪除', 'is-ok');
         } catch (e) {
-            showGlobalNotification((e && e.message) || '刪除失敗，請再試一次', 'error');
+            notify((e && e.message) || '刪除失敗，請再試一次', 'error');
             setStatus('刪除失敗', 'is-err');
         } finally {
             saving = false;
+            el.btnNew.disabled = false;
         }
     }
 

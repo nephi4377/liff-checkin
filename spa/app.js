@@ -365,7 +365,7 @@ const App = {
         routes['#/director-project-notes'] = { name: 'iframe', src: 'modules/attendance/director_project_notes.html?v=26.10.30.4', title: '專案／工地備忘' };
         routes['#/director-party-notes'] = { name: 'iframe', src: 'modules/attendance/director_party_notes.html?v=26.10.30.3', title: '客戶／廠商觀察' };
         routes['#/director-decision-notes'] = { name: 'iframe', src: 'modules/attendance/director_decision_notes.html?v=26.10.30.2', title: '決策紀錄' };
-        routes['#/director-followup-notes'] = { name: 'iframe', src: 'modules/attendance/director_followup_notes.html?v=26.10.30.1', title: '待跟進' };
+        routes['#/director-followup-notes'] = { name: 'iframe', src: 'modules/attendance/director_followup_notes.html?v=26.10.30.2', title: '待跟進' };
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
