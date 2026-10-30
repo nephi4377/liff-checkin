@@ -16,8 +16,8 @@
     <meta name="apple-mobile-web-app-title" content="員工待辦" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="format-detection" content="telephone=no" />
-    <!-- cache-bust 2026-10-29e：派工說明亦需點編輯（與工務自建鎖定同模式） -->
-    <meta name="et-build" content="20261029e" />
+    <!-- cache-bust 2026-10-29e：擋 Mantle 舊種子＋點編輯可改派工說明 -->
+    <meta name="et-build" content="20261029g" />
     <title>員工待辦事項</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,7 +30,7 @@
     <script>
       /* 清掉舊 stub／Workbox 快取，避免卡在 #236 或未換 bridge 的包 */
       (function () {
-        var BUILD = '20261029e';
+        var BUILD = '20261029g';
         try {
           if (localStorage.getItem('et-build') !== BUILD) {
             localStorage.setItem('et-build', BUILD);
@@ -54,11 +54,11 @@
     </script>
     <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <!-- Mantle UI 資料橋：mantledb → Sheet todo_*（不寫 Mantle） -->
-    <script src="./sheet-bridge.js?v=20261029e"></script>
-    <script type="module" crossorigin src="./assets/index-B0wpJKiW.js?v=20261029e"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CTl_-N1Z.css?v=20261029e" />
+    <script src="./sheet-bridge.js?v=20261029g"></script>
+    <script type="module" crossorigin src="./assets/index-B0wpJKiW.js?v=20261029g"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-CTl_-N1Z.css?v=20261029g" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <script id="vite-plugin-pwa:register-sw" src="./registerSW.js?v=20261029e"></script>
+    <script id="vite-plugin-pwa:register-sw" src="./registerSW.js?v=20261029g"></script>
   </head>
   <body>
     <div id="root"></div>
