@@ -53,9 +53,11 @@
             <div class="flex items-start justify-between gap-3 flex-wrap">
                 <div class="min-w-0">
                     <p class="text-xs text-slate-500 mb-1">
-                        <span class="font-semibold text-slate-700">人事筆記</span>
+                        <span class="font-semibold text-slate-700">人事</span>
                         <span class="mx-1 text-slate-300">｜</span>
-                        <a href="#/director-project-notes" id="link-project-notes" class="text-indigo-700 hover:underline">專案／工地備忘</a>
+                        <a href="#/director-project-notes" id="link-project-notes" class="text-indigo-700 hover:underline">專案備忘</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-party-notes" id="link-party-notes" class="text-indigo-700 hover:underline">客戶／廠商</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">總監人事筆記</h1>
                     <p class="text-sm text-slate-500 mt-1">選人 → 一行掃過 → 點開看細節或修改</p>
@@ -763,6 +765,15 @@
                 if (window.parent && window.parent !== window) {
                     ev.preventDefault();
                     window.parent.location.hash = '#/director-project-notes';
+                }
+            });
+        }
+        const linkParty = document.getElementById('link-party-notes');
+        if (linkParty) {
+            linkParty.addEventListener('click', (ev) => {
+                if (window.parent && window.parent !== window) {
+                    ev.preventDefault();
+                    window.parent.location.hash = '#/director-party-notes';
                 }
             });
         }
