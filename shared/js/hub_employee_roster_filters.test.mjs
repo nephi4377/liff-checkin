@@ -4,6 +4,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   RECENT_RESIGNED_DAYS,
   filterAttendanceActiveWithRecentResigned,
@@ -12,6 +15,8 @@ import {
   shouldUseFilteredHubRoster,
   parseResignationDate
 } from './hub_employee_roster_filters.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const NOW = Date.parse('2026-10-30T12:00:00+08:00');
 const dayMs = 24 * 60 * 60 * 1000;
@@ -134,5 +139,24 @@ describe('#247 director HR employees', () => {
   it('篩完空 → 後端 fallback', () => {
     const onlyVendors = [{ userId: 'V', status: '廠商', permission: 2 }];
     assert.equal(shouldUseFilteredHubRoster(filterDirectorHrEmployees(onlyVendors)), false);
+  });
+});
+
+describe('#249 attendance_report 不信任 HubRefCache', () => {
+  const src = readFileSync(
+    join(__dirname, '../../modules/attendance/attendance_report.html'),
+    'utf8'
+  );
+
+  it('不得以 Hub 名單略過 get_employees', () => {
+    assert.doesNotMatch(src, /略過 get_employees/);
+    assert.doesNotMatch(src, /function readHubRefEmployees/);
+    assert.doesNotMatch(src, /filterAttendanceActiveWithRecentResigned\s*\(/);
+  });
+
+  it('loadAndRenderEmployees 必打後端 get_employees', () => {
+    assert.match(src, /action:\s*'get_employees'/);
+    assert.match(src, /attendance_active_with_recent_resigned/);
+    assert.match(src, /一律向後端確認|向後端請求員工列表/);
   });
 });

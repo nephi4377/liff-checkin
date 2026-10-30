@@ -402,15 +402,10 @@
       </div>
     </div>
 
-<!-- Hub：員工先吃主控台 HubRefCache（與排班／新增案場同招） -->
-<script src="../../shared/js/hub_ref_cache.js?v=2"></script>
 <!-- 【⭐️ 核心改造：將內聯腳本改為模組，並從 utils.js 引入函式 ⭐️】 -->
+<!-- 出勤儀表員工名單：不信任 HubRefCache（暖機常為短名單、缺近期離職），一律打後端 get_employees 確認 -->
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
-    import {
-        filterAttendanceActiveWithRecentResigned,
-        shouldUseFilteredHubRoster
-    } from '/shared/js/hub_employee_roster_filters.js';
     import { initPayrollReviewPanel, initPayrollAdminPreview } from '/modules/attendance/payroll_review_panel.js';
     import { initLeaveYearStatsManager } from '/modules/attendance/leave_year_stats_manager.js?v=20260723';
     import { initLeaveYearStatsPanel } from '/modules/attendance/leave_year_stats_panel.js?v=20260723';
@@ -1034,44 +1029,22 @@
             fetchReportData();
         }
 
-        // Hub：員工先吃父層／HubRefCache；沒有才打 get_employees（勾「顯示所有歷史員工」仍走 API）
-        function readHubRefEmployees() {
-            try {
-                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
-                if (!Hub || typeof Hub.read !== 'function') return [];
-                const list = Hub.read('employees') || [];
-                return Array.isArray(list) && list.length ? list : [];
-            } catch (e) {
-                return [];
-            }
-        }
-
+        // 員工名單一律向後端確認（filter=attendance_active_with_recent_resigned 含近期離職）。
+        // 不讀 HubRefCache：共用快取常是短版在職名單，前端再篩也補不回缺的離職者。
+        // 本頁 localStorage 僅作瞬間顯示；必在背景打 get_employees 覆核。
         function loadAndRenderEmployees() {
             const showAll = document.getElementById('show-all-employees-checkbox').checked;
             const filter = showAll ? 'attendance_all' : 'attendance_active_with_recent_resigned';
             const cacheKey = `employees_cache_${filter}`;
 
-            // 步驟 0（Hub）：主控台已暖過且非「全部歷史」→ 套用與後端相同篩選後再用快取；篩完為空則打 API
-            if (!showAll) {
-                const hubRoster = filterAttendanceActiveWithRecentResigned(readHubRefEmployees());
-                if (shouldUseFilteredHubRoster(hubRoster)) {
-                    const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
-                    const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
-                    console.log('[attendance_report] 員工來源=' + src + '（略過 get_employees；已套用在職+60天內離職）');
-                    saveCache(cacheKey, hubRoster, 1);
-                    renderEmployeeSelect(hubRoster);
-                    return;
-                }
-            }
-
-            // 快取優先策略
+            // 快取優先策略（瞬間顯示）
             const cachedData = loadCache(cacheKey);
             if (cachedData) {
                 console.log(`⚡️ 從快取載入員工列表 (模式: ${filter})...`);
                 renderEmployeeSelect(cachedData);
             }
 
-            // 無論是否有快取，都在背景請求最新資料
+            // 無論是否有本頁快取，都向後端確認最新名單（含近期離職）
             console.log(`🔄 正在從後端請求員工列表 (模式: ${filter})...`);
             fetchApi({ page: 'attendance_api', action: 'get_employees', filter: filter, ...userParams })
                 .then(response => {
