@@ -47,6 +47,7 @@ export default {
         const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
         const directorHrNotesUrl = computed(() => `#/director-hr-notes`);
+        const directorProjectNotesUrl = computed(() => `#/director-project-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
@@ -442,6 +443,7 @@ export default {
             presenceDotClass,
             employeeEditorUrl,
             directorHrNotesUrl,
+            directorProjectNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -842,6 +844,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">總監人事筆記</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">私人人事紀錄：事件、觀察、面談，可改可分類。</p>
+                    </div>
+                </a>
+
+                <!-- 12c. 專案／工地備忘（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorProjectNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🏗️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">專案／工地備忘</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">依案場記一行摘要；點開看細節，可改可刪。</p>
                     </div>
                 </a>
 
