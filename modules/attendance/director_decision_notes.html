@@ -44,6 +44,8 @@
                         <span class="font-semibold text-slate-700">決策</span>
                         <span class="mx-1 text-slate-300">｜</span>
                         <a href="#/director-followup-notes" id="link-followup" class="text-indigo-700 hover:underline">待跟進</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript" class="text-indigo-700 hover:underline">摘記</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">決策紀錄</h1>
                     <p class="text-sm text-slate-500 mt-1">記題目與定論；列表一行掃過，點開才看「為何」</p>
@@ -550,6 +552,7 @@
         wireHash('link-project', '#/director-project-notes');
         wireHash('link-party', '#/director-party-notes');
         wireHash('link-followup', '#/director-followup-notes');
+        wireHash('link-transcript', '#/director-transcript-notes');
 
         if (!LOCAL_DEMO && permission < MIN_PERM) {
             el.denied.classList.remove('hidden');

@@ -51,6 +51,8 @@
                         <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
                         <span class="mx-1 text-slate-300">｜</span>
                         <span class="font-semibold text-slate-700">待跟進</span>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript" class="text-indigo-700 hover:underline">摘記</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">待跟進</h1>
                     <p class="text-sm text-slate-500 mt-1">一句話記住要跟的事；可選到期日，勾做完可還原</p>
@@ -702,6 +704,7 @@
         wireHash('link-project', '#/director-project-notes');
         wireHash('link-party', '#/director-party-notes');
         wireHash('link-decision', '#/director-decision-notes');
+        wireHash('link-transcript', '#/director-transcript-notes');
 
         if (!LOCAL_DEMO && permission < MIN_PERM) {
             el.denied.classList.remove('hidden');

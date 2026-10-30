@@ -56,6 +56,8 @@
                         <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
                         <span class="mx-1 text-slate-300">｜</span>
                         <a href="#/director-followup-notes" id="link-followup" class="text-indigo-700 hover:underline">待跟進</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript" class="text-indigo-700 hover:underline">摘記</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">客戶／廠商觀察</h1>
                     <p class="text-sm text-slate-500 mt-1">選類型與對象 → 一行摘要 → 存；可篩「只看雷點」</p>
@@ -794,6 +796,7 @@
         wireParentHash(document.getElementById('link-project'), '#/director-project-notes');
         wireParentHash(document.getElementById('link-decision'), '#/director-decision-notes');
         wireParentHash(document.getElementById('link-followup'), '#/director-followup-notes');
+        wireParentHash(document.getElementById('link-transcript'), '#/director-transcript-notes');
 
         if (!LOCAL_DEMO && permission < MIN_PERM) {
             el.denied.classList.remove('hidden');
