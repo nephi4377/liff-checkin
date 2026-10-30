@@ -95,15 +95,45 @@ function initializeUser() {
     return true;
 }
 
+function filterDailyReportEmployees(list) {
+    return (Array.isArray(list) ? list : []).filter(emp => emp && (emp.permission === 2 || emp.permission === 3));
+}
+
+function readHubRefEmployees() {
+    try {
+        const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+        if (!Hub || typeof Hub.read !== 'function') return [];
+        const list = Hub.read('employees') || [];
+        return Array.isArray(list) && list.length ? list : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+// Hub F8：員工先吃父層／HubRefCache；沒有才打 get_employees（日報／班表仍另抓）
 async function fetchEmployees() {
     try {
+        const hubEmployees = readHubRefEmployees();
+        if (hubEmployees.length) {
+            const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+            const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
+            console.log('[daily_report] 員工來源=' + src + '（略過 get_employees）');
+            return filterDailyReportEmployees(hubEmployees);
+        }
+
         const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
         url.searchParams.append('page', 'attendance_api');
         url.searchParams.append('action', 'get_employees');
         const response = await fetch(url);
         const result = await response.json();
         if (!result.success) throw new Error(result.message || '後端未回傳員工資料');
-        return result.data.filter(emp => emp.permission === 2 || emp.permission === 3);
+        try {
+            const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+            if (Hub && typeof Hub.set === 'function' && Array.isArray(result.data)) {
+                Hub.set('employees', result.data);
+            }
+        } catch (e) { /* ignore */ }
+        return filterDailyReportEmployees(result.data);
     } catch (error) {
         console.error('獲取員工列表失敗:', error);
         showError(`獲取員工列表失敗: ${error.message}`);
