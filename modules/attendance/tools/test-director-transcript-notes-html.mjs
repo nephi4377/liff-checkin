@@ -29,5 +29,8 @@ assert(!/showGlobalNotification\([^,]+,\s*'(error|success|info)'\)/.test(html), 
 assert(html.includes('僅私人'), '掛接僅私人');
 assert(hr.includes('link-transcript-notes'), '人事連摘記');
 assert(followup.includes('link-transcript'), '待跟進連摘記');
+assert(html.includes('function resetDraftUi'), '內部清草稿 resetDraftUi');
+assert(html.includes('resetDraftUi()'), '刪除／存檔路徑呼叫 resetDraftUi');
+assert(/if \(el\.draftNoteId\.value === noteId\)[\s\S]*resetDraftUi\(/.test(html), '刪除已開草稿走 resetDraftUi');
 
 console.log('OK test-director-transcript-notes-html');

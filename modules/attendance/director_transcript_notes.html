@@ -400,19 +400,29 @@
         try { el.draftSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
     }
 
-    function clearDraft() {
-        if (busy) {
-            notify('正在處理中，請稍候', 'info');
-            return;
-        }
+    /** 內部清草稿：不檢查 busy（刪除路徑必須能清掉已開草稿） */
+    function resetDraftUi() {
         el.draftSection.classList.add('hidden');
         el.draftNoteId.value = '';
         el.draftSummary.value = '';
         draftSourceText = '';
         el.draftSourceView.textContent = '';
         el.draftMsg.textContent = '';
-        document.querySelector('input[name="linkType"][value="private"]').checked = true;
+        el.draftSummaryErr.classList.add('hidden');
+        sourceExpanded = false;
+        el.draftSourceView.classList.add('hidden');
+        el.btnToggleSource.textContent = '展開原文';
+        const privateRadio = document.querySelector('input[name="linkType"][value="private"]');
+        if (privateRadio) privateRadio.checked = true;
         syncLinkIdVisibility();
+    }
+
+    function clearDraft() {
+        if (busy) {
+            notify('正在處理中，請稍候', 'info');
+            return;
+        }
+        resetDraftUi();
     }
 
     function loadNoteIntoDraft(noteId) {
@@ -562,8 +572,7 @@
             el.draftMsg.textContent = res.message || '已存進筆記本';
             el.draftMsg.className = 'text-sm text-emerald-700 min-h-[1.25rem]';
             notify(res.message || '已存進筆記本', 'success');
-            busy = false;
-            clearDraft();
+            resetDraftUi();
             el.composeSource.value = '';
             await loadNotes();
             if (res.data && res.data.noteId) {
@@ -598,7 +607,11 @@
             });
             if (!res || !res.success) throw new Error((res && res.message) || '刪除失敗，請再試一次');
             notify(res.message || '已刪除', 'success');
-            if (el.draftNoteId.value === noteId) clearDraft();
+            // 刪除進行中 busy=true；必須用內部清草稿，避免 clearDraft 被擋、畫面留已刪內容再 update
+            if (el.draftNoteId.value === noteId) {
+                resetDraftUi();
+                el.composeSource.value = '';
+            }
             expandedNoteId = '';
             await loadNotes();
             setStatus('已刪除', 'is-ok');
