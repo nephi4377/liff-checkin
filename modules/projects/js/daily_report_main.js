@@ -10,6 +10,10 @@ import { CONFIG } from '/shared/js/config.js';
 
 // [v579.0 重構] 引入共用模組
 import { extractDriveFileId } from '/shared/js/utils.js';
+import {
+    filterDailyReportEmployees,
+    shouldUseFilteredHubRoster
+} from '/shared/js/hub_employee_roster_filters.js';
 import { buildAiAnalysisHtml } from './siteReportAiUi.js';
 // [v581.0 修正] 根據使用者要求，改為使用自訂的 lazyLoadImages 函式來處理圖片延遲載入
 import { lazyLoadImages } from './ui.js';
@@ -95,10 +99,6 @@ function initializeUser() {
     return true;
 }
 
-function filterDailyReportEmployees(list) {
-    return (Array.isArray(list) ? list : []).filter(emp => emp && (emp.permission === 2 || emp.permission === 3));
-}
-
 function readHubRefEmployees() {
     try {
         const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
@@ -110,15 +110,15 @@ function readHubRefEmployees() {
     }
 }
 
-// Hub F8：員工先吃父層／HubRefCache；沒有才打 get_employees（日報／班表仍另抓）
+// Hub F8：員工先吃父層／HubRefCache；篩完空才打 get_employees（日報／班表仍另抓）
 async function fetchEmployees() {
     try {
-        const hubEmployees = readHubRefEmployees();
-        if (hubEmployees.length) {
+        const hubFiltered = filterDailyReportEmployees(readHubRefEmployees());
+        if (shouldUseFilteredHubRoster(hubFiltered)) {
             const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
             const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
-            console.log('[daily_report] 員工來源=' + src + '（略過 get_employees）');
-            return filterDailyReportEmployees(hubEmployees);
+            console.log('[daily_report] 員工來源=' + src + '（略過 get_employees；已排除離職並正規化權限）');
+            return hubFiltered;
         }
 
         const url = new URL(CONFIG.ATTENDANCE_GAS_WEB_APP_URL);
