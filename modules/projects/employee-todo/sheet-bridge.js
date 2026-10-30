@@ -11,6 +11,16 @@
   var LIFF_ID = '2007974938-U374uwei';
   var CACHE_KEY = 'employee-todo-sheet-bridge-v1';
   var MANTLE_HOST = 'mantledb.sh';
+  /** Mantle 內建示範單：未登入／空文件時必須 tombstone，否則會看起來像「又變回舊版」 */
+  var MANTLE_SEED_DELETED_IDS = [
+    'task-ende-751-putu',
+    'task-ende-786-pp',
+    'task-ende-photo-trim',
+    'task-ende-hao-790',
+    'task-ende-reorder-qty',
+    'task-ayong-trim-knife',
+    'task-renkai-trim-knife',
+  ];
 
   var lastRemote = null;
   var liffReady = null;
@@ -24,6 +34,22 @@
     }
   }
 
+  function withSeedTombstones(doc) {
+    doc = doc || emptyDoc();
+    var set = {};
+    (doc.deletedIds || []).forEach(function (id) {
+      if (id) set[id] = true;
+    });
+    MANTLE_SEED_DELETED_IDS.forEach(function (id) {
+      set[id] = true;
+    });
+    doc.deletedIds = Object.keys(set);
+    doc.tasks = (doc.tasks || []).filter(function (t) {
+      return t && t.id && !set[t.id];
+    });
+    return doc;
+  }
+
   function emptyDoc() {
     return {
       workers: [
@@ -33,7 +59,7 @@
       tasks: [],
       officeTasks: [],
       assigners: ['豪哥', '雯姐'],
-      deletedIds: [],
+      deletedIds: MANTLE_SEED_DELETED_IDS.slice(),
       updatedAt: Date.now(),
     };
   }
@@ -48,15 +74,7 @@
       ],
       assigners: ['豪哥', '雯姐'],
       // 擋掉 Mantle 內建 seed，避免預覽混進舊示範單
-      deletedIds: [
-        'task-ende-751-putu',
-        'task-ende-786-pp',
-        'task-ende-photo-trim',
-        'task-ende-hao-790',
-        'task-ende-reorder-qty',
-        'task-ayong-trim-knife',
-        'task-renkai-trim-knife',
-      ],
+      deletedIds: MANTLE_SEED_DELETED_IDS.slice(),
       updatedAt: now,
       officeTasks: [],
       tasks: [
@@ -478,26 +496,29 @@
 
   async function handlePull() {
     if (isPreview()) {
-      var local = loadCache() || previewDoc();
+      var local = withSeedTombstones(loadCache() || previewDoc());
       lastRemote = JSON.parse(JSON.stringify(local));
       return jsonResponse(local);
     }
     var cached = loadCache();
     var token = await waitForLiff();
     if (!token) {
+      // 未登入：絕不能回「空 deletedIds」，否則 Mantle 會灌回 751 補土等舊種子
       if (cached) {
-        lastRemote = JSON.parse(JSON.stringify(cached));
-        return jsonResponse(cached);
+        var safeCached = withSeedTombstones(cached);
+        lastRemote = JSON.parse(JSON.stringify(safeCached));
+        return jsonResponse(safeCached);
       }
       return jsonResponse(emptyDoc());
     }
     try {
-      var doc = await pullFromSheet(token);
+      var doc = withSeedTombstones(await pullFromSheet(token));
       return jsonResponse(doc);
     } catch (e) {
       if (cached) {
-        lastRemote = JSON.parse(JSON.stringify(cached));
-        return jsonResponse(cached);
+        var safeErr = withSeedTombstones(cached);
+        lastRemote = JSON.parse(JSON.stringify(safeErr));
+        return jsonResponse(safeErr);
       }
       return jsonResponse(emptyDoc(), 200);
     }

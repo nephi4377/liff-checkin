@@ -2,32 +2,32 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <!-- iOS Safari home-screen -->
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="./pwa-192.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>轉址至員工待辦</title>
+    <script>
+      (function () {
+        var q = location.search || '';
+        var h = location.hash || '';
+        location.replace('/modules/projects/employee-todo/' + q + h);
+      })();
+    </script>
     <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, viewport-fit=cover"
+      http-equiv="refresh"
+      content="0;url=/modules/projects/employee-todo/"
     />
-    <meta name="theme-color" content="#1e2a32" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="員工待辦" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="format-detection" content="telephone=no" />
-    <title>員工待辦事項</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&family=Syne:wght@600;700;800&display=swap"
-      rel="stylesheet"
-    />
-    <script type="module" crossorigin src="./assets/index-B0wpJKiW.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CTl_-N1Z.css">
-  <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
+  </head>
   <body>
-    <div id="root"></div>
+    <p>
+      正式派工已改到
+      <a id="et-redirect" href="/modules/projects/employee-todo/"
+        >新網址</a
+      >，正在轉過去…
+    </p>
+    <script>
+      document.getElementById('et-redirect').href =
+        '/modules/projects/employee-todo/' +
+        (location.search || '') +
+        (location.hash || '');
+    </script>
   </body>
 </html>
