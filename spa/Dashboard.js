@@ -51,6 +51,7 @@ export default {
         const directorPartyNotesUrl = computed(() => `#/director-party-notes`);
         const directorDecisionNotesUrl = computed(() => `#/director-decision-notes`);
         const directorFollowupNotesUrl = computed(() => `#/director-followup-notes`);
+        const directorTranscriptNotesUrl = computed(() => `#/director-transcript-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
@@ -450,6 +451,7 @@ export default {
             directorPartyNotesUrl,
             directorDecisionNotesUrl,
             directorFollowupNotesUrl,
+            directorTranscriptNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -890,6 +892,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">待跟進</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">一句話＋可選到期；勾做完可還原，過期醒目。</p>
+                    </div>
+                </a>
+
+                <!-- 12g. 對話摘記（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorTranscriptNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🗣️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">對話摘記</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">貼對話產生一行摘要，可改後存；可展開原文。</p>
                     </div>
                 </a>
 

@@ -62,6 +62,8 @@
                         <a href="#/director-decision-notes" id="link-decision-notes" class="text-indigo-700 hover:underline">決策</a>
                         <span class="mx-1 text-slate-300">｜</span>
                         <a href="#/director-followup-notes" id="link-followup-notes" class="text-indigo-700 hover:underline">待跟進</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript-notes" class="text-indigo-700 hover:underline">摘記</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">總監人事筆記</h1>
                     <p class="text-sm text-slate-500 mt-1">選人 → 一行掃過 → 點開看細節或修改</p>
@@ -796,6 +798,15 @@
                 if (window.parent && window.parent !== window) {
                     ev.preventDefault();
                     window.parent.location.hash = '#/director-followup-notes';
+                }
+            });
+        }
+        const linkTranscript = document.getElementById('link-transcript-notes');
+        if (linkTranscript) {
+            linkTranscript.addEventListener('click', (ev) => {
+                if (window.parent && window.parent !== window) {
+                    ev.preventDefault();
+                    window.parent.location.hash = '#/director-transcript-notes';
                 }
             });
         }
