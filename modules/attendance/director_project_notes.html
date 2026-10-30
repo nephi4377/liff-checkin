@@ -40,6 +40,8 @@
                         <span class="font-semibold text-slate-700">專案備忘</span>
                         <span class="mx-1 text-slate-300">｜</span>
                         <a href="#/director-party-notes" id="link-party" class="text-indigo-700 hover:underline">客戶／廠商</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
                     </p>
                     <h1 class="text-2xl font-bold text-slate-900">專案／工地備忘</h1>
                     <p class="text-sm text-slate-500 mt-1">選專案 → 一行摘要 → 存；點開才看細節</p>
@@ -678,6 +680,15 @@
                 if (window.parent && window.parent !== window) {
                     ev.preventDefault();
                     window.parent.location.hash = '#/director-party-notes';
+                }
+            });
+        }
+        const linkDecision = document.getElementById('link-decision');
+        if (linkDecision) {
+            linkDecision.addEventListener('click', (ev) => {
+                if (window.parent && window.parent !== window) {
+                    ev.preventDefault();
+                    window.parent.location.hash = '#/director-decision-notes';
                 }
             });
         }
