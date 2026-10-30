@@ -49,6 +49,7 @@ export default {
         const directorHrNotesUrl = computed(() => `#/director-hr-notes`);
         const directorProjectNotesUrl = computed(() => `#/director-project-notes`);
         const directorPartyNotesUrl = computed(() => `#/director-party-notes`);
+        const directorDecisionNotesUrl = computed(() => `#/director-decision-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
@@ -446,6 +447,7 @@ export default {
             directorHrNotesUrl,
             directorProjectNotesUrl,
             directorPartyNotesUrl,
+            directorDecisionNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -866,6 +868,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">客戶／廠商觀察</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">依對象記觀察與雷點；時間線可篩只看雷點。</p>
+                    </div>
+                </a>
+
+                <!-- 12e. 決策紀錄（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorDecisionNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">⚖️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">決策紀錄</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">題目、定論、為何與日期；之後可查上次怎麼定。</p>
                     </div>
                 </a>
 
