@@ -8,7 +8,7 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
     <script src="../../shared/js/operator_context.js?v=3"></script>
-    <script src="../../shared/js/accounting_api.js?v=102"></script>
+    <script src="../../shared/js/accounting_api.js?v=112"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
         .spinner { border-top-color: #3498db; animation: spin 1s ease-in-out infinite; }
@@ -307,6 +307,38 @@
     <script type="module">
         const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec'; // CheckinSystem 的 Apps Script URL
         let currentUserProfile = null;
+        let accountingSession = null;
+
+        async function ensureAccountingSession() {
+            if (accountingSession) return accountingSession;
+            if (typeof AccountingApi === 'undefined') return null;
+            accountingSession = AccountingApi.tryCachedSession({
+                minPermission: 1,
+                authAction: 'accounting_auth_me'
+            });
+            if (!accountingSession && typeof AccountingApi.tryProvisionalSession === 'function') {
+                accountingSession = AccountingApi.tryProvisionalSession({ minPermission: 1 });
+            }
+            if (!accountingSession && currentUserProfile && typeof AccountingApi.requestParentHubLiffToken === 'function') {
+                const hubTok = await AccountingApi.requestParentHubLiffToken({ attempts: 3, delayMs: 600 });
+                accountingSession = {
+                    fromHub: true,
+                    idToken: hubTok || '',
+                    profile: {
+                        userId: currentUserProfile.userId,
+                        displayName: currentUserProfile.displayName || ''
+                    },
+                    auth: {
+                        user_id: currentUserProfile.userId,
+                        display_name: currentUserProfile.displayName || ''
+                    }
+                };
+                if (accountingSession.idToken && typeof AccountingApi.cacheSession === 'function') {
+                    AccountingApi.cacheSession(accountingSession);
+                }
+            }
+            return accountingSession;
+        }
         let allEmployees = [];
 
         const employeeSelect = document.getElementById('employee-select');
@@ -477,8 +509,9 @@
             try {
                 const photo = await fileToBase64(file);
                 photo.kind = 'passbook';
+                const session = await ensureAccountingSession();
                 const data = await AccountingApi.employeeBankOcr(
-                    { idToken: '' },
+                    session || { idToken: '' },
                     photo,
                     'passbook',
                     currentUserProfile.userId
@@ -511,6 +544,7 @@
                     permission: 5
                 };
                 await showMainContent();
+                ensureAccountingSession().catch(function () {});
             } else {
                 // [v597.0 核心修正] 移除 LIFF 認證流程，改為完全依賴從主控台傳入的 uid 和 name 參數。
                 // 這解決了在 iframe 中重複初始化 LIFF 導致頁面卡住的問題。
@@ -519,6 +553,7 @@
 
                 if (uid && name) {
                     currentUserProfile = { userId: uid, displayName: name };
+                    ensureAccountingSession().catch(function () {});
                     await showMainContent();
                 } else {
                     // 如果缺少 uid 或 name，表示不是從主控台正常進入，顯示錯誤。

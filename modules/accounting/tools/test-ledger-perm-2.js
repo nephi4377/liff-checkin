@@ -85,7 +85,7 @@ assert.strictEqual(voidReq.sheet, '2026-01');
 assert.strictEqual(voidReq.row, 12);
 
 assert(html.indexOf('ledger_entry_map.js?v=5') >= 0, 'ledger map script');
-assert(html.indexOf('accounting_api.js?v=111') >= 0, 'api cache bust');
+assert(html.indexOf('accounting_api.js?v=112') >= 0, 'api cache bust');
 assert(html.indexOf('HISTORY_READ_ONLY') < 0, 'no read-only gate');
 assert(html.indexOf('void-ledger') >= 0, 'void button role');
 assert(html.indexOf('btn-edit') >= 0, 'edit button role');
@@ -108,7 +108,7 @@ assert(api.indexOf("action: 'accounting_ledger_void'") >= 0, 'void action');
 assert(api.indexOf("action: 'accounting_ledger_dup_review_clear'") >= 0, 'dup clear action');
 
 var sr = fs.readFileSync(path.join(root, 'submit_records.html'), 'utf8');
-assert(sr.indexOf('accounting_api.js?v=111') >= 0, 'submit_records api v=111');
+assert(sr.indexOf('accounting_api.js?v=112') >= 0, 'submit_records api v=111');
 
 assert.strictEqual(LedgerEntryMap.recorderDisplay({ recorder_name: 'A' }), 'A');
 assert.strictEqual(LedgerEntryMap.recorderDisplay({ recorderUserId: 'U' + 'a'.repeat(32) }), '—');

@@ -8,6 +8,13 @@ var AccountingApi = (function () {
   var SESSION_POLICY_KEY = 'tanxin_accounting_policy_v1';
   var SESSION_AUTH_PREFIX = 'tanxin_accounting_auth_v1:';
   var SESSION_TOKEN_KEY = 'tanxin_accounting_liff_token_v1';
+  /** project-console 核發；附在 accounting-gas POST（Backend_GAS #276） */
+  var HUB_GATE_TICKET_CACHE_PREFIX = 'tanxin_accounting_hub_gate_ticket_v1:';
+  var HUB_GATE_TICKET_DEFAULT_TTL_MS = 5 * 60 * 1000;
+  var HUB_GATE_TICKET_FETCH_TIMEOUT_MS = 15000;
+  var HUB_GATE_TICKET_EXPIRY_SKEW_MS = 5000;
+  var hubGateTicketMem_ = null;
+  var hubGateTicketInflight_ = null;
   var POLICY_TTL_MS = 24 * 60 * 60 * 1000;
   var AUTH_TTL_MS = 12 * 60 * 60 * 1000;
   var MIN_PERMISSION = 4;
@@ -198,6 +205,129 @@ var AccountingApi = (function () {
     }
   }
 
+  function hubGateTicketCacheKey_(tokenHash) {
+    return HUB_GATE_TICKET_CACHE_PREFIX + (tokenHash || 'anon');
+  }
+
+  function readHubGateTicketCache_(tokenHash) {
+    if (hubGateTicketMem_ && hubGateTicketMem_.hash === tokenHash) {
+      if (hubGateTicketMem_.expiresAtMs > Date.now() + HUB_GATE_TICKET_EXPIRY_SKEW_MS) {
+        return hubGateTicketMem_.ticket;
+      }
+    }
+    var cached = readSessionWrapped_(hubGateTicketCacheKey_(tokenHash), 0);
+    if (!cached || !cached.ticket) return '';
+    var exp = cached.expiresAtMs || 0;
+    if (!exp || exp <= Date.now() + HUB_GATE_TICKET_EXPIRY_SKEW_MS) return '';
+    hubGateTicketMem_ = { hash: tokenHash, ticket: cached.ticket, expiresAtMs: exp };
+    return cached.ticket;
+  }
+
+  function writeHubGateTicketCache_(tokenHash, ticket, expiresAtMs) {
+    if (!ticket) return;
+    hubGateTicketMem_ = { hash: tokenHash, ticket: ticket, expiresAtMs: expiresAtMs };
+    writeSessionWrapped_(hubGateTicketCacheKey_(tokenHash), { ticket: ticket, expiresAtMs: expiresAtMs }, 0);
+  }
+
+  function parseGateTicketExpiresMs_(res) {
+    if (!res) return Date.now() + HUB_GATE_TICKET_DEFAULT_TTL_MS;
+    if (res.expires_at_ms != null) {
+      var msNum = Number(res.expires_at_ms);
+      if (isFinite(msNum) && msNum > 0) return msNum;
+    }
+    if (res.expires_at != null) {
+      var parsed = Date.parse(String(res.expires_at));
+      if (isFinite(parsed)) return parsed;
+    }
+    if (res.valid_seconds != null) {
+      var sec = Number(res.valid_seconds);
+      if (isFinite(sec) && sec > 0) return Date.now() + sec * 1000;
+    }
+    if (res.ttl_seconds != null) {
+      var ttl = Number(res.ttl_seconds);
+      if (isFinite(ttl) && ttl > 0) return Date.now() + ttl * 1000;
+    }
+    return Date.now() + HUB_GATE_TICKET_DEFAULT_TTL_MS;
+  }
+
+  async function resolveLiffIdTokenForGate_(body) {
+    var token = (body && body.liff_id_token) || '';
+    if (token && isLiffIdTokenFresh_(token)) return token;
+    try {
+      token = sessionStorage.getItem(SESSION_TOKEN_KEY) || '';
+      if (isLiffIdTokenFresh_(token)) return token;
+    } catch (eStore) {}
+    if (body && body.auth && body.auth.liff_id_token && isLiffIdTokenFresh_(body.auth.liff_id_token)) {
+      return body.auth.liff_id_token;
+    }
+    if (typeof liff !== 'undefined') {
+      try {
+        if (liff.isLoggedIn && liff.isLoggedIn()) {
+          var live = liff.getIDToken();
+          if (isLiffIdTokenFresh_(live)) return live;
+        }
+      } catch (eLiff) {}
+    }
+    if (isInHubIframe_()) {
+      var hubTok = await requestParentHubLiffToken_({ attempts: 3, delayMs: 600 });
+      if (hubTok && isLiffIdTokenFresh_(hubTok)) {
+        try { sessionStorage.setItem(SESSION_TOKEN_KEY, hubTok); } catch (eSet) {}
+        return hubTok;
+      }
+    }
+    return '';
+  }
+
+  async function fetchHubGateTicket_(liffToken) {
+    if (!liffToken) return '';
+    var hash = simpleHash_(liffToken);
+    var existing = readHubGateTicketCache_(hash);
+    if (existing) return existing;
+    if (hubGateTicketInflight_) {
+      try { return await hubGateTicketInflight_; } catch (eWait) { return ''; }
+    }
+    hubGateTicketInflight_ = (async function () {
+      try {
+        var res = await postToUrl_(PROJECT_CONSOLE_API, {
+          action: 'accounting_hub_gate_ticket',
+          liff_id_token: liffToken
+        }, HUB_GATE_TICKET_FETCH_TIMEOUT_MS, '主控台');
+        if (!res || res.success === false) {
+          console.warn('[AccountingApi] hub_gate_ticket unavailable:', (res && res.message) || 'fetch failed');
+          return '';
+        }
+        var ticket = res.hub_gate_ticket || res.ticket || '';
+        if (!ticket) {
+          console.warn('[AccountingApi] hub_gate_ticket unavailable: empty ticket');
+          return '';
+        }
+        writeHubGateTicketCache_(hash, ticket, parseGateTicketExpiresMs_(res));
+        return ticket;
+      } catch (eFetch) {
+        console.warn('[AccountingApi] hub_gate_ticket unavailable:', (eFetch && eFetch.message) || String(eFetch || ''));
+        return '';
+      } finally {
+        hubGateTicketInflight_ = null;
+      }
+    })();
+    return hubGateTicketInflight_;
+  }
+
+  async function attachHubGateTicketIfPossible_(body) {
+    if (!body || body.hub_gate_ticket) return body;
+    var token = await resolveLiffIdTokenForGate_(body);
+    if (!token) return body;
+    var ticket = await fetchHubGateTicket_(token);
+    if (!ticket) return body;
+    return Object.assign({}, body, { hub_gate_ticket: ticket });
+  }
+
+  function prefetchHubGateTicket_() {
+    resolveLiffIdTokenForGate_(null).then(function (tok) {
+      if (tok) fetchHubGateTicket_(tok);
+    }).catch(function () {});
+  }
+
   async function post(body, timeoutMs) {
     var ms = timeoutMs === undefined ? DEFAULT_TIMEOUT_MS : timeoutMs;
     if (timeoutMs === undefined && body && body.action === 'accounting_form_submit') {
@@ -220,7 +350,8 @@ var AccountingApi = (function () {
     if (timeoutMs === undefined && body && body.action === 'ledger_review_bundle') {
       ms = 90000;
     }
-    return postToUrl_(GAS_API, body, ms, '會計');
+    var payload = await attachHubGateTicketIfPossible_(body || {});
+    return postToUrl_(GAS_API, payload, ms, '會計');
   }
 
   function buildHubAuthFromOperator_(hubOp) {
@@ -441,6 +572,9 @@ var AccountingApi = (function () {
     try {
       if (session) rememberSession_(session);
     } catch (eRem) {}
+    try {
+      if (session && (session.idToken || session.fromHub || isInHubIframe_())) prefetchHubGateTicket_();
+    } catch (eGate) {}
     try {
       if (session && typeof OperatorContext !== 'undefined') OperatorContext.applySession(session);
     } catch (eOp) {}
@@ -1717,9 +1851,11 @@ var AccountingApi = (function () {
         action: 'employee_bank_ocr',
         photo: photo || {},
         kind: kind || (photo && photo.kind) || 'passbook',
-        operatorUserId: operatorUserId || ''
+        operatorUserId: operatorUserId || '',
+        auth: auth
       };
       if (auth.liff_id_token) body.liff_id_token = auth.liff_id_token;
+      if (auth.user_id) body.user_id = auth.user_id;
       return post(body);
     },
     payrollRequestList: function (sessionOrToken, filter) {
