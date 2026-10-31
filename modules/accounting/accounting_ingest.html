@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=112"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
@@ -214,6 +214,8 @@
       var profile = { userId: '', displayName: '' };
       var sessionRef = null;
       var sessionCount = 0, idToken = '', devBypass = false;
+      var hubIngestLiffToken = '';
+      var hubIngestLiffTokenPromise = null;
       var pendingPhotos = [], localPhotos = [], queryParams = {}, hubContext = { projects: [], employees: [] };
       var applicantDefault = '';
       var cachedVendors = [];
@@ -439,13 +441,15 @@
 
 
       function flushFormDeferredInBackground(token, sheet, row) {
-        if (!token || typeof AccountingApi.accountingFormFlushDeferred !== 'function') return;
-        var sess = sessionRef || {
-          auth: { user_id: profile.userId },
-          idToken: idToken,
-          devBypass: !!(sessionRef && sessionRef.devBypass)
+        if (!token || typeof AccountingApi.post !== 'function') return;
+        var body = {
+          action: 'accounting_form_flush_deferred',
+          deferred_token: token || ''
         };
-        AccountingApi.accountingFormFlushDeferred(sess, token).then(function (flushRes) {
+        if (sessionRef && sessionRef.fromHub) body.source = 'hub';
+        attachIngestAuth(body).then(function () {
+          return AccountingApi.post(body);
+        }).then(function (flushRes) {
           if (flushRes && flushRes.after_error) {
             setWarn('已記入「' + (sheet || '') + '」第 ' + (row || '?') +
               ' 列，但後續補資料失敗。帳已留下，請勿再送同一筆；需要時再請資訊協助補齊。');
@@ -581,10 +585,42 @@
         document.getElementById('photoInput').value = '';
       }
 
-      function attachIngestAuth(body) {
+      async function refreshHubIngestLiffToken() {
+        if (!sessionRef || !sessionRef.fromHub) return '';
+        if (hubIngestLiffToken) return hubIngestLiffToken;
+        if (typeof AccountingApi === 'undefined' || typeof AccountingApi.requestParentHubLiffToken !== 'function') {
+          return '';
+        }
+        if (!hubIngestLiffTokenPromise) {
+          hubIngestLiffTokenPromise = AccountingApi.requestParentHubLiffToken({ attempts: 4, delayMs: 600 })
+            .then(function (tok) {
+              hubIngestLiffToken = tok || '';
+              hubIngestLiffTokenPromise = null;
+              if (hubIngestLiffToken) {
+                idToken = hubIngestLiffToken;
+                sessionRef.idToken = hubIngestLiffToken;
+              }
+              return hubIngestLiffToken;
+            })
+            .catch(function () {
+              hubIngestLiffTokenPromise = null;
+              return '';
+            });
+        }
+        return hubIngestLiffTokenPromise;
+      }
+
+      async function attachIngestAuth(body) {
         if (sessionRef && sessionRef.fromHub && sessionRef.auth && sessionRef.auth.user_id) {
           body.user_id = sessionRef.auth.user_id;
-          body.auth = { user_id: sessionRef.auth.user_id };
+          body.source = body.source || 'hub';
+          var hubTok = await refreshHubIngestLiffToken();
+          if (hubTok) {
+            body.liff_id_token = hubTok;
+            body.auth = { user_id: sessionRef.auth.user_id, liff_id_token: hubTok };
+          } else {
+            body.auth = { user_id: sessionRef.auth.user_id };
+          }
           return;
         }
         var tok = idToken || (sessionRef && sessionRef.idToken) || '';
@@ -600,7 +636,8 @@
           token: token,
           user_id: profile.userId
         };
-        attachIngestAuth(body);
+        if (sessionRef && sessionRef.fromHub) body.source = 'hub';
+        await attachIngestAuth(body);
         var data = await AccountingApi.post(body);
         if (!data.success) { setMsg(data.message || '無法帶入照片'); return; }
         pendingPhotos = data.photos || [];
@@ -665,7 +702,7 @@
             display_name: profile.displayName,
             payload: { format: kind.value, fields: fields, photos: photos }
           };
-          attachIngestAuth(body);
+          await attachIngestAuth(body);
           var data = await AccountingApi.post(body);
           if (!data.success && data.needs_dup_confirm) {
             var prior = data.duplicate_prior || {};
@@ -689,6 +726,7 @@
             var forceOk = await askDupConfirm(dupMsg);
             if (!forceOk) throw new Error('已取消，沒有再記一筆');
             body.force_duplicate = true;
+            await attachIngestAuth(body);
             data = await AccountingApi.post(body);
           }
           if (!data || data.success === false) {
@@ -751,6 +789,7 @@
           (session.fromHub ? ' · 主控台' : (session.devBypass ? ' · 測試模式' : ''));
         showApp();
         setupHubContext(sessionRef);
+        if (session.fromHub) refreshHubIngestLiffToken().catch(function () {});
         if (queryParams.pending) loadPendingPhotos(queryParams.pending).catch(function () {});
         var histLink = document.getElementById('historyLinkLine');
         var perm = Number((session.auth && session.auth.permission) || 0);
