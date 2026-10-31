@@ -98,10 +98,13 @@ test.describe('LayoutPlanner 3D perf / memory', () => {
       ? heapAfterRebuild.bytes - heapBeforeRebuild.bytes
       : null;
 
+    const diag3d = await page.evaluate(() => document.getElementById('lp-3d-viewport')?.__lp3dGetDiagnostics?.());
     const report = {
-      taskId: 'FLOORPLAN-3D-PERF-1',
+      taskId: 'FLOORPLAN-3D-WALK-1',
       iterations: ITERATIONS,
       cabinetCount,
+      heavyLayout: diag3d?.heavyLayout ?? null,
+      sceneMeshCount: diag3d?.sceneMeshCount ?? null,
       heapStart,
       heapEnd,
       heapDeltaBytes,
@@ -110,7 +113,7 @@ test.describe('LayoutPlanner 3D perf / memory', () => {
       avgFrameMs: Math.round(avgFrameMs * 100) / 100,
       maxFrameMs: Math.round(Math.max(...frameTimes) * 100) / 100,
       timestamp: new Date().toISOString(),
-      branch: 'after-fix',
+      branch: 'walk-1',
     };
 
     fs.mkdirSync(ARTIFACTS, { recursive: true });
