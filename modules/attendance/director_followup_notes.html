@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>待跟進</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+        .item-row:hover { background-color: #f8fafc; }
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+            border-radius: 0.5rem;
+            height: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status-line.is-busy { color: #4338ca; }
+        #status-line.is-ok { color: #047857; }
+        #status-line.is-err { color: #b91c1c; }
+        .badge-overdue {
+            color: #b91c1c;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 0.15rem 0.45rem;
+            border-radius: 0.35rem;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div class="max-w-2xl mx-auto p-4 md:p-6 pb-10">
+        <header class="mb-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div class="min-w-0">
+                    <p class="text-xs text-slate-500 mb-1">
+                        <a href="#/director-hr-notes" id="link-hr" class="text-indigo-700 hover:underline">人事</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-project-notes" id="link-project" class="text-indigo-700 hover:underline">專案</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-party-notes" id="link-party" class="text-indigo-700 hover:underline">對象</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <span class="font-semibold text-slate-700">待跟進</span>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript" class="text-indigo-700 hover:underline">摘記</a>
+                    </p>
+                    <h1 class="text-2xl font-bold text-slate-900">待跟進</h1>
+                    <p class="text-sm text-slate-500 mt-1">一句話記住要跟的事；可選到期日，勾做完可還原</p>
+                </div>
+                <p id="status-line" class="text-sm font-medium min-h-[1.25rem]" aria-live="polite"></p>
+            </div>
+        </header>
+
+        <div id="denied-panel" class="hidden bg-white border border-amber-200 rounded-xl p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-amber-900">無法開啟此頁</h2>
+            <p id="denied-msg" class="text-sm text-amber-800 mt-2 leading-relaxed">只有總監／高權限可以使用待跟進。</p>
+        </div>
+
+        <div id="main-panel" class="hidden space-y-4">
+            <section class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <h2 class="text-lg font-semibold text-slate-900">未完成</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" id="btn-reload"
+                            class="border border-slate-300 text-slate-700 font-medium py-2 px-3 rounded-lg text-sm min-h-[44px] hover:bg-slate-50">
+                            重新整理
+                        </button>
+                        <button type="button" id="btn-new"
+                            class="bg-indigo-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-indigo-700 text-sm min-h-[44px]">
+                            要跟進
+                        </button>
+                    </div>
+                </div>
+                <div id="open-list" class="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden"></div>
+                <p id="open-empty" class="hidden text-sm text-slate-500 py-6 text-center px-2">沒有未完成項目。按「要跟進」加一句話。</p>
+                <div id="notes-skeleton" class="hidden pt-1" aria-hidden="true">
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                </div>
+            </section>
+
+            <section class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <h2 class="text-lg font-semibold text-slate-900">已完成</h2>
+                    <button type="button" id="btn-toggle-done"
+                        class="text-sm text-indigo-700 font-medium min-h-[44px] px-2 hover:underline">
+                        顯示
+                    </button>
+                </div>
+                <div id="done-wrap" class="hidden">
+                    <div id="done-list" class="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden"></div>
+                    <p id="done-empty" class="hidden text-sm text-slate-500 py-4 text-center">還沒有已完成項目。</p>
+                </div>
+            </section>
+
+            <section id="form-section" class="bg-white border border-indigo-200 rounded-xl p-4 shadow-sm hidden">
+                <h2 id="form-heading" class="text-lg font-semibold text-slate-900 mb-3">要跟進</h2>
+                <form id="note-form" class="space-y-3">
+                    <input type="hidden" id="form-note-id" value="">
+                    <div>
+                        <label for="form-summary" class="block text-sm font-semibold text-slate-700 mb-1">一句話</label>
+                        <input id="form-summary" type="text" maxlength="200" required
+                            placeholder="例如：催廠商回樣品"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                        <p id="form-summary-err" class="hidden text-sm text-red-600 mt-1"></p>
+                    </div>
+                    <div>
+                        <label for="form-due" class="block text-sm font-semibold text-slate-700 mb-1">到期日（可空白）</label>
+                        <input id="form-due" type="date"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                    </div>
+                    <p id="form-msg" class="text-sm min-h-[1.25rem]" role="status"></p>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        <button type="submit" id="btn-save"
+                            class="bg-indigo-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-indigo-700 min-h-[44px]">
+                            存
+                        </button>
+                        <button type="button" id="btn-cancel"
+                            class="border border-slate-300 text-slate-700 font-medium py-2.5 px-4 rounded-lg min-h-[44px] hover:bg-slate-50">
+                            取消
+                        </button>
+                        <button type="button" id="btn-delete"
+                            class="hidden ml-auto border border-red-300 text-red-700 font-medium py-2.5 px-4 rounded-lg min-h-[44px] hover:bg-red-50">
+                            刪除
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+
+<script type="module">
+    import { showGlobalNotification } from '/shared/js/utils.js';
+    import { CONFIG } from '/shared/js/config.js';
+
+    const NOTES_API = CONFIG.ATTENDANCE_GAS_WEB_APP_URL;
+    const MIN_PERM = 5;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const operatorId = String(urlParams.get('uid') || '').trim();
+    const operatorName = String(urlParams.get('name') || '').trim();
+    const permission = parseInt(urlParams.get('permission') || '1', 10);
+    const LOCAL_DEMO = urlParams.get('localDemo') === '1';
+
+    const el = {
+        status: document.getElementById('status-line'),
+        denied: document.getElementById('denied-panel'),
+        deniedMsg: document.getElementById('denied-msg'),
+        main: document.getElementById('main-panel'),
+        openList: document.getElementById('open-list'),
+        openEmpty: document.getElementById('open-empty'),
+        doneWrap: document.getElementById('done-wrap'),
+        doneList: document.getElementById('done-list'),
+        doneEmpty: document.getElementById('done-empty'),
+        notesSkeleton: document.getElementById('notes-skeleton'),
+        btnNew: document.getElementById('btn-new'),
+        btnReload: document.getElementById('btn-reload'),
+        btnToggleDone: document.getElementById('btn-toggle-done'),
+        formSection: document.getElementById('form-section'),
+        formHeading: document.getElementById('form-heading'),
+        form: document.getElementById('note-form'),
+        formNoteId: document.getElementById('form-note-id'),
+        formSummary: document.getElementById('form-summary'),
+        formSummaryErr: document.getElementById('form-summary-err'),
+        formDue: document.getElementById('form-due'),
+        formMsg: document.getElementById('form-msg'),
+        btnSave: document.getElementById('btn-save'),
+        btnCancel: document.getElementById('btn-cancel'),
+        btnDelete: document.getElementById('btn-delete'),
+    };
+
+    let openCache = [];
+    let doneCache = [];
+    let showDone = false;
+    let saving = false;
+    /** 進行中存檔對應的表單 noteId（新建為 ''）；成功時只清同一份草稿 */
+    let savingFormNoteId = null;
+
+    function notify(message, type) {
+        const duration = type === 'error' ? 8000 : 5000;
+        showGlobalNotification(message, duration, type || 'info');
+    }
+
+    let demoNotes = [
+        {
+            noteId: 'FLW_DEMO001',
+            summary: '催甲廠回樣品',
+            dueDate: '2026-10-28',
+            doneAt: '',
+            createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+            updatedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
+            createdByUid: 'U_DIRECTOR',
+            metadataJson: '',
+            status: 'open',
+            overdue: true
+        },
+        {
+            noteId: 'FLW_DEMO002',
+            summary: '跟業主確認色板',
+            dueDate: '',
+            doneAt: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdByUid: 'U_DIRECTOR',
+            metadataJson: '',
+            status: 'open',
+            overdue: false
+        }
+    ];
+
+    function todayYmd() {
+        const d = new Date();
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+
+    function computeOverdue(n) {
+        if (!n || n.status !== 'open') return false;
+        if (typeof n.overdue === 'boolean') return n.overdue;
+        const due = String(n.dueDate || '').trim();
+        return !!due && due < todayYmd();
+    }
+
+    function setStatus(text, kind) {
+        el.status.textContent = text || '';
+        el.status.classList.remove('is-busy', 'is-ok', 'is-err');
+        if (kind) el.status.classList.add(kind);
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    async function fetchNotesGet(params) {
+        if (LOCAL_DEMO) return demoHandleGet(params);
+        const url = new URL(NOTES_API);
+        url.searchParams.append('source', '總監待跟進');
+        for (const key in params) {
+            if (params[key] != null && params[key] !== '') url.searchParams.append(key, params[key]);
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 45000);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`伺服器回應異常（${response.status}），請稍後再試`);
+            return await response.json();
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw new Error('連線等待過久，請再試一次');
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function postNotes(payload) {
+        if (LOCAL_DEMO) return demoHandlePost(payload);
+        const res = await fetch(NOTES_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`伺服器回應異常（${res.status}），請稍後再試`);
+        return await res.json();
+    }
+
+    function enrich(n) {
+        return Object.assign({}, n, { overdue: computeOverdue(n) });
+    }
+
+    function demoHandleGet(params) {
+        if (params.mode === 'get') {
+            const n = demoNotes.find((x) => x.noteId === params.noteId && x.status !== 'deleted');
+            return Promise.resolve(n
+                ? { success: true, data: enrich(n) }
+                : { success: false, message: '找不到這筆待跟進（可能已刪除）' });
+        }
+        const filter = String(params.filter || 'open');
+        let rows = demoNotes.filter((x) => x.status !== 'deleted').map(enrich);
+        if (filter === 'open') rows = rows.filter((x) => x.status === 'open');
+        else if (filter === 'done') rows = rows.filter((x) => x.status === 'done');
+        else if (filter === 'overdue') rows = rows.filter((x) => x.status === 'open' && x.overdue);
+        return Promise.resolve({ success: true, data: rows });
+    }
+
+    function demoHandlePost(payload) {
+        if (payload.op === 'create') {
+            const now = new Date().toISOString();
+            const note = {
+                noteId: 'FLW_DEMO' + Date.now(),
+                summary: payload.summary,
+                dueDate: payload.dueDate || '',
+                doneAt: '',
+                createdAt: now,
+                updatedAt: now,
+                createdByUid: operatorId || 'U_DIRECTOR',
+                metadataJson: '',
+                status: 'open'
+            };
+            demoNotes.unshift(note);
+            return Promise.resolve({ success: true, message: '已存', data: enrich(note) });
+        }
+        if (payload.op === 'update') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆待跟進（可能已刪除）' });
+            if (payload.summary != null) n.summary = payload.summary;
+            if (payload.dueDate != null) n.dueDate = payload.dueDate;
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已存', data: enrich(n) });
+        }
+        if (payload.op === 'delete') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆待跟進（可能已刪除）' });
+            n.status = 'deleted';
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已刪除待跟進', data: { noteId: n.noteId, status: 'deleted' } });
+        }
+        if (payload.op === 'complete') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆待跟進（可能已刪除）' });
+            n.status = 'done';
+            n.doneAt = new Date().toISOString();
+            n.updatedAt = n.doneAt;
+            return Promise.resolve({ success: true, message: '已勾做完', data: enrich(n) });
+        }
+        if (payload.op === 'restore') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆待跟進（可能已刪除）' });
+            n.status = 'open';
+            n.doneAt = '';
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已還原為未完成', data: enrich(n) });
+        }
+        return Promise.resolve({ success: false, message: '未知的操作' });
+    }
+
+    function renderOpenRow(n) {
+        const overdue = computeOverdue(n);
+        const dueLabel = n.dueDate
+            ? (overdue
+                ? `<span class="badge-overdue">過期</span> <span class="text-xs text-red-700">${escapeHtml(n.dueDate)}</span>`
+                : `<span class="text-xs text-slate-500">到期 ${escapeHtml(n.dueDate)}</span>`)
+            : `<span class="text-xs text-slate-400">無到期日</span>`;
+        return `<article class="item-row px-3 py-3" data-id="${escapeHtml(n.noteId)}">
+            <div class="flex items-start gap-3">
+                <button type="button" class="btn-complete flex-shrink-0 mt-0.5 w-11 h-11 rounded-lg border-2 border-slate-300 text-slate-500 hover:border-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 font-bold text-lg"
+                    data-id="${escapeHtml(n.noteId)}" title="做完" aria-label="勾做完">✓</button>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm font-semibold text-slate-900 leading-snug ${overdue ? 'text-red-900' : ''}">${escapeHtml(n.summary)}</p>
+                    <div class="mt-1 flex flex-wrap items-center gap-2">${dueLabel}</div>
+                    <div class="mt-2 flex flex-wrap gap-2">
+                        <button type="button" class="btn-edit text-sm font-semibold text-indigo-700 min-h-[40px] px-2 rounded-md hover:bg-indigo-50" data-id="${escapeHtml(n.noteId)}">修改</button>
+                        <button type="button" class="btn-delete-row text-sm font-semibold text-red-700 min-h-[40px] px-2 rounded-md hover:bg-red-50" data-id="${escapeHtml(n.noteId)}">刪除</button>
+                    </div>
+                </div>
+            </div>
+        </article>`;
+    }
+
+    function renderDoneRow(n) {
+        return `<article class="item-row px-3 py-3 opacity-80" data-id="${escapeHtml(n.noteId)}">
+            <div class="flex items-start gap-3">
+                <button type="button" class="btn-restore flex-shrink-0 mt-0.5 w-11 h-11 rounded-lg border-2 border-emerald-400 bg-emerald-50 text-emerald-700 font-bold text-lg"
+                    data-id="${escapeHtml(n.noteId)}" title="還原" aria-label="還原為未完成">↺</button>
+                <div class="min-w-0 flex-1">
+                    <p class="text-sm text-slate-600 line-through leading-snug">${escapeHtml(n.summary)}</p>
+                    <p class="text-xs text-slate-400 mt-1">${n.dueDate ? '原到期 ' + escapeHtml(n.dueDate) : '無到期日'}</p>
+                </div>
+            </div>
+        </article>`;
+    }
+
+    function bindOpenActions() {
+        el.openList.querySelectorAll('.btn-complete').forEach((btn) => {
+            btn.addEventListener('click', () => completeNote(btn.getAttribute('data-id')));
+        });
+        el.openList.querySelectorAll('.btn-edit').forEach((btn) => {
+            btn.addEventListener('click', () => openEditForm(btn.getAttribute('data-id')));
+        });
+        el.openList.querySelectorAll('.btn-delete-row').forEach((btn) => {
+            btn.addEventListener('click', () => deleteNoteById(btn.getAttribute('data-id')));
+        });
+    }
+
+    function bindDoneActions() {
+        el.doneList.querySelectorAll('.btn-restore').forEach((btn) => {
+            btn.addEventListener('click', () => restoreNote(btn.getAttribute('data-id')));
+        });
+    }
+
+    function renderLists() {
+        el.notesSkeleton.classList.add('hidden');
+        if (!openCache.length) {
+            el.openList.innerHTML = '';
+            el.openEmpty.classList.remove('hidden');
+        } else {
+            el.openEmpty.classList.add('hidden');
+            el.openList.innerHTML = openCache.map(renderOpenRow).join('');
+            bindOpenActions();
+        }
+
+        if (showDone) {
+            el.doneWrap.classList.remove('hidden');
+            el.btnToggleDone.textContent = '隱藏';
+            if (!doneCache.length) {
+                el.doneList.innerHTML = '';
+                el.doneEmpty.classList.remove('hidden');
+            } else {
+                el.doneEmpty.classList.add('hidden');
+                el.doneList.innerHTML = doneCache.map(renderDoneRow).join('');
+                bindDoneActions();
+            }
+        } else {
+            el.doneWrap.classList.add('hidden');
+            el.btnToggleDone.textContent = '顯示';
+        }
+    }
+
+    function hideForm() {
+        if (saving) {
+            notify('正在處理中，請稍候再關表單', 'info');
+            return;
+        }
+        el.formSection.classList.add('hidden');
+        el.form.reset();
+        el.formNoteId.value = '';
+        el.formMsg.textContent = '';
+        el.formMsg.className = 'text-sm min-h-[1.25rem]';
+        el.formSummaryErr.classList.add('hidden');
+        el.btnDelete.classList.add('hidden');
+        el.btnSave.disabled = false;
+        el.btnSave.textContent = '存';
+    }
+
+    function openNewForm() {
+        if (saving) {
+            notify('正在處理中，請稍候再開新的待跟進', 'info');
+            return;
+        }
+        el.formSection.classList.remove('hidden');
+        el.formHeading.textContent = '要跟進';
+        el.formNoteId.value = '';
+        el.formSummary.value = '';
+        el.formDue.value = '';
+        el.formMsg.textContent = '';
+        el.formSummaryErr.classList.add('hidden');
+        el.btnDelete.classList.add('hidden');
+        try { el.formSummary.focus(); } catch (e) { /* ignore */ }
+        try { el.formSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
+
+    function openEditForm(noteId) {
+        if (saving) {
+            notify('正在處理中，請稍候再改其他筆', 'info');
+            return;
+        }
+        const n = openCache.find((x) => x.noteId === noteId) || doneCache.find((x) => x.noteId === noteId);
+        if (!n) {
+            notify('找不到這筆待跟進，請重新整理', 'error');
+            return;
+        }
+        el.formSection.classList.remove('hidden');
+        el.formHeading.textContent = '修改待跟進';
+        el.formNoteId.value = n.noteId;
+        el.formSummary.value = n.summary || '';
+        el.formDue.value = n.dueDate || '';
+        el.formMsg.textContent = '';
+        el.btnDelete.classList.remove('hidden');
+        try { el.formSummary.focus(); } catch (e) { /* ignore */ }
+        try { el.formSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
+
+    async function loadNotes() {
+        el.openList.innerHTML = '';
+        el.openEmpty.classList.add('hidden');
+        el.notesSkeleton.classList.remove('hidden');
+        setStatus('更新中', 'is-busy');
+        try {
+            const [openRes, doneRes] = await Promise.all([
+                fetchNotesGet({
+                    action: 'director_followup_notes',
+                    mode: 'list',
+                    filter: 'open',
+                    operatorId: operatorId,
+                    userId: operatorId
+                }),
+                fetchNotesGet({
+                    action: 'director_followup_notes',
+                    mode: 'list',
+                    filter: 'done',
+                    operatorId: operatorId,
+                    userId: operatorId
+                })
+            ]);
+            if (!openRes || openRes.success === false) {
+                throw new Error((openRes && openRes.message) || '讀取待跟進失敗');
+            }
+            if (!doneRes || doneRes.success === false) {
+                throw new Error((doneRes && doneRes.message) || '讀取已完成失敗');
+            }
+            openCache = (Array.isArray(openRes.data) ? openRes.data : []).map(enrich);
+            doneCache = (Array.isArray(doneRes.data) ? doneRes.data : []).map(enrich);
+            renderLists();
+            setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
+        } catch (e) {
+            el.notesSkeleton.classList.add('hidden');
+            el.openEmpty.classList.remove('hidden');
+            el.openEmpty.textContent = (e && e.message) || '讀取失敗，請按「重新整理」再試';
+            setStatus('讀取失敗', 'is-err');
+            notify(el.openEmpty.textContent, 'error');
+        }
+    }
+
+    async function saveNote(ev) {
+        ev.preventDefault();
+        if (saving) return;
+        const summary = el.formSummary.value.trim();
+        if (!summary) {
+            el.formSummaryErr.textContent = '請填寫一句話';
+            el.formSummaryErr.classList.remove('hidden');
+            el.formSummary.focus();
+            return;
+        }
+        el.formSummaryErr.classList.add('hidden');
+
+        const noteId = el.formNoteId.value.trim();
+        saving = true;
+        savingFormNoteId = noteId;
+        el.btnSave.disabled = true;
+        el.btnSave.textContent = '處理中…';
+        el.btnDelete.disabled = true;
+        el.btnNew.disabled = true;
+        el.formSummary.readOnly = true;
+        el.formDue.disabled = true;
+        el.formMsg.textContent = '處理中，請稍候';
+        el.formMsg.className = 'text-sm text-indigo-700 min-h-[1.25rem]';
+        setStatus('處理中', 'is-busy');
+
+        const payload = {
+            action: 'director_followup_notes',
+            op: noteId ? 'update' : 'create',
+            operatorId: operatorId,
+            userId: operatorId,
+            userName: operatorName,
+            summary: summary,
+            dueDate: el.formDue.value || ''
+        };
+        if (noteId) payload.noteId = noteId;
+
+        try {
+            const res = await postNotes(payload);
+            if (!res || !res.success) {
+                throw new Error((res && res.message) || '存檔失敗，請再試一次');
+            }
+            el.formMsg.textContent = res.message || '已存';
+            el.formMsg.className = 'text-sm text-emerald-700 min-h-[1.25rem]';
+            notify(res.message || '已存', 'success');
+            // 只清「同一份」草稿；請求中也鎖了表單切換
+            const stillSameDraft = el.formNoteId.value.trim() === savingFormNoteId;
+            saving = false;
+            savingFormNoteId = null;
+            el.formSummary.readOnly = false;
+            el.formDue.disabled = false;
+            el.btnNew.disabled = false;
+            if (stillSameDraft) hideForm();
+            else {
+                el.btnSave.disabled = false;
+                el.btnSave.textContent = '存';
+                el.btnDelete.disabled = false;
+            }
+            await loadNotes();
+            setStatus('已存', 'is-ok');
+        } catch (e) {
+            el.formMsg.textContent = (e && e.message) || '存檔失敗，請再試一次';
+            el.formMsg.className = 'text-sm text-red-600 min-h-[1.25rem]';
+            notify(el.formMsg.textContent, 'error');
+            setStatus('存檔失敗', 'is-err');
+            saving = false;
+            savingFormNoteId = null;
+            el.btnSave.disabled = false;
+            el.btnSave.textContent = '存';
+            el.btnDelete.disabled = false;
+            el.btnNew.disabled = false;
+            el.formSummary.readOnly = false;
+            el.formDue.disabled = false;
+        }
+    }
+
+    async function completeNote(noteId) {
+        if (!noteId || saving) return;
+        saving = true;
+        el.btnNew.disabled = true;
+        setStatus('處理中', 'is-busy');
+        try {
+            const res = await postNotes({
+                action: 'director_followup_notes',
+                op: 'complete',
+                operatorId: operatorId,
+                userId: operatorId,
+                noteId: noteId
+            });
+            if (!res || !res.success) throw new Error((res && res.message) || '標記失敗');
+            notify(res.message || '已勾做完', 'success');
+            if (el.formNoteId.value === noteId) {
+                saving = false;
+                hideForm();
+            }
+            await loadNotes();
+            setStatus('已勾做完', 'is-ok');
+        } catch (e) {
+            notify((e && e.message) || '標記失敗', 'error');
+            setStatus('失敗', 'is-err');
+        } finally {
+            saving = false;
+            el.btnNew.disabled = false;
+        }
+    }
+
+    async function restoreNote(noteId) {
+        if (!noteId || saving) return;
+        saving = true;
+        el.btnNew.disabled = true;
+        setStatus('處理中', 'is-busy');
+        try {
+            const res = await postNotes({
+                action: 'director_followup_notes',
+                op: 'restore',
+                operatorId: operatorId,
+                userId: operatorId,
+                noteId: noteId
+            });
+            if (!res || !res.success) throw new Error((res && res.message) || '還原失敗');
+            notify(res.message || '已還原', 'success');
+            await loadNotes();
+            setStatus('已還原', 'is-ok');
+        } catch (e) {
+            notify((e && e.message) || '還原失敗', 'error');
+            setStatus('失敗', 'is-err');
+        } finally {
+            saving = false;
+            el.btnNew.disabled = false;
+        }
+    }
+
+    async function deleteNoteById(noteId) {
+        if (!noteId || saving) return;
+        if (!window.confirm('確定刪除這筆待跟進？刪除後列表就看不到了。')) return;
+        saving = true;
+        el.btnNew.disabled = true;
+        setStatus('處理中', 'is-busy');
+        try {
+            const res = await postNotes({
+                action: 'director_followup_notes',
+                op: 'delete',
+                operatorId: operatorId,
+                userId: operatorId,
+                noteId: noteId
+            });
+            if (!res || !res.success) throw new Error((res && res.message) || '刪除失敗，請再試一次');
+            notify(res.message || '已刪除', 'success');
+            if (el.formNoteId.value === noteId) {
+                saving = false;
+                hideForm();
+            }
+            await loadNotes();
+            setStatus('已刪除', 'is-ok');
+        } catch (e) {
+            notify((e && e.message) || '刪除失敗，請再試一次', 'error');
+            setStatus('刪除失敗', 'is-err');
+        } finally {
+            saving = false;
+            el.btnNew.disabled = false;
+        }
+    }
+
+    function wireHash(id, hash) {
+        const a = document.getElementById(id);
+        if (!a) return;
+        a.addEventListener('click', (ev) => {
+            if (window.parent && window.parent !== window) {
+                ev.preventDefault();
+                window.parent.location.hash = hash;
+            }
+        });
+    }
+
+    function boot() {
+        wireHash('link-hr', '#/director-hr-notes');
+        wireHash('link-project', '#/director-project-notes');
+        wireHash('link-party', '#/director-party-notes');
+        wireHash('link-decision', '#/director-decision-notes');
+        wireHash('link-transcript', '#/director-transcript-notes');
+
+        if (!LOCAL_DEMO && permission < MIN_PERM) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '只有總監／高權限可以使用待跟進。若您應有權限，請從主控台重新進入。';
+            setStatus('');
+            return;
+        }
+        if (!LOCAL_DEMO && !operatorId) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '找不到登入身分。請從主控台進入本頁，不要直接開網址。';
+            setStatus('');
+            return;
+        }
+        el.main.classList.remove('hidden');
+        loadNotes();
+        el.btnNew.addEventListener('click', openNewForm);
+        el.btnReload.addEventListener('click', () => loadNotes());
+        el.btnToggleDone.addEventListener('click', () => {
+            showDone = !showDone;
+            renderLists();
+        });
+        el.form.addEventListener('submit', saveNote);
+        el.btnCancel.addEventListener('click', hideForm);
+        el.btnDelete.addEventListener('click', () => deleteNoteById(el.formNoteId.value.trim()));
+    }
+
+    boot();
+</script>
+</body>
+</html>

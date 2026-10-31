@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>客戶／廠商觀察</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+        .note-row { cursor: pointer; touch-action: manipulation; }
+        .note-row:hover { background-color: #f8fafc; }
+        .note-row.is-open { background-color: #f1f5f9; }
+        .cat-chip {
+            display: inline-block;
+            font-size: 0.75rem;
+            line-height: 1.25;
+            padding: 0.2rem 0.55rem;
+            border-radius: 0.375rem;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .cat-observation { background: #eef2ff; color: #3730a3; }
+        .cat-red_flag { background: #fef2f2; color: #b91c1c; }
+        .cat-free { background: #f1f5f9; color: #475569; }
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+            border-radius: 0.5rem;
+            height: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        textarea { min-height: 7rem; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status-line.is-busy { color: #4338ca; }
+        #status-line.is-ok { color: #047857; }
+        #status-line.is-err { color: #b91c1c; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div class="max-w-2xl mx-auto p-4 md:p-6 pb-10">
+        <header class="mb-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div class="min-w-0">
+                    <p class="text-xs text-slate-500 mb-1">
+                        <a href="#/director-hr-notes" id="link-hr" class="text-indigo-700 hover:underline">人事</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-project-notes" id="link-project" class="text-indigo-700 hover:underline">專案備忘</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <span class="font-semibold text-slate-700">客戶／廠商</span>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-followup-notes" id="link-followup" class="text-indigo-700 hover:underline">待跟進</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-transcript-notes" id="link-transcript" class="text-indigo-700 hover:underline">摘記</a>
+                    </p>
+                    <h1 class="text-2xl font-bold text-slate-900">客戶／廠商觀察</h1>
+                    <p class="text-sm text-slate-500 mt-1">選類型與對象 → 一行摘要 → 存；可篩「只看雷點」</p>
+                </div>
+                <p id="status-line" class="text-sm font-medium min-h-[1.25rem]" aria-live="polite"></p>
+            </div>
+        </header>
+
+        <div id="denied-panel" class="hidden bg-white border border-amber-200 rounded-xl p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-amber-900">無法開啟此頁</h2>
+            <p id="denied-msg" class="text-sm text-amber-800 mt-2 leading-relaxed">只有總監／高權限可以使用客戶／廠商觀察。</p>
+        </div>
+
+        <div id="main-panel" class="hidden space-y-4">
+            <section class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                <div>
+                    <span class="block text-sm font-semibold text-slate-700 mb-2">對象類型</span>
+                    <div class="flex flex-wrap gap-2">
+                        <label class="inline-flex items-center gap-2 min-h-[44px] px-3 border border-slate-300 rounded-lg cursor-pointer">
+                            <input type="radio" name="party-type" value="customer" checked class="accent-indigo-600">
+                            <span>客戶</span>
+                        </label>
+                        <label class="inline-flex items-center gap-2 min-h-[44px] px-3 border border-slate-300 rounded-lg cursor-pointer">
+                            <input type="radio" name="party-type" value="vendor" class="accent-indigo-600">
+                            <span>廠商</span>
+                        </label>
+                    </div>
+                </div>
+                <div>
+                    <label for="party-search" class="block text-sm font-semibold text-slate-700 mb-1">選對象</label>
+                    <input id="party-search" type="search" enterkeyhint="search" placeholder="搜尋名稱或貼上編號"
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 min-h-[44px]">
+                    <select id="party-select" size="5"
+                        class="w-full border border-slate-300 rounded-lg px-2 py-2 text-base min-h-[9rem] focus:outline-none focus:ring-2 focus:ring-indigo-400">
+                    </select>
+                    <p id="party-hint" class="text-xs text-slate-500 mt-2">系統認穩定編號；畫面上顯示名稱方便選。也可手動輸入。</p>
+                </div>
+                <div id="manual-party" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                        <label for="manual-party-id" class="block text-xs font-semibold text-slate-600 mb-1">手動對象編號</label>
+                        <input id="manual-party-id" type="text" maxlength="64" placeholder="例如 C001"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-base min-h-[44px]">
+                    </div>
+                    <div>
+                        <label for="manual-party-name" class="block text-xs font-semibold text-slate-600 mb-1">手動對象名稱</label>
+                        <input id="manual-party-name" type="text" maxlength="200" placeholder="顯示用名稱"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-base min-h-[44px]">
+                    </div>
+                </div>
+                <button type="button" id="btn-use-manual"
+                    class="border border-slate-300 text-slate-700 font-medium py-2 px-3 rounded-lg text-sm min-h-[44px] hover:bg-slate-50">
+                    用手動編號載入時間線
+                </button>
+            </section>
+
+            <section id="notes-section" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hidden">
+                <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <div class="min-w-0">
+                        <h2 id="notes-title" class="text-lg font-semibold text-slate-900">時間線</h2>
+                        <p id="notes-subtitle" class="text-xs text-slate-500 mt-0.5 break-all"></p>
+                    </div>
+                    <button type="button" id="btn-new-note"
+                        class="bg-indigo-600 text-white font-semibold py-2.5 px-4 rounded-lg hover:bg-indigo-700 text-sm min-h-[44px]">
+                        ＋ 新增觀察
+                    </button>
+                </div>
+                <div class="flex flex-wrap gap-2 mb-3 items-center">
+                    <label class="inline-flex items-center gap-2 min-h-[44px] text-sm text-slate-700">
+                        <input type="checkbox" id="filter-red-flag" class="accent-red-600 w-4 h-4">
+                        只看雷點
+                    </label>
+                    <button type="button" id="btn-reload-notes"
+                        class="border border-slate-300 text-slate-700 font-medium py-2 px-3 rounded-lg text-sm min-h-[44px] hover:bg-slate-50">
+                        重新整理
+                    </button>
+                </div>
+                <div id="notes-list" class="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden"></div>
+                <p id="notes-empty" class="hidden text-sm text-slate-500 py-6 text-center px-2">這個對象還沒有觀察。按「新增觀察」開始記一筆。</p>
+                <div id="notes-skeleton" class="hidden pt-1" aria-hidden="true">
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                </div>
+            </section>
+
+            <section id="form-section" class="bg-white border border-indigo-200 rounded-xl p-4 shadow-sm hidden">
+                <h2 id="form-title" class="text-lg font-semibold text-slate-900 mb-3">新增觀察</h2>
+                <form id="note-form" class="space-y-3">
+                    <input type="hidden" id="form-note-id" value="">
+                    <div>
+                        <label for="form-category" class="block text-sm font-semibold text-slate-700 mb-1">分類</label>
+                        <select id="form-category"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                            <option value="observation" selected>觀察</option>
+                            <option value="red_flag">雷點</option>
+                            <option value="free">自由</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="form-summary" class="block text-sm font-semibold text-slate-700 mb-1">一行摘要</label>
+                        <input id="form-summary" type="text" maxlength="200" required
+                            placeholder="掃時間線時會看到這行"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                        <p id="form-summary-err" class="hidden text-sm text-red-600 mt-1"></p>
+                    </div>
+                    <div>
+                        <label for="form-body" class="block text-sm font-semibold text-slate-700 mb-1">詳細內容（可空白）</label>
+                        <textarea id="form-body" placeholder="點開才會看到的細節"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base"></textarea>
+                    </div>
+                    <p id="form-msg" class="text-sm min-h-[1.25rem]" role="status"></p>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        <button type="submit" id="btn-save"
+                            class="bg-indigo-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-indigo-700 min-h-[44px]">
+                            存
+                        </button>
+                        <button type="button" id="btn-cancel-form"
+                            class="border border-slate-300 text-slate-700 font-medium py-2.5 px-4 rounded-lg min-h-[44px] hover:bg-slate-50">
+                            取消
+                        </button>
+                        <button type="button" id="btn-delete"
+                            class="hidden ml-auto border border-red-300 text-red-700 font-medium py-2.5 px-4 rounded-lg min-h-[44px] hover:bg-red-50">
+                            刪除
+                        </button>
+                    </div>
+                </form>
+            </section>
+        </div>
+    </div>
+
+<script src="../../shared/js/hub_ref_cache.js?v=2"></script>
+<script type="module">
+    import { showGlobalNotification } from '/shared/js/utils.js';
+    import { CONFIG } from '/shared/js/config.js';
+
+    const NOTES_API = CONFIG.ATTENDANCE_GAS_WEB_APP_URL;
+    const MIN_PERM = 5;
+    const CAT_LABELS = { observation: '觀察', red_flag: '雷點', free: '自由' };
+    const TYPE_LABELS = { customer: '客戶', vendor: '廠商' };
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const operatorId = String(urlParams.get('uid') || '').trim();
+    const operatorName = String(urlParams.get('name') || '').trim();
+    const permission = parseInt(urlParams.get('permission') || '1', 10);
+    const LOCAL_DEMO = urlParams.get('localDemo') === '1';
+
+    const el = {
+        status: document.getElementById('status-line'),
+        denied: document.getElementById('denied-panel'),
+        deniedMsg: document.getElementById('denied-msg'),
+        main: document.getElementById('main-panel'),
+        partySearch: document.getElementById('party-search'),
+        partySelect: document.getElementById('party-select'),
+        partyHint: document.getElementById('party-hint'),
+        manualId: document.getElementById('manual-party-id'),
+        manualName: document.getElementById('manual-party-name'),
+        btnUseManual: document.getElementById('btn-use-manual'),
+        notesSection: document.getElementById('notes-section'),
+        notesTitle: document.getElementById('notes-title'),
+        notesSubtitle: document.getElementById('notes-subtitle'),
+        notesList: document.getElementById('notes-list'),
+        notesEmpty: document.getElementById('notes-empty'),
+        notesSkeleton: document.getElementById('notes-skeleton'),
+        filterRed: document.getElementById('filter-red-flag'),
+        btnNew: document.getElementById('btn-new-note'),
+        btnReload: document.getElementById('btn-reload-notes'),
+        formSection: document.getElementById('form-section'),
+        formTitle: document.getElementById('form-title'),
+        form: document.getElementById('note-form'),
+        formNoteId: document.getElementById('form-note-id'),
+        formCategory: document.getElementById('form-category'),
+        formSummary: document.getElementById('form-summary'),
+        formSummaryErr: document.getElementById('form-summary-err'),
+        formBody: document.getElementById('form-body'),
+        formMsg: document.getElementById('form-msg'),
+        btnSave: document.getElementById('btn-save'),
+        btnCancel: document.getElementById('btn-cancel-form'),
+        btnDelete: document.getElementById('btn-delete'),
+    };
+
+    let partyType = 'customer';
+    let partyLists = { customer: [], vendor: [] };
+    let selectedPartyId = '';
+    let selectedPartyName = '';
+    let notesCache = [];
+    let expandedNoteId = '';
+    let saving = false;
+
+    let demoNotes = [
+        {
+            noteId: 'PTN_DEMO001',
+            partyType: 'customer',
+            partyId: 'C001',
+            partyName: '示範客戶甲',
+            category: 'observation',
+            summary: '溝通偏慢，喜歡一次講很多條件',
+            body: '上次會談約 40 分鐘；先記觀察。',
+            createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+            updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+            createdByUid: 'U_DIRECTOR',
+            metadataJson: '',
+            status: 'active'
+        },
+        {
+            noteId: 'PTN_DEMO002',
+            partyType: 'vendor',
+            partyId: 'V010',
+            partyName: '示範水電行',
+            category: 'red_flag',
+            summary: '報價常漏項，現場要再對一次',
+            body: '雷點：漏項兩次。',
+            createdAt: new Date(Date.now() - 86400000).toISOString(),
+            updatedAt: new Date(Date.now() - 86400000).toISOString(),
+            createdByUid: 'U_DIRECTOR',
+            metadataJson: '',
+            status: 'active'
+        }
+    ];
+    const demoParties = {
+        customer: [
+            { id: 'C001', name: '示範客戶甲' },
+            { id: 'C002', name: '示範客戶乙' }
+        ],
+        vendor: [
+            { id: 'V010', name: '示範水電行' },
+            { id: 'V020', name: '示範木作廠' }
+        ]
+    };
+
+    function setStatus(text, kind) {
+        el.status.textContent = text || '';
+        el.status.classList.remove('is-busy', 'is-ok', 'is-err');
+        if (kind) el.status.classList.add(kind);
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function formatWhen(iso) {
+        if (!iso) return '';
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return String(iso).slice(0, 16);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${y}-${m}-${day} ${hh}:${mm}`;
+    }
+
+    function currentPartyType() {
+        const checked = document.querySelector('input[name="party-type"]:checked');
+        return checked ? checked.value : 'customer';
+    }
+
+    async function fetchNotesGet(params) {
+        if (LOCAL_DEMO) return demoHandleGet(params);
+        const url = new URL(NOTES_API);
+        url.searchParams.append('source', '總監客戶廠商觀察');
+        for (const key in params) {
+            if (params[key] != null && params[key] !== '') url.searchParams.append(key, params[key]);
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 45000);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`伺服器回應異常（${response.status}），請稍後再試`);
+            return await response.json();
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw new Error('連線等待過久，請再試一次');
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function postNotes(payload) {
+        if (LOCAL_DEMO) return demoHandlePost(payload);
+        const res = await fetch(NOTES_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`伺服器回應異常（${res.status}），請稍後再試`);
+        return await res.json();
+    }
+
+    function demoHandleGet(params) {
+        if (params.action !== 'director_party_notes') {
+            return Promise.resolve({ success: false, message: '未知請求' });
+        }
+        if (params.mode === 'get') {
+            const n = demoNotes.find((x) => x.noteId === params.noteId && x.status !== 'deleted');
+            return Promise.resolve(n
+                ? { success: true, data: n }
+                : { success: false, message: '找不到這筆觀察（可能已刪除）' });
+        }
+        let rows = demoNotes.filter((x) => x.status !== 'deleted');
+        if (params.partyType) rows = rows.filter((x) => x.partyType === params.partyType);
+        if (params.partyId) rows = rows.filter((x) => x.partyId === params.partyId);
+        if (params.category) rows = rows.filter((x) => x.category === params.category);
+        rows.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        return Promise.resolve({ success: true, data: rows });
+    }
+
+    function demoHandlePost(payload) {
+        if (payload.op === 'create') {
+            const now = new Date().toISOString();
+            const note = {
+                noteId: 'PTN_DEMO' + Date.now(),
+                partyType: payload.partyType,
+                partyId: payload.partyId,
+                partyName: payload.partyName || '',
+                category: payload.category || 'observation',
+                summary: payload.summary,
+                body: payload.body || '',
+                createdAt: now,
+                updatedAt: now,
+                createdByUid: operatorId || 'U_DIRECTOR',
+                metadataJson: '',
+                status: 'active'
+            };
+            demoNotes.unshift(note);
+            return Promise.resolve({ success: true, message: '已存', data: note });
+        }
+        if (payload.op === 'update') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆觀察（可能已刪除）' });
+            if (payload.category != null) n.category = payload.category;
+            if (payload.summary != null) n.summary = payload.summary;
+            if (payload.body != null) n.body = payload.body;
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已存', data: n });
+        }
+        if (payload.op === 'delete') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆觀察（可能已刪除）' });
+            n.status = 'deleted';
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已刪除觀察', data: { noteId: n.noteId, status: 'deleted' } });
+        }
+        return Promise.resolve({ success: false, message: '未知的操作' });
+    }
+
+    function normalizePartyItem(raw, type) {
+        if (!raw) return null;
+        if (type === 'customer') {
+            const id = String(raw.id || raw.customerId || raw.UID || raw.uid || raw.GID || '').trim();
+            const name = String(raw.name || raw.customerName || raw['業主姓名'] || raw['客戶名稱'] || raw['案場名稱'] || id).trim();
+            if (!id) return null;
+            return { id, name };
+        }
+        const id = String(raw.id || raw.vendor_id || raw.vendorId || '').trim();
+        const name = String(raw.name || raw.vendor_name || raw.vendorName || id).trim();
+        if (!id) return null;
+        return { id, name };
+    }
+
+    function renderPartyOptions(filterText) {
+        const q = String(filterText || '').trim().toLowerCase();
+        const list = (partyLists[partyType] || []).filter((p) => {
+            const id = String(p.id || '').toLowerCase();
+            const name = String(p.name || '').toLowerCase();
+            if (!q) return true;
+            return name.includes(q) || id.includes(q);
+        });
+        el.partySelect.innerHTML = list.map((p) => {
+            const id = escapeHtml(p.id);
+            const label = escapeHtml(`${p.name || p.id}（${p.id}）`);
+            const selected = p.id === selectedPartyId ? ' selected' : '';
+            return `<option value="${id}"${selected}>${label}</option>`;
+        }).join('');
+        if (!list.length) {
+            el.partyHint.textContent = q
+                ? '找不到符合對象；可改關鍵字，或在下方手動輸入編號。'
+                : '目前沒有名單快取；請用下方手動輸入編號與名稱。';
+        } else {
+            el.partyHint.textContent = '系統認穩定編號；畫面上顯示名稱方便選。也可手動輸入。';
+        }
+    }
+
+    function renderExpandedDetail(n) {
+        return `<div class="px-3 pb-3 text-sm text-slate-700 whitespace-pre-wrap">${escapeHtml(n.body || '（無詳細內容）')}</div>
+               <div class="px-3 pb-3 flex flex-wrap gap-2">
+                 <button type="button" class="btn-edit text-sm font-semibold text-indigo-700 min-h-[44px] px-3 rounded-md hover:bg-indigo-50" data-id="${escapeHtml(n.noteId)}">修改</button>
+                 <button type="button" class="btn-delete-row text-sm font-semibold text-red-700 min-h-[44px] px-3 rounded-md hover:bg-red-50" data-id="${escapeHtml(n.noteId)}">刪除</button>
+                 <button type="button" class="btn-collapse text-sm text-slate-600 min-h-[44px] px-3 rounded-md hover:bg-slate-100">收合</button>
+               </div>`;
+    }
+
+    function renderNotes() {
+        el.notesSkeleton.classList.add('hidden');
+        const rows = notesCache;
+        if (!rows.length) {
+            el.notesList.innerHTML = '';
+            el.notesEmpty.textContent = el.filterRed.checked
+                ? '這個對象還沒有雷點紀錄。'
+                : '這個對象還沒有觀察。按「新增觀察」開始記一筆。';
+            el.notesEmpty.classList.remove('hidden');
+            return;
+        }
+        el.notesEmpty.classList.add('hidden');
+        el.notesList.innerHTML = rows.map((n) => {
+            const open = n.noteId === expandedNoteId;
+            const cat = CAT_LABELS[n.category] || n.category;
+            const chipClass = `cat-${n.category || 'observation'}`;
+            const bodyHtml = open ? renderExpandedDetail(n) : '';
+            return `<article class="note-row ${open ? 'is-open' : ''}" data-id="${escapeHtml(n.noteId)}">
+                <div class="flex items-start gap-2 px-3 py-3 min-h-[52px]">
+                    <span class="cat-chip ${chipClass}">${escapeHtml(cat)}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-sm font-medium text-slate-900 leading-snug">${escapeHtml(n.summary)}</p>
+                        <p class="text-xs text-slate-500 mt-0.5">${escapeHtml(formatWhen(n.updatedAt || n.createdAt))}</p>
+                    </div>
+                    <span class="text-xs text-slate-400 flex-shrink-0 pt-1" aria-hidden="true">${open ? '▲' : '▼'}</span>
+                </div>
+                ${bodyHtml}
+            </article>`;
+        }).join('');
+
+        el.notesList.querySelectorAll('.note-row').forEach((row) => {
+            row.addEventListener('click', (ev) => {
+                if (ev.target.closest('button')) return;
+                const id = row.getAttribute('data-id');
+                expandedNoteId = expandedNoteId === id ? '' : id;
+                renderNotes();
+            });
+        });
+        el.notesList.querySelectorAll('.btn-edit').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                openEditForm(btn.getAttribute('data-id'));
+            });
+        });
+        el.notesList.querySelectorAll('.btn-delete-row').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                deleteNoteById(btn.getAttribute('data-id'));
+            });
+        });
+        el.notesList.querySelectorAll('.btn-collapse').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                expandedNoteId = '';
+                renderNotes();
+            });
+        });
+    }
+
+    function hideForm() {
+        el.formSection.classList.add('hidden');
+        el.form.reset();
+        el.formNoteId.value = '';
+        el.formCategory.value = 'observation';
+        el.formMsg.textContent = '';
+        el.formMsg.className = 'text-sm min-h-[1.25rem]';
+        el.formSummaryErr.classList.add('hidden');
+        el.btnDelete.classList.add('hidden');
+        el.btnSave.disabled = false;
+        el.btnSave.textContent = '存';
+    }
+
+    function syncSelectedFromUi() {
+        const id = String(el.partySelect.value || '').trim();
+        if (id) {
+            selectedPartyId = id;
+            const found = (partyLists[partyType] || []).find((p) => p.id === id);
+            selectedPartyName = found ? found.name : '';
+        }
+        return selectedPartyId;
+    }
+
+    function openNewForm() {
+        syncSelectedFromUi();
+        if (!selectedPartyId) {
+            try { showGlobalNotification('請先選一個對象或用手動編號', 'error'); } catch (e) { /* ignore */ }
+            return;
+        }
+        if (el.notesSection.classList.contains('hidden')) loadNotes();
+        el.formSection.classList.remove('hidden');
+        el.formTitle.textContent = '新增觀察';
+        el.formNoteId.value = '';
+        el.formCategory.value = 'observation';
+        el.formSummary.value = '';
+        el.formBody.value = '';
+        el.formMsg.textContent = '';
+        el.btnDelete.classList.add('hidden');
+        try { el.formSummary.focus(); } catch (e) { /* ignore */ }
+        try { el.formSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
+
+    function openEditForm(noteId) {
+        const n = notesCache.find((x) => x.noteId === noteId);
+        if (!n) {
+            showGlobalNotification('找不到這筆觀察，請重新整理', 'error');
+            return;
+        }
+        el.formSection.classList.remove('hidden');
+        el.formTitle.textContent = '修改觀察';
+        el.formNoteId.value = n.noteId;
+        el.formCategory.value = n.category || 'observation';
+        el.formSummary.value = n.summary || '';
+        el.formBody.value = n.body || '';
+        el.formMsg.textContent = '';
+        el.btnDelete.classList.remove('hidden');
+        try { el.formSummary.focus(); } catch (e) { /* ignore */ }
+        try { el.formSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
+
+    function loadPartyLists() {
+        setStatus('更新中', 'is-busy');
+        if (LOCAL_DEMO) {
+            partyLists = {
+                customer: demoParties.customer.slice(),
+                vendor: demoParties.vendor.slice()
+            };
+            renderPartyOptions(el.partySearch.value);
+            setStatus('本地演示', 'is-ok');
+            return;
+        }
+        try {
+            const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
+            const customersRaw = (Hub && Hub.read) ? (Hub.read('customers') || []) : [];
+            partyLists.customer = (Array.isArray(customersRaw) ? customersRaw : [])
+                .map((c) => normalizePartyItem(c, 'customer'))
+                .filter(Boolean);
+        } catch (e) {
+            partyLists.customer = [];
+        }
+        // 廠商：若父層／本機有會計快取就用；否則靠手動輸入
+        try {
+            let vendorsRaw = [];
+            if (window.parent && window.parent !== window && window.parent.AccountingCache) {
+                vendorsRaw = window.parent.AccountingCache.peekVendors
+                    ? (window.parent.AccountingCache.peekVendors() || [])
+                    : [];
+            }
+            partyLists.vendor = (Array.isArray(vendorsRaw) ? vendorsRaw : [])
+                .map((v) => normalizePartyItem(v, 'vendor'))
+                .filter(Boolean);
+        } catch (e) {
+            partyLists.vendor = [];
+        }
+        renderPartyOptions(el.partySearch.value);
+        setStatus('');
+    }
+
+    async function loadNotes() {
+        if (!selectedPartyId) return;
+        el.notesSection.classList.remove('hidden');
+        el.notesTitle.textContent = `${selectedPartyName || selectedPartyId}的時間線`;
+        el.notesSubtitle.textContent = `${TYPE_LABELS[partyType] || partyType}｜編號：${selectedPartyId}`;
+        el.notesList.innerHTML = '';
+        el.notesEmpty.classList.add('hidden');
+        el.notesSkeleton.classList.remove('hidden');
+        setStatus('更新中', 'is-busy');
+        try {
+            const params = {
+                action: 'director_party_notes',
+                mode: 'list',
+                partyType: partyType,
+                partyId: selectedPartyId,
+                operatorId: operatorId,
+                userId: operatorId
+            };
+            if (el.filterRed.checked) params.category = 'red_flag';
+            const res = await fetchNotesGet(params);
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || '讀取觀察失敗');
+            }
+            notesCache = Array.isArray(res.data) ? res.data : [];
+            renderNotes();
+            setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
+        } catch (e) {
+            el.notesSkeleton.classList.add('hidden');
+            el.notesEmpty.classList.remove('hidden');
+            el.notesEmpty.textContent = (e && e.message) || '讀取失敗，請按「重新整理」再試';
+            setStatus('讀取失敗', 'is-err');
+            showGlobalNotification(el.notesEmpty.textContent, 'error');
+        }
+    }
+
+    async function saveNote(ev) {
+        ev.preventDefault();
+        if (saving) return;
+        syncSelectedFromUi();
+        const summary = el.formSummary.value.trim();
+        if (!summary) {
+            el.formSummaryErr.textContent = '請填寫一行摘要，時間線才掃得過。';
+            el.formSummaryErr.classList.remove('hidden');
+            el.formSummary.focus();
+            return;
+        }
+        el.formSummaryErr.classList.add('hidden');
+        if (!selectedPartyId) {
+            el.formMsg.textContent = '請先選一個對象';
+            el.formMsg.className = 'text-sm text-red-600 min-h-[1.25rem]';
+            return;
+        }
+
+        saving = true;
+        el.btnSave.disabled = true;
+        el.btnSave.textContent = '處理中…';
+        el.btnDelete.disabled = true;
+        el.formMsg.textContent = '處理中，請稍候';
+        el.formMsg.className = 'text-sm text-indigo-700 min-h-[1.25rem]';
+        setStatus('處理中', 'is-busy');
+
+        const noteId = el.formNoteId.value.trim();
+        const payload = {
+            action: 'director_party_notes',
+            op: noteId ? 'update' : 'create',
+            operatorId: operatorId,
+            userId: operatorId,
+            userName: operatorName,
+            partyType: partyType,
+            partyId: selectedPartyId,
+            partyName: selectedPartyName,
+            category: el.formCategory.value || 'observation',
+            summary: summary,
+            body: el.formBody.value
+        };
+        if (noteId) payload.noteId = noteId;
+
+        try {
+            const res = await postNotes(payload);
+            if (!res || !res.success) {
+                throw new Error((res && res.message) || '存檔失敗，請再試一次');
+            }
+            el.formMsg.textContent = res.message || '已存';
+            el.formMsg.className = 'text-sm text-emerald-700 min-h-[1.25rem]';
+            showGlobalNotification(res.message || '已存', 'success');
+            hideForm();
+            await loadNotes();
+            if (res.data && res.data.noteId) {
+                expandedNoteId = res.data.noteId;
+                renderNotes();
+            }
+            setStatus('已存', 'is-ok');
+        } catch (e) {
+            el.formMsg.textContent = (e && e.message) || '存檔失敗，請再試一次';
+            el.formMsg.className = 'text-sm text-red-600 min-h-[1.25rem]';
+            showGlobalNotification(el.formMsg.textContent, 'error');
+            setStatus('存檔失敗', 'is-err');
+        } finally {
+            saving = false;
+            el.btnSave.disabled = false;
+            el.btnSave.textContent = '存';
+            el.btnDelete.disabled = false;
+        }
+    }
+
+    async function deleteNoteById(noteId) {
+        if (!noteId || saving) return;
+        if (!window.confirm('確定刪除這筆觀察？刪除後時間線就看不到了。')) return;
+        saving = true;
+        setStatus('處理中', 'is-busy');
+        try {
+            const res = await postNotes({
+                action: 'director_party_notes',
+                op: 'delete',
+                operatorId: operatorId,
+                userId: operatorId,
+                noteId: noteId
+            });
+            if (!res || !res.success) {
+                throw new Error((res && res.message) || '刪除失敗，請再試一次');
+            }
+            showGlobalNotification(res.message || '已刪除', 'success');
+            if (el.formNoteId.value === noteId) hideForm();
+            expandedNoteId = '';
+            await loadNotes();
+            setStatus('已刪除', 'is-ok');
+        } catch (e) {
+            showGlobalNotification((e && e.message) || '刪除失敗，請再試一次', 'error');
+            setStatus('刪除失敗', 'is-err');
+        } finally {
+            saving = false;
+        }
+    }
+
+    function onPartySelect() {
+        syncSelectedFromUi();
+        hideForm();
+        expandedNoteId = '';
+        if (selectedPartyId) loadNotes();
+        else {
+            el.notesSection.classList.add('hidden');
+            notesCache = [];
+        }
+    }
+
+    function useManualParty() {
+        const id = String(el.manualId.value || '').trim();
+        const name = String(el.manualName.value || '').trim();
+        if (!id) {
+            showGlobalNotification('請填寫對象編號', 'error');
+            return;
+        }
+        if (!/^[0-9A-Za-z_-]{1,64}$/.test(id)) {
+            showGlobalNotification('對象編號格式無效', 'error');
+            return;
+        }
+        selectedPartyId = id;
+        selectedPartyName = name || id;
+        // 把手動項加進下拉方便之後選
+        const list = partyLists[partyType] || [];
+        if (!list.some((p) => p.id === id)) {
+            list.unshift({ id, name: selectedPartyName });
+            partyLists[partyType] = list;
+            renderPartyOptions(el.partySearch.value);
+        }
+        el.partySelect.value = id;
+        hideForm();
+        expandedNoteId = '';
+        loadNotes();
+    }
+
+    function wireParentHash(linkEl, hash) {
+        if (!linkEl) return;
+        linkEl.addEventListener('click', (ev) => {
+            if (window.parent && window.parent !== window) {
+                ev.preventDefault();
+                window.parent.location.hash = hash;
+            }
+        });
+    }
+
+    function boot() {
+        wireParentHash(document.getElementById('link-hr'), '#/director-hr-notes');
+        wireParentHash(document.getElementById('link-project'), '#/director-project-notes');
+        wireParentHash(document.getElementById('link-decision'), '#/director-decision-notes');
+        wireParentHash(document.getElementById('link-followup'), '#/director-followup-notes');
+        wireParentHash(document.getElementById('link-transcript'), '#/director-transcript-notes');
+
+        if (!LOCAL_DEMO && permission < MIN_PERM) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '只有總監／高權限可以使用客戶／廠商觀察。若您應有權限，請從主控台重新進入。';
+            setStatus('');
+            return;
+        }
+        if (!LOCAL_DEMO && !operatorId) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '找不到登入身分。請從主控台進入本頁，不要直接開網址。';
+            setStatus('');
+            return;
+        }
+        el.main.classList.remove('hidden');
+        partyType = currentPartyType();
+        loadPartyLists();
+
+        document.querySelectorAll('input[name="party-type"]').forEach((r) => {
+            r.addEventListener('change', () => {
+                partyType = currentPartyType();
+                selectedPartyId = '';
+                selectedPartyName = '';
+                hideForm();
+                el.notesSection.classList.add('hidden');
+                renderPartyOptions(el.partySearch.value);
+            });
+        });
+        el.partySearch.addEventListener('input', () => renderPartyOptions(el.partySearch.value));
+        el.partySelect.addEventListener('change', onPartySelect);
+        el.partySelect.addEventListener('click', () => {
+            if (el.partySelect.value && el.partySelect.value !== selectedPartyId) onPartySelect();
+        });
+        el.btnUseManual.addEventListener('click', useManualParty);
+        el.btnNew.addEventListener('click', openNewForm);
+        el.btnReload.addEventListener('click', () => loadNotes());
+        el.filterRed.addEventListener('change', () => loadNotes());
+        el.form.addEventListener('submit', saveNote);
+        el.btnCancel.addEventListener('click', hideForm);
+        el.btnDelete.addEventListener('click', () => deleteNoteById(el.formNoteId.value.trim()));
+    }
+
+    boot();
+</script>
+</body>
+</html>

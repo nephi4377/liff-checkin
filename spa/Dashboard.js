@@ -47,6 +47,11 @@ export default {
         const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
         const directorHrNotesUrl = computed(() => `#/director-hr-notes`);
+        const directorProjectNotesUrl = computed(() => `#/director-project-notes`);
+        const directorPartyNotesUrl = computed(() => `#/director-party-notes`);
+        const directorDecisionNotesUrl = computed(() => `#/director-decision-notes`);
+        const directorFollowupNotesUrl = computed(() => `#/director-followup-notes`);
+        const directorTranscriptNotesUrl = computed(() => `#/director-transcript-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
@@ -442,6 +447,11 @@ export default {
             presenceDotClass,
             employeeEditorUrl,
             directorHrNotesUrl,
+            directorProjectNotesUrl,
+            directorPartyNotesUrl,
+            directorDecisionNotesUrl,
+            directorFollowupNotesUrl,
+            directorTranscriptNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -842,6 +852,56 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">總監人事筆記</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">私人人事紀錄：事件、觀察、面談，可改可分類。</p>
+                    </div>
+                </a>
+
+                <!-- 12c. 專案／工地備忘（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorProjectNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🏗️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">專案／工地備忘</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">依案場記一行摘要；點開看細節，可改可刪。</p>
+                    </div>
+                </a>
+
+                <!-- 12d. 客戶／廠商觀察（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorPartyNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">👁️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">客戶／廠商觀察</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">依對象記觀察與雷點；時間線可篩只看雷點。</p>
+                    </div>
+                </a>
+
+                <!-- 12e. 決策紀錄（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorDecisionNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">⚖️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">決策紀錄</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">題目、定論、為何與日期；之後可查上次怎麼定。</p>
+                    </div>
+                </a>
+
+                <!-- 12f. 待跟進 inbox（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorFollowupNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">📌</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">待跟進</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">一句話＋可選到期；勾做完可還原，過期醒目。</p>
+                    </div>
+                </a>
+
+                <!-- 12g. 對話摘記（權限 ≥ 5） -->
+                <a v-if="currentUser && currentUser.permission >= 5" :href="directorTranscriptNotesUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🗣️</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">對話摘記</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">貼對話產生一行摘要，可改後存；可展開原文。</p>
                     </div>
                 </a>
 
