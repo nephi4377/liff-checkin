@@ -140,6 +140,20 @@ describe('#247 director HR employees', () => {
     const onlyVendors = [{ userId: 'V', status: '廠商', permission: 2 }];
     assert.equal(shouldUseFilteredHubRoster(filterDirectorHrEmployees(onlyVendors)), false);
   });
+
+  it('本頁原始碼不得寫回共用 HubRefCache.employees（防 demo 污染）', () => {
+    const src = readFileSync(
+      join(__dirname, '../../modules/attendance/director_hr_notes.html'),
+      'utf8'
+    );
+    assert.equal(
+      /Hub\.set\s*\(\s*['"]employees['"]/.test(src),
+      false,
+      'director_hr_notes 不可 Hub.set(\"employees\")'
+    );
+    assert.match(src, /filterDirectorHrEmployees/);
+    assert.match(src, /shouldUseFilteredHubRoster/);
+  });
 });
 
 describe('#249 attendance_report 不信任 HubRefCache', () => {

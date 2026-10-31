@@ -179,6 +179,10 @@
 <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
 <script type="module">
     import { showGlobalNotification } from '/shared/js/utils.js';
+    import {
+        filterDirectorHrEmployees,
+        shouldUseFilteredHubRoster
+    } from '/shared/js/hub_employee_roster_filters.js';
 
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz5-DUPNNciVdvE5wrOogNgxYt8EpDZppAe9f2cUh8pW9y3i29fB6n0RA5r-A5KuAiz/exec';
     const MIN_PERM = 5;
@@ -579,6 +583,8 @@
     }
 
     function readHubRefEmployees() {
+        // 本地演示不讀共用快取，避免 demo 與正式名單混用
+        if (LOCAL_DEMO) return [];
         try {
             const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
             if (!Hub || typeof Hub.read !== 'function') return [];
@@ -589,16 +595,16 @@
         }
     }
 
-    // Hub F7：員工先吃父層／HubRefCache；沒有才打 get_employees（筆記仍另抓）
+    // Hub F7：員工先吃父層／HubRefCache（只讀，绝不寫回共用 key）；沒有／篩完空才打 get_employees
     async function loadEmployees() {
         setStatus('更新中', 'is-busy');
         try {
-            const hubEmployees = readHubRefEmployees();
-            if (hubEmployees.length) {
+            const hubFiltered = filterDirectorHrEmployees(readHubRefEmployees());
+            if (shouldUseFilteredHubRoster(hubFiltered)) {
                 const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
                 const src = Hub && typeof Hub.sourceLabel === 'function' ? Hub.sourceLabel('employees') : 'hub_ref_cache';
-                console.log('[director_hr_notes] 員工來源=' + src + '（略過 get_employees）');
-                allEmployees = hubEmployees.filter((emp) => emp && emp.status !== '離職');
+                console.log('[director_hr_notes] 員工來源=' + src + '（略過 get_employees；已排除廠商／離職）');
+                allEmployees = hubFiltered;
                 renderEmployeeOptions(el.empSearch.value);
                 setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
                 return;
@@ -613,11 +619,8 @@
             if (!res || res.success === false) {
                 throw new Error((res && res.message) || '讀取員工名單失敗');
             }
+            // 本頁不寫回 HubRefCache.employees，避免 demo／attendance_active 子集污染全站共用快取
             allEmployees = Array.isArray(res.data) ? res.data : [];
-            try {
-                const Hub = typeof HubRefCache !== 'undefined' ? HubRefCache : window.HubRefCache;
-                if (Hub && typeof Hub.set === 'function') Hub.set('employees', allEmployees);
-            } catch (e) { /* ignore */ }
             renderEmployeeOptions(el.empSearch.value);
             setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
         } catch (e) {
