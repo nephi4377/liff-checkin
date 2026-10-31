@@ -116,6 +116,20 @@ describe('#246 daily report employees', () => {
     const filtered = filterDailyReportEmployees(onlyResigned);
     assert.equal(shouldUseFilteredHubRoster(filtered), false);
   });
+
+  it('工作總覽原始碼須用共用篩選且先判斷 shouldUseFilteredHubRoster', () => {
+    const src = readFileSync(
+      join(__dirname, '../../modules/projects/js/daily_report_main.js'),
+      'utf8'
+    );
+    assert.match(src, /filterDailyReportEmployees/);
+    assert.match(src, /shouldUseFilteredHubRoster/);
+    assert.equal(
+      /permission\s*===\s*2\s*\|\|\s*emp\.permission\s*===\s*3/.test(src),
+      false,
+      '不可再使用嚴格 === 2／3（會漏字串權限）'
+    );
+  });
 });
 
 describe('#247 director HR employees', () => {
