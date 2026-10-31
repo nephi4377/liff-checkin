@@ -10,7 +10,9 @@ var AccountingApi = (function () {
   var SESSION_TOKEN_KEY = 'tanxin_accounting_liff_token_v1';
   /** project-console 核發；附在 accounting-gas POST（Backend_GAS #276） */
   var HUB_GATE_TICKET_CACHE_PREFIX = 'tanxin_accounting_hub_gate_ticket_v1:';
-  var HUB_GATE_TICKET_DEFAULT_TTL_MS = 5 * 60 * 1000;
+  var HUB_GATE_TICKET_DEFAULT_TTL_MS = 90000;
+  var HUB_GATE_TICKET_EARLY_MS = 15000;
+  var HUB_GATE_TICKET_MAX_CACHE_MS = 100000;
   var HUB_GATE_TICKET_FETCH_TIMEOUT_MS = 15000;
   var HUB_GATE_TICKET_EXPIRY_SKEW_MS = 5000;
   var hubGateTicketMem_ = null;
@@ -230,7 +232,16 @@ var AccountingApi = (function () {
   }
 
   function parseGateTicketExpiresMs_(res) {
-    if (!res) return Date.now() + HUB_GATE_TICKET_DEFAULT_TTL_MS;
+    var now = Date.now();
+    if (!res) return now + HUB_GATE_TICKET_DEFAULT_TTL_MS;
+    if (res.expires_in_sec != null) {
+      var inSec = Number(res.expires_in_sec);
+      if (isFinite(inSec) && inSec > 0) {
+        var cacheMs = Math.min(inSec * 1000 - HUB_GATE_TICKET_EARLY_MS, HUB_GATE_TICKET_MAX_CACHE_MS);
+        if (cacheMs < 1000) cacheMs = 1000;
+        return now + cacheMs;
+      }
+    }
     if (res.expires_at_ms != null) {
       var msNum = Number(res.expires_at_ms);
       if (isFinite(msNum) && msNum > 0) return msNum;
@@ -241,13 +252,13 @@ var AccountingApi = (function () {
     }
     if (res.valid_seconds != null) {
       var sec = Number(res.valid_seconds);
-      if (isFinite(sec) && sec > 0) return Date.now() + sec * 1000;
+      if (isFinite(sec) && sec > 0) return now + sec * 1000;
     }
     if (res.ttl_seconds != null) {
       var ttl = Number(res.ttl_seconds);
-      if (isFinite(ttl) && ttl > 0) return Date.now() + ttl * 1000;
+      if (isFinite(ttl) && ttl > 0) return now + ttl * 1000;
     }
-    return Date.now() + HUB_GATE_TICKET_DEFAULT_TTL_MS;
+    return now + HUB_GATE_TICKET_DEFAULT_TTL_MS;
   }
 
   async function resolveLiffIdTokenForGate_(body) {
