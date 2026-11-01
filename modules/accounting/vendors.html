@@ -159,10 +159,25 @@
     .tag.bad { background: #fce8e6; color: #c5221f; }
     .tag.muted { background: #f1f3f4; color: #5f6368; }
     .tag.notify-ok { background: #e6f4ea; color: #137333; }
-    .tag.notify-fail { background: #fce8e6; color: #c5221f; }
+    /* 通知失敗用琥珀，勿與「已退回」同款大紅（避免以為錢沒匯） */
+    .tag.notify-fail { background: #fef7e0; color: #b06000; }
     .tag.notify-skip { background: #fef7e0; color: #b06000; }
     .tag.notify-none { background: #f1f3f4; color: #5f6368; }
+    .pay-notify-hint { color: #5f6368; font-size: 12px; margin-top: 4px; line-height: 1.4; }
     .pay-history-list { margin-top: 10px; }
+    .pay-stage-block { margin-top: 12px; }
+    .pay-stage-scroll {
+      max-height: min(52vh, 420px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-right: 2px;
+      border: 1px solid #e8eaed;
+      border-radius: 10px;
+      background: #fff;
+    }
+    .pay-stage-scroll .pay-history-item { margin: 0; border-radius: 0; border-left: none; border-right: none; border-top: none; }
+    .pay-stage-scroll .pay-history-item:first-child { border-top: none; }
+    .pay-stage-scroll .pay-history-item + .pay-history-item { border-top: 1px solid #e8eaed; }
     .pay-history-item { border: 1px solid #e8eaed; border-radius: 10px; padding: 10px 12px; margin: 8px 0; background: #fafafa; }
     .pay-history-item .pay-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
     .pay-history-item .btn-sm { padding: 6px 10px; font-size: 13px; margin-top: 0; }
@@ -349,7 +364,7 @@
 
       <div id="payHistorySection" class="hidden">
         <p class="section-title">請款／匯款紀錄（近 12 個月）</p>
-        <p class="sub" style="margin:0 0 8px">看這家廠商近 12 個月的請款申請（待審／待匯／已匯／退回），含待付款與「收支登錄支出有對到這家廠商」補上的已匯款。新增請款會帶入這家廠商；待匯款可於此編輯或刪除（需財務權限 ≥4）。已匯款可看上次 LINE 通知小標記；財務 ≥4 可「補通知」（只重送通知，不改入帳）。</p>
+        <p class="sub" style="margin:0 0 8px">看這家廠商近 12 個月的請款申請（待審／待匯／已匯／退回），含待付款與「收支登錄支出有對到這家廠商」補上的已匯款。新增請款會帶入這家廠商；待匯款可於此編輯或刪除（需財務權限 ≥4）。已匯款旁的小標記是<strong>通知結果</strong>（不是匯款成敗）；財務 ≥4 可「補通知」（只重送 LINE，不改入帳）。</p>
         <div class="form-actions" style="margin-top:0">
           <a class="btn btn-primary" id="payHistoryAddBtn" href="payment_request.html" target="_blank" rel="noopener">新增請款</a>
           <button type="button" class="btn btn-secondary" id="payHistoryReloadBtn">重新整理</button>
@@ -796,11 +811,31 @@
 
       var NOTIFY_OUTCOME_LABEL = {
         notified: '已通知',
-        notify_failed: '失敗',
-        skipped: '略過',
+        notify_failed: '通知未送到',
+        skipped: '未送通知',
         unlinked: '未綁 LINE',
-        none: '尚無紀錄'
+        none: '尚無通知'
       };
+
+      function notifyOutcomeHint(it) {
+        var outcome = String((it && it.last_notify_outcome) || '').trim() || 'none';
+        var code = String((it && it.last_notify_verify_code) || '').trim();
+        var msg = String((it && it.last_notify_message) || '').trim();
+        if (outcome === 'notify_failed') {
+          if (code === 'payment_line_uid_mismatch') {
+            return '帳已入；通知被擋：請款單上的 LINE 與名冊綁定不一致。部署修正後可再按「補通知」（會以名冊綁定為準）。';
+          }
+          if (code.indexOf('strict') >= 0 || code === 'line_display_name_strict_mismatch') {
+            return '帳已入；LINE 顯示名與名冊姓名不完全相同，已擋下。把 LINE 顯示名加進名冊「別名」後再補通知。';
+          }
+          if (msg) return '帳已入；是通知沒送到。' + msg;
+          return '帳已入；是通知沒送到。可按「補通知」或改綁 LINE／用 EMAIL。';
+        }
+        if (outcome === 'unlinked') {
+          return '帳已入；這家還沒綁 LINE，無法推播。可綁定後補通知，或用 EMAIL。';
+        }
+        return '';
+      }
 
       function notifyOutcomeTag(it) {
         if (!it || it.stage !== '已匯款') return '';
@@ -810,7 +845,7 @@
         if (outcome === 'notified') cls = 'tag notify-ok';
         else if (outcome === 'notify_failed') cls = 'tag notify-fail';
         else if (outcome === 'skipped' || outcome === 'unlinked') cls = 'tag notify-skip';
-        var title = label;
+        var title = '通知：' + label;
         if (it.last_notify_at) title += ' · ' + String(it.last_notify_at).replace('T', ' ').slice(0, 16);
         if (it.last_notify_resend) title += '（補通知）';
         if (it.last_notify_line_id) {
@@ -818,7 +853,25 @@
           title += ' → ' + (lid.indexOf('C') === 0 ? '群組 ' : '私訊 ') + lid.slice(0, 10) + '…';
         }
         if (it.last_notify_line_channel) title += '／' + (it.last_notify_line_channel === 'official' ? '官方 LINE' : '會計 LINE');
-        return '<span class="' + cls + '" title="' + title + '" style="margin-left:6px">' + label + '</span>';
+        var html = '<span class="' + cls + '" title="' + title + '" style="margin-left:6px">' + label + '</span>';
+        var hint = notifyOutcomeHint(it);
+        if (hint) html += '<div class="pay-notify-hint">' + hint + '</div>';
+        return html;
+      }
+
+      function emailDraftHint(d) {
+        var reason = String((d && d.reason) || '').trim();
+        if (d && d.hint) return String(d.hint);
+        if (reason === 'unlinked') {
+          return '這家廠商名冊還沒綁 LINE，無法推播。可複製下方內容改用 EMAIL 通知。';
+        }
+        if (reason === 'payment_line_uid_mismatch') {
+          return '通知被擋（請款單 LINE 與名冊綁定不一致），不是「沒綁」。部署修正後請再按「補通知」；或先用 EMAIL。';
+        }
+        if (reason.indexOf('strict') >= 0 || reason === 'line_display_name_strict_mismatch') {
+          return 'LINE 顯示名與名冊不完全相同，推播被擋。可把顯示名加進別名後再補通知，或先用 EMAIL。';
+        }
+        return 'LINE 通知沒送到時可用 EMAIL。可複製下方內容改寄（不代表名冊沒綁 LINE）。';
       }
 
       function renderPayEmailDrafts(drafts, host) {
@@ -828,7 +881,7 @@
           div.className = 'pay-notify-email';
           div.innerHTML = '<strong>' + (d.vendor_name || d.subject || '匯款通知') + '</strong>' +
             (d.to ? (' → ' + d.to) : '（無廠商 email，寄至會計）') +
-            '<div class="sub" style="margin-top:4px">這家廠商沒綁 LINE，無法推播。可複製下方內容改用 EMAIL 通知。</div>';
+            '<div class="sub" style="margin-top:4px">' + emailDraftHint(d) + '</div>';
           var copyBtn = document.createElement('button');
           copyBtn.type = 'button';
           copyBtn.className = 'btn btn-secondary btn-sm';
@@ -858,7 +911,7 @@
         var failed = records.filter(function (r) { return r.outcome === 'notify_failed'; }).length;
         var unlinked = records.filter(function (r) { return r.outcome === 'unlinked'; }).length;
         if (notified) lines.push('已通知 ' + notified + ' 筆');
-        if (failed) lines.push('失敗 ' + failed + ' 筆');
+        if (failed) lines.push('通知未送到 ' + failed + ' 筆（帳沒改）');
         if (unlinked) lines.push('未綁 LINE ' + unlinked + ' 筆（可用 EMAIL 草稿）');
         records.forEach(function (r) {
           if (r.outcome === 'notified' && r.line_id) {
@@ -867,7 +920,7 @@
               (r.line_channel === 'official' ? '（官方 LINE）' : '（會計 LINE）'));
           }
           if (r.outcome === 'notify_failed') {
-            lines.push('失敗：' + (r.vendor_name || r.payment_request_id || '') +
+            lines.push('通知未送到：' + (r.vendor_name || r.payment_request_id || '') +
               (r.message ? '（' + r.message + '）' : ''));
           }
         });
@@ -993,6 +1046,18 @@
         return wrap;
       }
 
+      function payHistoryItemTime(it) {
+        return String(
+          (it && (it.paid_at || it.updated_at || it.request_date || it.txn_date || it.doc_date)) || ''
+        );
+      }
+
+      function sortPayHistoryNewestFirst(list) {
+        return (list || []).slice().sort(function (a, b) {
+          return payHistoryItemTime(b).localeCompare(payHistoryItemTime(a));
+        });
+      }
+
       function renderPayHistory(items) {
         var box = $('payHistoryList');
         box.innerHTML = '';
@@ -1010,14 +1075,26 @@
         PAY_STAGE_ORDER.forEach(function (stage) {
           var list = groups[stage];
           if (!list || !list.length) return;
+          list = sortPayHistoryNewestFirst(list);
+          var block = document.createElement('div');
+          block.className = 'pay-stage-block';
           var head = document.createElement('p');
           head.className = 'section-title';
-          head.style.marginTop = '12px';
+          head.style.margin = '0 0 6px';
           head.textContent = (PAY_STAGE_LABEL[stage] || stage) + '（' + list.length + '）';
-          box.appendChild(head);
+          block.appendChild(head);
+          var host = block;
+          if (stage === '已匯款' && list.length > 3) {
+            var scroll = document.createElement('div');
+            scroll.className = 'pay-stage-scroll';
+            scroll.setAttribute('aria-label', '已匯款列表（可捲動，最新在上）');
+            block.appendChild(scroll);
+            host = scroll;
+          }
           list.forEach(function (it) {
-            box.appendChild(renderPayHistoryItem(it));
+            host.appendChild(renderPayHistoryItem(it));
           });
+          box.appendChild(block);
         });
       }
 

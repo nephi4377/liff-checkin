@@ -1,0 +1,124 @@
+{
+  "_source": "Backend_GAS accounting-gas/SPEC/LEDGER_PERM_API.md @ cursor/acct-sec-11-ledger-history-own-ba72",
+  "view_all_min_perm": 5,
+  "actions": {
+    "recent": "accounting_ledger_recent",
+    "detail": "accounting_ledger_detail",
+    "update": "accounting_ledger_update",
+    "void": "accounting_ledger_void",
+    "dup_review_clear": "accounting_ledger_dup_review_clear",
+    "delete_flagged_deprecated": "accounting_ledger_delete_flagged"
+  },
+  "examples": {
+    "ledger_recent_mine_only": {
+      "success": true,
+      "mine_only": true,
+      "view_all_min_perm": 5,
+      "items": [
+        {
+          "sheet": "2026-01",
+          "row": 42,
+          "ingest_id": "ing-demo-001",
+          "recorder_user_id": "U_OWNER_DEMO",
+          "recorderUserId": "U_OWNER_DEMO",
+          "recorder_name": "王小明",
+          "type": "支出",
+          "amount": 1500,
+          "note": "廠商試算",
+          "voided": false,
+          "voided_at": "",
+          "voided_by": "",
+          "void_reason": "",
+          "duplicate_review_pending": true,
+          "duplicate_review_status": "pending",
+          "can_void": true,
+          "can_clear_duplicate_review": true,
+          "can_delete": false,
+          "can_edit": true
+        }
+      ]
+    },
+    "ledger_detail_voided": {
+      "success": true,
+      "item": {
+        "sheet": "2026-01",
+        "row": 41,
+        "ingest_id": "ing-demo-void",
+        "recorderUserId": "U_OWNER_DEMO",
+        "recorder_name": "王小明",
+        "voided": true,
+        "voided_at": "2026-10-23T09:00:00+08:00",
+        "voided_by": "U_BOSS",
+        "voided_by_name": "李主管",
+        "void_reason": "重複登錄",
+        "duplicate_review_pending": false,
+        "duplicate_review_status": "",
+        "can_void": false,
+        "can_clear_duplicate_review": false,
+        "can_delete": false,
+        "can_edit": false
+      }
+    },
+    "ledger_void_success": {
+      "success": true,
+      "voided": true,
+      "voided_at": "2026-10-23T09:00:00+08:00",
+      "voided_by": "U_OWNER_DEMO",
+      "voided_by_name": "王小明",
+      "void_reason": "重複登錄",
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "ingest_id": "ing-demo-001",
+        "recorderUserId": "U_OWNER_DEMO",
+        "recorder_name": "王小明",
+        "voided": true,
+        "voided_at": "2026-10-23T09:00:00+08:00",
+        "voided_by": "U_OWNER_DEMO",
+        "voided_by_name": "王小明",
+        "void_reason": "重複登錄"
+      }
+    },
+    "ledger_update_dup_flagged": {
+      "success": true,
+      "message": "已儲存",
+      "duplicate_review_pending": true,
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "duplicate_review_pending": true,
+        "duplicate_review_status": "pending",
+        "recorderUserId": "U_OWNER_DEMO"
+      }
+    },
+    "dup_review_clear_success": {
+      "success": true,
+      "item": {
+        "sheet": "2026-01",
+        "row": 42,
+        "duplicate_review_pending": false,
+        "duplicate_review_status": "cleared",
+        "can_clear_duplicate_review": false,
+        "recorderUserId": "U_OWNER_DEMO"
+      }
+    }
+  },
+  "error_examples": {
+    "LEDGER_PERM_DENIED": {
+      "success": false,
+      "error_code": "LEDGER_PERM_DENIED",
+      "message": "Permission denied."
+    },
+    "LEDGER_UNKNOWN_OWNER": {
+      "success": false,
+      "error_code": "LEDGER_UNKNOWN_OWNER",
+      "message": "Unknown owner."
+    },
+    "LEDGER_DELETE_DISABLED": {
+      "success": false,
+      "error_code": "LEDGER_DELETE_DISABLED",
+      "use_void": true,
+      "message": "Delete disabled; use void."
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildAuthPayload, postTodoAction } from './api.js';
+import { readDocumentCache, writeDocumentCache } from './documentCache.js';
 import { ensureLiffSession, refreshIdToken } from './liffAuth.js';
 import { resolveRoleFromLocation, roleLabel } from './role.js';
 import { startSyncLoop } from './sync.js';
@@ -12,19 +13,36 @@ export default function App() {
   const [syncState, setSyncState] = useState({ status: 'idle', lastAt: 0, error: '' });
   const [newTitle, setNewTitle] = useState('');
   const [newAssignee, setNewAssignee] = useState('ops-ende');
+  const [listAwaitingFetch, setListAwaitingFetch] = useState(true);
+
+  useEffect(() => {
+    const cached = readDocumentCache(role);
+    if (cached) {
+      setDoc({
+        tasks: cached.tasks || [],
+        officeTasks: cached.officeTasks || [],
+        assigners: cached.assigners || [],
+        updatedAt: cached.updatedAt || 0,
+      });
+      setListAwaitingFetch(false);
+    }
+  }, [role]);
 
   const loadDocument = useCallback(async () => {
     const token = await refreshIdToken();
     if (!token) throw new Error('請先 LINE 登入');
     const data = await postTodoAction(buildAuthPayload(token, 'todo_list'));
-    setDoc({
+    const next = {
       tasks: data.tasks || [],
       officeTasks: data.officeTasks || [],
       assigners: data.assigners || [],
       updatedAt: data.updatedAt || 0,
-    });
+    };
+    setDoc(next);
+    writeDocumentCache(role, next);
+    setListAwaitingFetch(false);
     setSyncState({ status: 'ok', lastAt: Date.now(), error: '' });
-  }, []);
+  }, [role]);
 
   useEffect(() => {
     let cancelSync = () => {};
@@ -32,12 +50,31 @@ export default function App() {
       try {
         const session = await ensureLiffSession();
         if (session.pendingLogin) return;
+        if (session.configMissing) {
+          setAuth({
+            ready: true,
+            error: session.error || '',
+            displayName: '',
+            canWrite: false,
+          });
+          return;
+        }
+        if (session.preview) {
+          setAuth({
+            ready: true,
+            error: '',
+            displayName: session.displayName,
+            canWrite: false,
+            preview: true,
+          });
+          setListAwaitingFetch(false);
+          return;
+        }
         setAuth({
           ready: true,
           error: '',
           displayName: session.displayName,
           canWrite: true,
-          preview: session.preview,
         });
         cancelSync = startSyncLoop(async () => {
           try {
@@ -117,7 +154,7 @@ export default function App() {
         {auth.error && <p className="error">{auth.error}</p>}
       </header>
 
-      {role === 'assistant' && (
+      {role === 'assistant' && auth.canWrite && (
         <section className="composer">
           <input
             value={newTitle}
@@ -132,6 +169,14 @@ export default function App() {
         </section>
       )}
 
+      {listAwaitingFetch && visibleTasks.length === 0 && !auth.preview && (
+        <div className="list-skeleton" aria-busy="true" aria-label="載入待辦">
+          <div className="sk-row" />
+          <div className="sk-row" />
+          <div className="sk-row short" />
+        </div>
+      )}
+
       <ul className="task-list">
         {visibleTasks.map((t) => (
           <li key={t.id} className={t.completed ? 'done' : ''}>
@@ -139,7 +184,10 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={!!t.completed}
-                onChange={() => toggleComplete(t)}
+                disabled={!auth.canWrite}
+                onChange={() => {
+                  if (auth.canWrite) toggleComplete(t);
+                }}
               />
               <span>
                 {t.caseNo ? `${t.caseNo} ` : ''}

@@ -5,6 +5,7 @@ on:
     paths:
       - 'employee-todo-src/**'
       - 'employee-todo/**'
+      - 'modules/projects/employee-todo/**'
       - '.github/workflows/employee-todo-tests.yml'
   workflow_dispatch:
 

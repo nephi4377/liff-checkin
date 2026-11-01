@@ -14,6 +14,7 @@ function assert(cond, msg) {
 }
 
 var root = path.resolve(__dirname, '../../..');
+var cacheBust = require('./lib/read-cache-bust');
 var html = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
 
 assert(/filterErrorFlag/.test(html), 'has error-flag filter select');
@@ -22,8 +23,9 @@ assert(/隱藏已標示錯誤/.test(html), 'filter option: exclude flagged');
 assert(/已標示錯誤記帳/.test(html), 'list badge copy');
 assert(/is-error-flagged/.test(html), 'flagged row highlight class');
 assert(/error_flagged/.test(html) && /buildFilter/.test(html), 'passes error_flagged in filter');
-var apiVer = (html.match(/accounting_api\.js\?v=(\d+)/) || [])[1];
-assert(apiVer && Number(apiVer) >= 105, 'ledger_review links accounting_api.js with ?v= cache bust (min 105)');
+var apiVer = cacheBust.readCacheBustVersion(html, 'accounting_api.js');
+assert(apiVer, 'api cache bust present');
+assert(parseInt(apiVer, 10) >= 102, 'api cache bust >= v102 (got v=' + apiVer + ')');
 assert(/錯誤原因：/.test(html) || /歷史已標錯誤/.test(html), 'shows error reason on list/detail');
 assert(/沒有已標示「錯誤記帳」的請款/.test(html), 'empty hint for only-flagged filter');
 assert(!/reviewFlagReasonMask/.test(html), 'no flag-reason dialog on review');

@@ -17,10 +17,15 @@ vi.mock('three', async (importOriginal) => {
             render() {}
 
             dispose() {}
+
+            getContext() {
+                return {};
+            }
         },
     };
 });
 
+import { OrbitControls } from './vendor/three/examples/jsm/controls/OrbitControls.js';
 import * as walkModule from './LP_3D_walk.js';
 import { createLayoutPlanner3DViewer } from './LP_3DViewer.js';
 
@@ -91,6 +96,23 @@ describe('createLayoutPlanner3DViewer walk lifecycle', () => {
 
         viewer.dispose();
         expect(walkDisposeSpies[0]).toHaveBeenCalledTimes(1);
+        viewers.pop();
+    });
+
+    it('dispose 會呼叫 OrbitControls.dispose', () => {
+        const disposeSpy = vi.spyOn(OrbitControls.prototype, 'dispose');
+        const mountEl = document.createElement('div');
+        Object.assign(mountEl.style, { width: '640px', height: '480px' });
+        document.body.appendChild(mountEl);
+        const viewer = createLayoutPlanner3DViewer({
+            mountEl,
+            getData: () => minimalLayoutData(),
+        });
+        viewers.push(viewer);
+        viewer.open();
+        viewer.dispose();
+        expect(disposeSpy).toHaveBeenCalled();
+        disposeSpy.mockRestore();
         viewers.pop();
     });
 });

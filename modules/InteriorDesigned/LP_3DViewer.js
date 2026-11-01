@@ -41,6 +41,9 @@ import {
     createWalkCollisionCache,
     resolveWalkBodyRadiusCm,
     resolveWalkSpawnXZ,
+    resolveOpeningCutterCenterOnWall,
+    partitionSegmentToObb,
+    partitionRotationY,
 } from './LP_3D_walk_collision.js';
 
 /** ExtrudeGeometry 旋轉後 shape.y 對應 world -Z，與 fixture 的 centerZ 一致 */
@@ -128,8 +131,9 @@ function buildWallBrush(wall, wallMat, openings, defaults) {
             op.heightCm + mh,
             Math.max(op.depthCm + md, 30),
         );
+        const cutCenter = resolveOpeningCutterCenterOnWall(wall, op);
         const cutBrush = new Brush(cutGeo);
-        cutBrush.position.set(op.centerX, op.baseYCm + op.heightCm / 2, op.centerZ);
+        cutBrush.position.set(cutCenter.centerX, op.baseYCm + op.heightCm / 2, cutCenter.centerZ);
         cutBrush.rotation.y = (-op.rotationDeg * Math.PI) / 180;
         cutBrush.updateMatrixWorld();
         const prev = brush;
@@ -157,6 +161,18 @@ function buildWallTopCapMesh(wall, material, capThicknessCm) {
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.y = wall.heightCm - capThicknessCm;
     mesh.userData.lp3dWallTopCap = true;
+    return mesh;
+}
+
+/** 俯視隔間牆（薄板，與外牆 plan ring 同層） */
+function buildPartitionPlanMesh(obb, material) {
+    const len = obb.halfW * 2;
+    const thick = obb.halfD * 2;
+    const geo = new THREE.BoxGeometry(len, 0.4, thick);
+    const mesh = new THREE.Mesh(geo, material);
+    mesh.position.set(obb.cx, 0.2, obb.cz);
+    mesh.rotation.y = partitionRotationY(obb);
+    mesh.userData.lp3dPartitionPlan = true;
     return mesh;
 }
 
@@ -242,7 +258,10 @@ export function createLayoutPlanner3DViewer(options) {
     const presetSelect = overlayEl?.querySelector('#lp-3d-preset-select');
     const btnSavePng = overlayEl?.querySelector('#lp-3d-btn-save-png');
 
+    let lastViewerHint = '';
+
     function setHint(text) {
+        lastViewerHint = text;
         if (hintEl) hintEl.textContent = text;
     }
 
@@ -379,10 +398,22 @@ export function createLayoutPlanner3DViewer(options) {
 
         const lpPreview = typeof window !== 'undefined'
             && new URLSearchParams(window.location.search).get('lpPreview') === '1';
-        renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            preserveDrawingBuffer: lpPreview,
-        });
+        try {
+            renderer = new THREE.WebGLRenderer({
+                antialias: true,
+                preserveDrawingBuffer: lpPreview,
+            });
+        } catch (err) {
+            setHint('此裝置無法建立 WebGL 3D 預覽，請更新瀏覽器或顯示驅動後再試');
+            throw err;
+        }
+        const gl = typeof renderer.getContext === 'function' ? renderer.getContext() : null;
+        if (!gl) {
+            renderer.dispose();
+            renderer = null;
+            setHint('此裝置無法建立 WebGL 3D 預覽，請更新瀏覽器或顯示驅動後再試');
+            throw new Error('WebGL context unavailable');
+        }
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.setSize(mountEl.clientWidth, mountEl.clientHeight);
         mountEl.appendChild(renderer.domElement);
@@ -568,6 +599,24 @@ export function createLayoutPlanner3DViewer(options) {
             root.add(planRing);
         }
 
+        const partitionHeight = defaults.WALL_HEIGHT_CM;
+        for (const pw of desc.partitionWalls || []) {
+            const obb = partitionSegmentToObb(pw.ax, pw.az, pw.bx, pw.bz, pw.thicknessCm);
+            const segLen = obb.halfW * 2;
+            const thick = obb.halfD * 2;
+            const geo = new THREE.BoxGeometry(segLen, partitionHeight, thick);
+            const mesh = new THREE.Mesh(geo, wallMat);
+            mesh.position.set(obb.cx, partitionHeight / 2, obb.cz);
+            mesh.rotation.y = partitionRotationY(obb);
+            mesh.userData.lp3dPartitionWall = true;
+            wallMeshes.current.push(mesh);
+            root.add(mesh);
+            const planMat = wallCapMatTopDown || wallCapMatStandard || wallMat;
+            const planMesh = buildPartitionPlanMesh(obb, planMat);
+            wallPlanRingMeshes.current.push(planMesh);
+            root.add(planMesh);
+        }
+
         fixtureGroups.current = new Map();
         const cabinetCount = desc.fixtures.filter((f) => f.kind === 'cabinet').length;
         const showCabinetLabels = cabinetCount <= 12;
@@ -576,6 +625,7 @@ export function createLayoutPlanner3DViewer(options) {
             const liftY = fix.kind === 'cabinet' ? 0.35 : 0;
             group.position.set(fix.centerX, liftY, fix.centerZ);
             group.rotation.y = (-fix.rotationDeg * Math.PI) / 180;
+            if (fix.mirrored) group.scale.x = -1;
             group.userData.lp3dFixtureId = fix.id;
             group.userData.lp3dFixtureKind = fix.kind;
             fixtureGroups.current.set(fix.id, group);
@@ -1374,6 +1424,7 @@ export function createLayoutPlanner3DViewer(options) {
             setWalkPosition: (x, z) => walk?.setPosition(x, z),
             lookWalkAt: (x, z) => walk?.lookAt(x, z),
             getRoomAcceptanceSnapshot: () => computeRoomAcceptanceSnapshot(),
+            getLabelSpriteScaleX: () => labelGroup.current?.children?.map((s) => s.scale?.x ?? 0) ?? [],
             resetWalkRoomPreview: () => {
                 if (!walk || !lastDesc) return;
                 viewMode = 'walk';
@@ -1472,12 +1523,25 @@ export function createLayoutPlanner3DViewer(options) {
             resizeObserver = null;
             walk?.dispose();
             walk = null;
+            controls?.dispose();
+            controls = null;
+            if (contentGroup.current) {
+                disposeObject3D(contentGroup.current);
+                contentGroup.current = null;
+            }
+            if (labelGroup.current) {
+                disposeObject3D(labelGroup.current);
+                labelGroup.current = null;
+            }
+            wallCapMatStandard?.dispose();
+            wallCapMatTopDown?.dispose();
+            wallCapMatStandard = null;
+            wallCapMatTopDown = null;
             if (renderer) {
                 renderer.dispose();
                 renderer.domElement?.remove();
                 renderer = null;
             }
-            controls = null;
             scene = null;
             camera = null;
         },
@@ -1492,6 +1556,9 @@ export function createLayoutPlanner3DViewer(options) {
             };
         },
         rebuild,
+        getUserHint() {
+            return lastViewerHint;
+        },
         setViewMode(mode) {
             viewMode = mode === 'walk' ? 'walk' : 'orbit';
             applyViewMode();

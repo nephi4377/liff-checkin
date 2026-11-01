@@ -3,7 +3,12 @@ import { resolveRoleFromLocation, roleLabel } from './role.js';
 
 describe('resolveRoleFromLocation', () => {
   it('maps paigong query to assistant', () => {
-    expect(resolveRoleFromLocation({ pathname: '/employee-todo/', search: '?role=paigong' })).toBe('assistant');
+    expect(
+      resolveRoleFromLocation({
+        pathname: '/modules/projects/employee-todo/',
+        search: '?role=paigong',
+      }),
+    ).toBe('assistant');
   });
 
   it('maps ende to ops-ende', () => {

@@ -1,0 +1,26 @@
+name: CI integration guard
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  integrate-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Unit tests (cache-bust parser)
+        run: node --test tools/ci-integrate-guard/test/version.test.js
+
+      - name: Cache-bust + provenance check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/ci-integrate-guard/run.js --event "$GITHUB_EVENT_PATH" --repo-root .

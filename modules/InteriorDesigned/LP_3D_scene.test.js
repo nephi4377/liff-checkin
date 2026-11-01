@@ -5,6 +5,7 @@ import {
     classifyPlacedCabinet3DKind,
     resolvePlacedCabinet3DKind,
     openingCutsWall,
+    openingAssociatesWithWall,
     pointInWallBand,
     offsetPolygon,
     clampPointToWalkRings,
@@ -31,6 +32,13 @@ describe('classifyPlacedCabinet3DKind', () => {
         expect(classifyPlacedCabinet3DKind({ data: { name: '矮櫃', group: '系統櫃' } })).toBe('cabinet');
         expect(classifyPlacedCabinet3DKind({ data: { isWall: true, name: '牆' } })).toBe('wallSegment');
     });
+
+    it('系統櫃名稱含「門」字不誤判為門片（SWEEP-2 B4）', () => {
+        expect(classifyPlacedCabinet3DKind({ data: { name: '開門高衣櫃', group: '系統櫃' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '雙開門矮櫃', group: '木作工程' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '開門高衣櫃', group: '門片' } })).toBe('cabinet');
+        expect(classifyPlacedCabinet3DKind({ data: { name: '窗邊櫃', group: '門窗工程' } })).toBe('cabinet');
+    });
 });
 
 describe('resolvePlacedCabinet3DKind', () => {
@@ -47,7 +55,7 @@ describe('resolvePlacedCabinet3DKind', () => {
 });
 
 describe('openingCutsWall', () => {
-    it('門中心在牆帶內才切削', () => {
+    it('門貼牆才切削；遠離牆體內部不切削', () => {
         const wall = {
             outer: [
                 { x: -50, z: -50 },
@@ -64,9 +72,47 @@ describe('openingCutsWall', () => {
         };
         expect(pointInWallBand(0, -45, wall)).toBe(true);
         expect(pointInWallBand(0, 0, wall)).toBe(false);
-        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45 })).toBe(true);
-        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: 0 })).toBe(false);
+        expect(openingCutsWall(wall, { kind: 'door', centerX: 0, centerZ: -45, widthCm: 90, depthCm: 15 })).toBe(true);
+        expect(openingCutsWall(wall, {
+            kind: 'door',
+            centerX: 0,
+            centerZ: 0,
+            widthCm: 20,
+            depthCm: 20,
+            rotationDeg: 0,
+        })).toBe(false);
         expect(openingCutsWall(wall, { kind: 'cabinet', centerX: 0, centerZ: -45 })).toBe(false);
+    });
+
+    it('旋轉門中心在室內、角點貼牆時仍應切削（與 openingAssociatesWithWall 一致）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'w1',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [{
+                id: 'door-rot',
+                x: 500,
+                y: 312,
+                rotation: 90,
+                currentW: 90,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+            }],
+        });
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        expect(openingAssociatesWithWall(wall, door)).toBe(true);
+        expect(pointInWallBand(door.centerX, door.centerZ, wall)).toBe(false);
+        expect(openingCutsWall(wall, door)).toBe(true);
     });
 });
 
@@ -123,6 +169,24 @@ describe('buildLayout3DDescriptor', () => {
         expect(desc.fixtures.find((f) => f.id === 'x1')).toBeUndefined();
         expect(desc.floors).toEqual([]);
         expect(desc.ceilings).toEqual([]);
+    });
+
+    it('傳遞 2D 鏡像旗標至 fixture（SWEEP-2 B5）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [],
+            placedCabinets: [{
+                id: 'm1',
+                x: 100,
+                y: 100,
+                rotation: 0,
+                mirrored: true,
+                currentW: 80,
+                currentH: 40,
+                data: { name: '矮櫃', group: '系統櫃', width: 80, depth: 40 },
+            }],
+        });
+        expect(desc.fixtures[0].mirrored).toBe(true);
     });
 
     it('包含地板與天花區域', () => {

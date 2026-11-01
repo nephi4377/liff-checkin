@@ -290,15 +290,18 @@ const App = {
             } catch (e) { /* ignore */ }
         };
 
-        /** 會計 iframe 須等員工名單就緒再掛載，避免 permission 更新導致整頁重載 */
+        /**
+         * 會計 iframe：等 currentUser（真 permission）再掛。
+         * 舊邏輯「有員工名單即可」會先以 permission=1 掛上，真值到達後改 query →
+         * IframeView about:blank 重掛，LINE 內常變成「點開空白、重開才有」。
+         */
         const iframeMountReady = computed(() => {
             if (!userProfile.value?.userId) return false;
             const view = currentView.value;
             if (view?.name !== 'iframe') return false;
             const src = String(view.src || '');
             if (src.indexOf('modules/accounting/') < 0) return true;
-            if (currentUser.value) return true;
-            return allEmployees.value.length > 0;
+            return !!currentUser.value;
         });
 
         // [v411.0 SPA化] 簡易路由系統
@@ -309,10 +312,10 @@ const App = {
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
             '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html?v=26.10.26.6', title: '新增／修改案場資料' }, // Hub F4：先吃 HubRefCache
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
-            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html', title: '團隊工作總覽' }, // [v515.0 修正] 改為絕對路徑
+            '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html?v=26.10.30.5', title: '團隊工作總覽' }, // Hub F8：快取排除離職＋權限字串正規化
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
-            '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '出勤儀表板' }, // [v515.0 修正] 改為絕對路徑
-            '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html', title: '我的出勤與假勤', params: '&mode=personal' },
+            '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.3', title: '出勤儀表板' }, // 員工名單一律 get_employees 確認
+            '#/my-personal': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.3', title: '我的出勤與假勤', params: '&mode=personal' },
             '#/staff-status-board': { name: 'iframe', src: 'modules/attendance/staff_status_board.html', title: '全員出勤燈號看板' },
             '#/approval-dashboard': { name: 'iframe', src: 'modules/attendance/approval_dashboard.html', title: '假勤審核儀表板' }, // [v515.0 修正] 改為絕對路徑
             '#/leave-request': { name: 'iframe', src: 'modules/attendance/leave_request.html', title: '線上假勤申請' }, // [v515.0 修正] 改為絕對路徑
@@ -358,7 +361,12 @@ const App = {
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
         // 公司知識庫（注意：#/knowledge 已被 index.html 轉去公開 FAQ 頁，故用 #/kb）
         routes['#/kb'] = { name: 'iframe', src: 'modules/kb/index.html', title: '公司知識庫' };
-        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html', title: '總監人事筆記' };
+        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html?v=26.10.30.8', title: '總監人事筆記' }; // Hub F7：快取排除廠商；本頁不寫回共用 key
+        routes['#/director-project-notes'] = { name: 'iframe', src: 'modules/attendance/director_project_notes.html?v=26.10.30.5', title: '專案／工地備忘' };
+        routes['#/director-party-notes'] = { name: 'iframe', src: 'modules/attendance/director_party_notes.html?v=26.10.30.4', title: '客戶／廠商觀察' };
+        routes['#/director-decision-notes'] = { name: 'iframe', src: 'modules/attendance/director_decision_notes.html?v=26.10.30.3', title: '決策紀錄' };
+        routes['#/director-followup-notes'] = { name: 'iframe', src: 'modules/attendance/director_followup_notes.html?v=26.10.30.3', title: '待跟進' };
+        routes['#/director-transcript-notes'] = { name: 'iframe', src: 'modules/attendance/director_transcript_notes.html?v=26.10.30.2', title: '對話摘記' };
 
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
@@ -1302,6 +1310,10 @@ const App = {
                          <ProjectBoard :projects="allProjects" :userProfile="userProfile" :currentUser="currentUser"
                             :projectsLoading="projectsLoading" :projectsError="projectsError"
                             @retry="refreshHubProjects" />
+                    </div>
+                    <div v-else-if="currentView.name === 'iframe' && !iframeMountReady" class="h-full min-h-[70vh] flex flex-col items-center justify-center gap-2 bg-gray-50">
+                        <div class="spinner w-8 h-8 border-4 border-gray-200 rounded-full"></div>
+                        <p class="text-sm text-gray-500 m-0">準備會計模組…</p>
                     </div>
                     <div v-else-if="currentView.name === 'iframe' && iframeMountReady" class="h-full min-h-[70vh]">
                         <!-- :key 含 route params：會計多頁共用 index.html，僅改 route= 也必須整顆重掛 -->

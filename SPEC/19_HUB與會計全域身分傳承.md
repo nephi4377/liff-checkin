@@ -146,6 +146,9 @@
 | 會計 `searchMasterList(official_customer)` 首次 `fetch_all` → `HubRefCache.set('customers')` | 各會計頁本地 keyword 篩選 | 綁定成功 `invalidate('customers')` |
 | HUB 寫入後 | **`NewSiteForm`**：開頁先 `HubRefCache.read` 員工／案場；沒有才 `get_employees`／`get_all_sites` | 案場 CRUD 成功仍 `invalidate`＋`spa_hub_invalidate_projects` |
 | HUB 寫入後 | **`shift_schedule`**：開頁先 `HubRefCache.read('employees')`；沒有才 `get_employees`（班表仍另抓） | 獨立開頁（無快取）仍 API 後備 |
+| HUB 寫入後 | **`attendance_report`（出勤儀表）**：**不讀** `HubRefCache` 當名單權威；一律 `get_employees`（預設 `attendance_active_with_recent_resigned`；勾歷史則 `attendance_all`）。本頁 localStorage 僅瞬間顯示，背景必打後端覆核（Hub 暖機常為短版在職名單，前端再篩補不回近期離職） | 薪資／出勤選人需完整後端篩選結果 |
+| HUB 寫入後 | **`director_hr_notes`（總監人事筆記）**：開頁先讀 `HubRefCache` 再排除廠商／離職／權限≥5；篩完空則 `get_employees(attendance_active)`；**本頁不寫回**共用 `employees` | 本地 demo 不讀／不寫共用快取 |
+| HUB 寫入後 | **`daily_report`（團隊工作總覽）**：開頁先讀 `HubRefCache`，正規化權限 2／3 並排除離職；篩完空則 `get_employees` | 獨立開頁（無快取）仍 API 後備 |
 | `NewSiteForm` 等 postMessage `spa_hub_invalidate_projects` | HUB 重抓後 `HubRefCache.set('projects')` | 案場 CRUD 後清快取 |
 
 **與其他快取的分工**
@@ -258,7 +261,7 @@
 
 | 能力 | 狀態 |
 |------|------|
-| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**，避免 `permission` 更新整頁重載 |
+| HUB iframe 帶 `uid`／`permission`／`hub_liff_id` | ✅ `spa/app.js`（`hubLiffId` 經 `setup()` 暴露）；**會計 iframe 等 `currentUser` 就緒再掛載**（勿用「僅有員工名單」先以 permission=1 掛上），避免 query 變更觸發 `about:blank` 重掛變成空白；等待時顯示「準備會計模組」；`IframeView` 改 overlay＋load 安全逾時（勿 `hidden` 整顆 iframe） |
 | HUB 父層回應 `request_hub_liff_token` | ✅ `spa/app.js`（`refreshHubIdToken` 須與 `handleIframeMessage` **同 setup 作用域**） |
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | HUB 主控台種子寫入 `OperatorContext` | ✅ `index.html` 載入＋`spa/app.js` `syncHubOperatorSession`（F6） |
@@ -342,6 +345,11 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-10-30 | v1.9.12：團隊工作總覽讀 `HubRefCache` 後正規化權限字串 2／3、排除離職；篩完空則 API（避免離職被標缺交）。 |
+| 2026-10-30 | v1.9.11：總監人事筆記讀 `HubRefCache` 後排除廠商／離職／權限≥5；篩完空則 API；**本頁不寫回**共用 `employees`（demo 不污染）。 |
+| 2026-10-30 | v1.9.10：出勤儀表**不信任** `HubRefCache` 員工名單；一律向後端 `get_employees` 確認（含近期離職）。共用篩選模組仍供他頁使用。 |
+| 2026-10-30 | v1.9.9：出勤儀表讀 `HubRefCache` 後套用與後端相同之「在職＋60 天內離職」篩選（`hub_employee_roster_filters.js`）；篩完空則後備 API。（已被 v1.9.10 取代） |
+| 2026-10-30 | v1.9.8：出勤儀表（`attendance_report`）開頁先讀 `HubRefCache` 員工（前端排除廠商／權限≥5）；沒有才打 `get_employees`；勾「顯示所有歷史員工」仍走 API。API 契約不變。 |
 | 2026-10-26 | v1.9.7：HUB 主控台載入 `operator_context.js`，登入／核心就緒後寫入 `tanxin_operator_v1`（`source: hub`），供子頁讀本分頁記憶。API 契約不變；前端 only，無 clasp。 |
 | 2026-10-26 | v1.9.6：排班頁（`shift_schedule`）開頁先讀 `HubRefCache` 員工；沒有才打 `get_employees`（班表仍另抓）。API 契約不變。 |
 | 2026-10-26 | v1.9.5：新增／修改案場（`NewSiteForm`）開頁先讀 `HubRefCache` 員工／案場；沒有才打 `get_employees`／`get_all_sites`。API 契約不變。 |

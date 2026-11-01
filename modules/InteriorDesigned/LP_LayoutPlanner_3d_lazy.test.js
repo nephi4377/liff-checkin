@@ -17,4 +17,9 @@ describe('LP_LayoutPlanner 3D lazy load', () => {
         expect(plannerSrc).toMatch(/lp3dViewerPromise/);
         expect(plannerSrc).toMatch(/lp3dOpening/);
     });
+
+    it('關閉 3D 時取消排程中的 rebuild（SWEEP-2 B7）', () => {
+        expect(plannerSrc).toMatch(/cancelScheduledLp3dRebuild/);
+        expect(plannerSrc).toMatch(/if \(!lp3dMode \|\| !lp3dViewer\) return/);
+    });
 });

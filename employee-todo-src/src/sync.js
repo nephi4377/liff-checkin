@@ -1,8 +1,8 @@
 import { SYNC_INTERVAL_MS } from './config.js';
 
 /**
- * 註冊固定間隔同步（預設 12 秒，與舊版一致）
- * @param {(reason: 'interval'|'manual') => void | Promise<void>} fn
+ * 固定間隔同步（預設 45 秒）。背景分頁暫停輪詢，回到前景立即 refresh。
+ * @param {(reason: 'interval'|'manual'|'visible') => void | Promise<void>} fn
  * @returns {() => void} cleanup
  */
 export function startSyncLoop(fn, intervalMs = SYNC_INTERVAL_MS) {
@@ -11,6 +11,7 @@ export function startSyncLoop(fn, intervalMs = SYNC_INTERVAL_MS) {
 
   const tick = async (reason) => {
     if (stopped) return;
+    if (reason === 'interval' && document.hidden) return;
     try {
       await fn(reason);
     } catch (e) {
@@ -18,11 +19,35 @@ export function startSyncLoop(fn, intervalMs = SYNC_INTERVAL_MS) {
     }
   };
 
-  timer = setInterval(() => tick('interval'), intervalMs);
+  const clearTimer = () => {
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+
+  const scheduleInterval = () => {
+    clearTimer();
+    if (stopped || document.hidden) return;
+    timer = setInterval(() => tick('interval'), intervalMs);
+  };
+
+  const onVisibilityChange = () => {
+    if (document.hidden) {
+      clearTimer();
+      return;
+    }
+    tick('visible');
+    scheduleInterval();
+  };
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  scheduleInterval();
   tick('manual');
 
   return () => {
     stopped = true;
-    if (timer) clearInterval(timer);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    clearTimer();
   };
 }

@@ -49,8 +49,8 @@
 | 高度 | Three `Y` | 向上為正 |
 | 繪製牆 `drawnAreas.wall` | 內圈 + 外擴 `thickness` 形成環狀，**向上拉伸** | **牆高 280**（約 9 尺 2） |
 | 櫃體 `placedCabinets` | `BoxGeometry(w, h, d)` | **櫃高 90**（台面／矮櫃）；若 `data.height` 日後加入 Sheet 則優先 |
-| 門（`classifyPlacedCabinet3DKind` → `door`） | 平面矩形拉高 | **門高 210**；`group` 為「門窗工程／門片」或名稱含「門」 |
-| 窗（→ `window`） | 平面矩形拉高，**窗台離地** | **窗台 90 + 窗高 120**；名稱含「窗／落地窗」等 |
+| 門（`classifyPlacedCabinet3DKind` → `door`） | 平面矩形拉高 | **門高 210**；`group` 為「門窗工程／門片」且名稱含「門」；**名稱含「櫃」一律當櫃體**（如開門高衣櫃） |
+| 窗（→ `window`） | 平面矩形拉高，**窗台離地** | **窗台 90 + 窗高 120**；名稱含「窗／落地窗」等；**名稱含「櫃」不當窗**（如窗邊櫃） |
 | 牆片元件 `data.isWall` | 同櫃體盒子 | **高 280、色偏灰** |
 | 地板 | 薄板 | **`drawnAreas.floor` 或牆內圈 fallback**（`FLOOR_THICKNESS_CM`）；仍保留 GridHelper |
 

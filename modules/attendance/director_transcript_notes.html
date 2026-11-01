@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>對話摘記</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; }
+        .note-row { cursor: pointer; touch-action: manipulation; }
+        .note-row:hover { background-color: #f8fafc; }
+        .note-row.is-open { background-color: #f1f5f9; }
+        .skeleton {
+            background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.2s infinite;
+            border-radius: 0.5rem;
+            height: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        @keyframes shimmer {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        textarea { min-height: 8rem; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        #status-line.is-busy { color: #4338ca; }
+        #status-line.is-ok { color: #047857; }
+        #status-line.is-err { color: #b91c1c; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <div class="max-w-2xl mx-auto p-4 md:p-6 pb-10">
+        <header class="mb-4">
+            <div class="flex items-start justify-between gap-3 flex-wrap">
+                <div class="min-w-0">
+                    <p class="text-xs text-slate-500 mb-1">
+                        <a href="#/director-hr-notes" id="link-hr" class="text-indigo-700 hover:underline">人事</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-project-notes" id="link-project" class="text-indigo-700 hover:underline">專案</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-party-notes" id="link-party" class="text-indigo-700 hover:underline">對象</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-decision-notes" id="link-decision" class="text-indigo-700 hover:underline">決策</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <a href="#/director-followup-notes" id="link-followup" class="text-indigo-700 hover:underline">待跟進</a>
+                        <span class="mx-1 text-slate-300">｜</span>
+                        <span class="font-semibold text-slate-700">摘記</span>
+                    </p>
+                    <h1 class="text-2xl font-bold text-slate-900">對話摘記</h1>
+                    <p class="text-sm text-slate-500 mt-1">貼對話 → 產生一行摘要 → 可改後存進筆記本</p>
+                </div>
+                <p id="status-line" class="text-sm font-medium min-h-[1.25rem]" aria-live="polite"></p>
+            </div>
+        </header>
+
+        <div id="denied-panel" class="hidden bg-white border border-amber-200 rounded-xl p-5 shadow-sm">
+            <h2 class="text-lg font-semibold text-amber-900">無法開啟此頁</h2>
+            <p id="denied-msg" class="text-sm text-amber-800 mt-2 leading-relaxed">只有總監／高權限可以使用對話摘記。</p>
+        </div>
+
+        <div id="main-panel" class="hidden space-y-4">
+            <section class="bg-white border border-indigo-200 rounded-xl p-4 shadow-sm">
+                <h2 class="text-lg font-semibold text-slate-900 mb-3">貼上對話</h2>
+                <label for="compose-source" class="block text-sm font-semibold text-slate-700 mb-1">對話或文字</label>
+                <textarea id="compose-source" placeholder="把對話貼進來（語音轉成的文字也可以）"
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base"></textarea>
+                <p id="compose-source-err" class="hidden text-sm text-red-600 mt-1"></p>
+                <div class="flex flex-wrap gap-2 mt-3">
+                    <button type="button" id="btn-summarize"
+                        class="bg-indigo-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-indigo-700 min-h-[44px]">
+                        產生摘要
+                    </button>
+                </div>
+                <p id="compose-busy" class="hidden text-sm text-indigo-700 mt-2 font-medium">整理中，請稍候…</p>
+                <p id="compose-err" class="hidden text-sm text-red-600 mt-2" role="alert"></p>
+            </section>
+
+            <section id="draft-section" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm hidden">
+                <h2 class="text-lg font-semibold text-slate-900 mb-3">摘要草稿</h2>
+                <input type="hidden" id="draft-note-id" value="">
+                <div class="mb-3">
+                    <label for="draft-summary" class="block text-sm font-semibold text-slate-700 mb-1">一行摘要（可改）</label>
+                    <input id="draft-summary" type="text" maxlength="200"
+                        class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                    <p id="draft-summary-err" class="hidden text-sm text-red-600 mt-1"></p>
+                </div>
+                <div class="mb-3">
+                    <button type="button" id="btn-toggle-source"
+                        class="text-sm font-semibold text-indigo-700 min-h-[40px] hover:underline">展開原文</button>
+                    <pre id="draft-source-view" class="hidden mt-2 text-sm text-slate-700 whitespace-pre-wrap bg-slate-50 border border-slate-100 rounded-lg p-3 max-h-64 overflow-auto"></pre>
+                </div>
+                <div class="mb-3">
+                    <p class="block text-sm font-semibold text-slate-700 mb-1">掛到</p>
+                    <div class="flex flex-wrap gap-3 text-sm">
+                        <label class="inline-flex items-center gap-1.5 min-h-[40px]"><input type="radio" name="linkType" value="private" checked> 僅私人</label>
+                        <label class="inline-flex items-center gap-1.5 min-h-[40px]"><input type="radio" name="linkType" value="project"> 專案</label>
+                        <label class="inline-flex items-center gap-1.5 min-h-[40px]"><input type="radio" name="linkType" value="employee"> 員工</label>
+                    </div>
+                    <div id="link-id-wrap" class="hidden mt-2">
+                        <label for="draft-link-id" class="block text-sm text-slate-600 mb-1">編號（專案 ID 或員工 UID）</label>
+                        <input id="draft-link-id" type="text" maxlength="120"
+                            class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-base min-h-[44px]">
+                    </div>
+                </div>
+                <p id="draft-msg" class="text-sm min-h-[1.25rem]" role="status"></p>
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button type="button" id="btn-save-draft"
+                        class="bg-indigo-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-indigo-700 min-h-[44px]">
+                        存進筆記本
+                    </button>
+                    <button type="button" id="btn-clear-draft"
+                        class="border border-slate-300 text-slate-700 font-medium py-2.5 px-4 rounded-lg min-h-[44px] hover:bg-slate-50">
+                        清除草稿
+                    </button>
+                </div>
+            </section>
+
+            <section class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                <div class="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                    <h2 class="text-lg font-semibold text-slate-900">已存摘記</h2>
+                    <button type="button" id="btn-reload"
+                        class="border border-slate-300 text-slate-700 font-medium py-2 px-3 rounded-lg text-sm min-h-[44px] hover:bg-slate-50">
+                        重新整理
+                    </button>
+                </div>
+                <div id="notes-list" class="divide-y divide-slate-100 border border-slate-100 rounded-lg overflow-hidden"></div>
+                <p id="notes-empty" class="hidden text-sm text-slate-500 py-6 text-center px-2">還沒有摘記。上方貼對話並產生摘要後存進來。</p>
+                <div id="notes-skeleton" class="hidden pt-1" aria-hidden="true">
+                    <div class="skeleton"></div>
+                    <div class="skeleton"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+<script type="module">
+    import { showGlobalNotification } from '/shared/js/utils.js';
+    import { CONFIG } from '/shared/js/config.js';
+
+    const NOTES_API = CONFIG.ATTENDANCE_GAS_WEB_APP_URL;
+    const MIN_PERM = 5;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const operatorId = String(urlParams.get('uid') || '').trim();
+    const operatorName = String(urlParams.get('name') || '').trim();
+    const permission = parseInt(urlParams.get('permission') || '1', 10);
+    const LOCAL_DEMO = urlParams.get('localDemo') === '1';
+
+    const el = {
+        status: document.getElementById('status-line'),
+        denied: document.getElementById('denied-panel'),
+        deniedMsg: document.getElementById('denied-msg'),
+        main: document.getElementById('main-panel'),
+        composeSource: document.getElementById('compose-source'),
+        composeSourceErr: document.getElementById('compose-source-err'),
+        btnSummarize: document.getElementById('btn-summarize'),
+        composeBusy: document.getElementById('compose-busy'),
+        composeErr: document.getElementById('compose-err'),
+        draftSection: document.getElementById('draft-section'),
+        draftNoteId: document.getElementById('draft-note-id'),
+        draftSummary: document.getElementById('draft-summary'),
+        draftSummaryErr: document.getElementById('draft-summary-err'),
+        btnToggleSource: document.getElementById('btn-toggle-source'),
+        draftSourceView: document.getElementById('draft-source-view'),
+        linkIdWrap: document.getElementById('link-id-wrap'),
+        draftLinkId: document.getElementById('draft-link-id'),
+        draftMsg: document.getElementById('draft-msg'),
+        btnSaveDraft: document.getElementById('btn-save-draft'),
+        btnClearDraft: document.getElementById('btn-clear-draft'),
+        notesList: document.getElementById('notes-list'),
+        notesEmpty: document.getElementById('notes-empty'),
+        notesSkeleton: document.getElementById('notes-skeleton'),
+        btnReload: document.getElementById('btn-reload'),
+    };
+
+    let notesCache = [];
+    let expandedNoteId = '';
+    let draftSourceText = '';
+    let sourceExpanded = false;
+    let busy = false;
+    let demoNotes = [];
+
+    function notify(message, type) {
+        const duration = type === 'error' ? 8000 : 5000;
+        showGlobalNotification(message, duration, type || 'info');
+    }
+
+    function setStatus(text, kind) {
+        el.status.textContent = text || '';
+        el.status.classList.remove('is-busy', 'is-ok', 'is-err');
+        if (kind) el.status.classList.add(kind);
+    }
+
+    function escapeHtml(s) {
+        return String(s ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function selectedLinkType() {
+        const r = document.querySelector('input[name="linkType"]:checked');
+        return r ? r.value : 'private';
+    }
+
+    function syncLinkIdVisibility() {
+        const t = selectedLinkType();
+        if (t === 'private') {
+            el.linkIdWrap.classList.add('hidden');
+            el.draftLinkId.value = '';
+        } else {
+            el.linkIdWrap.classList.remove('hidden');
+        }
+    }
+
+    function heuristicSummary(sourceText) {
+        const lines = String(sourceText || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+        let pick = lines[0] || String(sourceText || '').trim();
+        pick = pick.replace(/^[\d:：\-\s]+/, '').replace(/^(對方|我|客戶|廠商)[:：]\s*/, '');
+        if (pick.length > 80) pick = pick.slice(0, 80) + '…';
+        return pick || '（無內容可摘要）';
+    }
+
+    async function fetchNotesGet(params) {
+        if (LOCAL_DEMO) return demoHandleGet(params);
+        const url = new URL(NOTES_API);
+        url.searchParams.append('source', '總監對話摘記');
+        for (const key in params) {
+            if (params[key] != null && params[key] !== '') url.searchParams.append(key, params[key]);
+        }
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 45000);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`伺服器回應異常（${response.status}），請稍後再試`);
+            return await response.json();
+        } catch (e) {
+            if (e && e.name === 'AbortError') throw new Error('連線等待過久，請再試一次');
+            throw e;
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    async function postNotes(payload) {
+        if (LOCAL_DEMO) return demoHandlePost(payload);
+        const res = await fetch(NOTES_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`伺服器回應異常（${res.status}），請稍後再試`);
+        return await res.json();
+    }
+
+    function demoHandleGet(params) {
+        if (params.mode === 'get') {
+            const n = demoNotes.find((x) => x.noteId === params.noteId && x.status !== 'deleted');
+            return Promise.resolve(n
+                ? { success: true, data: n }
+                : { success: false, message: '找不到這筆摘記（可能已刪除）' });
+        }
+        const rows = demoNotes.filter((x) => x.status !== 'deleted')
+            .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        return Promise.resolve({ success: true, data: rows });
+    }
+
+    function demoHandlePost(payload) {
+        if (payload.op === 'summarize') {
+            const src = String(payload.sourceText || '').trim();
+            if (!src) return Promise.resolve({ success: false, message: '請貼上對話或文字' });
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    resolve({
+                        success: true,
+                        message: '已整理',
+                        data: { summary: heuristicSummary(src), sourceText: src }
+                    });
+                }, 400);
+            });
+        }
+        if (payload.op === 'create') {
+            const now = new Date().toISOString();
+            const note = {
+                noteId: 'TRN_DEMO' + Date.now(),
+                summary: payload.summary,
+                sourceText: payload.sourceText,
+                linkType: payload.linkType || 'private',
+                linkId: payload.linkId || '',
+                createdAt: now,
+                updatedAt: now,
+                createdByUid: operatorId || 'U_DIRECTOR',
+                metadataJson: '',
+                status: 'active'
+            };
+            demoNotes.unshift(note);
+            return Promise.resolve({ success: true, message: '已存進筆記本', data: note });
+        }
+        if (payload.op === 'update') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆摘記（可能已刪除）' });
+            if (payload.summary != null) n.summary = payload.summary;
+            if (payload.sourceText != null) n.sourceText = payload.sourceText;
+            if (payload.linkType != null) n.linkType = payload.linkType;
+            if (payload.linkId != null) n.linkId = payload.linkId;
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已存', data: n });
+        }
+        if (payload.op === 'delete') {
+            const n = demoNotes.find((x) => x.noteId === payload.noteId);
+            if (!n) return Promise.resolve({ success: false, message: '找不到這筆摘記（可能已刪除）' });
+            n.status = 'deleted';
+            n.updatedAt = new Date().toISOString();
+            return Promise.resolve({ success: true, message: '已刪除摘記', data: { noteId: n.noteId, status: 'deleted' } });
+        }
+        return Promise.resolve({ success: false, message: '未知的操作' });
+    }
+
+    function linkLabel(n) {
+        if (!n || n.linkType === 'private' || !n.linkType) return '僅私人';
+        if (n.linkType === 'project') return '專案 ' + (n.linkId || '');
+        if (n.linkType === 'employee') return '員工 ' + (n.linkId || '');
+        return n.linkType;
+    }
+
+    function renderExpanded(n) {
+        return `<div class="px-3 pb-2 text-sm text-slate-700 whitespace-pre-wrap max-h-48 overflow-auto">${escapeHtml(n.sourceText || '（無原文）')}</div>
+            <div class="px-3 pb-3 flex flex-wrap gap-2">
+              <button type="button" class="btn-edit text-sm font-semibold text-indigo-700 min-h-[44px] px-3 rounded-md hover:bg-indigo-50" data-id="${escapeHtml(n.noteId)}">改摘要</button>
+              <button type="button" class="btn-delete-row text-sm font-semibold text-red-700 min-h-[44px] px-3 rounded-md hover:bg-red-50" data-id="${escapeHtml(n.noteId)}">刪除</button>
+              <button type="button" class="btn-collapse text-sm text-slate-600 min-h-[44px] px-3 rounded-md hover:bg-slate-100">收合</button>
+            </div>`;
+    }
+
+    function renderNotes() {
+        el.notesSkeleton.classList.add('hidden');
+        if (!notesCache.length) {
+            el.notesList.innerHTML = '';
+            el.notesEmpty.classList.remove('hidden');
+            return;
+        }
+        el.notesEmpty.classList.add('hidden');
+        el.notesList.innerHTML = notesCache.map((n) => {
+            const open = n.noteId === expandedNoteId;
+            return `<article class="note-row ${open ? 'is-open' : ''}" data-id="${escapeHtml(n.noteId)}">
+                <div class="flex items-start gap-2 px-3 py-3 min-h-[52px]">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-slate-500">${escapeHtml(linkLabel(n))}</p>
+                        <p class="text-sm font-semibold text-slate-900 leading-snug mt-0.5">${escapeHtml(n.summary)}</p>
+                    </div>
+                    <span class="text-xs text-slate-400 flex-shrink-0 pt-1" aria-hidden="true">${open ? '▲' : '▼'}</span>
+                </div>
+                ${open ? renderExpanded(n) : ''}
+            </article>`;
+        }).join('');
+
+        el.notesList.querySelectorAll('.note-row').forEach((row) => {
+            row.addEventListener('click', (ev) => {
+                if (ev.target.closest('button')) return;
+                const id = row.getAttribute('data-id');
+                expandedNoteId = expandedNoteId === id ? '' : id;
+                renderNotes();
+            });
+        });
+        el.notesList.querySelectorAll('.btn-edit').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                loadNoteIntoDraft(btn.getAttribute('data-id'));
+            });
+        });
+        el.notesList.querySelectorAll('.btn-delete-row').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                deleteNoteById(btn.getAttribute('data-id'));
+            });
+        });
+        el.notesList.querySelectorAll('.btn-collapse').forEach((btn) => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                expandedNoteId = '';
+                renderNotes();
+            });
+        });
+    }
+
+    function showDraft(summary, sourceText, noteId) {
+        draftSourceText = sourceText || '';
+        el.draftNoteId.value = noteId || '';
+        el.draftSummary.value = summary || '';
+        el.draftSourceView.textContent = draftSourceText;
+        el.draftSection.classList.remove('hidden');
+        el.draftSummaryErr.classList.add('hidden');
+        el.draftMsg.textContent = '';
+        sourceExpanded = false;
+        el.draftSourceView.classList.add('hidden');
+        el.btnToggleSource.textContent = '展開原文';
+        try { el.draftSummary.focus(); } catch (e) { /* ignore */ }
+        try { el.draftSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) { /* ignore */ }
+    }
+
+    /** 內部清草稿：不檢查 busy（刪除路徑必須能清掉已開草稿） */
+    function resetDraftUi() {
+        el.draftSection.classList.add('hidden');
+        el.draftNoteId.value = '';
+        el.draftSummary.value = '';
+        draftSourceText = '';
+        el.draftSourceView.textContent = '';
+        el.draftMsg.textContent = '';
+        el.draftSummaryErr.classList.add('hidden');
+        sourceExpanded = false;
+        el.draftSourceView.classList.add('hidden');
+        el.btnToggleSource.textContent = '展開原文';
+        const privateRadio = document.querySelector('input[name="linkType"][value="private"]');
+        if (privateRadio) privateRadio.checked = true;
+        syncLinkIdVisibility();
+    }
+
+    function clearDraft() {
+        if (busy) {
+            notify('正在處理中，請稍候', 'info');
+            return;
+        }
+        resetDraftUi();
+    }
+
+    function loadNoteIntoDraft(noteId) {
+        if (busy) {
+            notify('正在處理中，請稍候再改', 'info');
+            return;
+        }
+        const n = notesCache.find((x) => x.noteId === noteId);
+        if (!n) {
+            notify('找不到這筆摘記，請重新整理', 'error');
+            return;
+        }
+        el.composeSource.value = n.sourceText || '';
+        const lt = n.linkType || 'private';
+        const radio = document.querySelector(`input[name="linkType"][value="${lt}"]`);
+        if (radio) radio.checked = true;
+        el.draftLinkId.value = n.linkId || '';
+        syncLinkIdVisibility();
+        showDraft(n.summary, n.sourceText, n.noteId);
+    }
+
+    async function loadNotes() {
+        el.notesList.innerHTML = '';
+        el.notesEmpty.classList.add('hidden');
+        el.notesSkeleton.classList.remove('hidden');
+        setStatus('更新中', 'is-busy');
+        try {
+            const res = await fetchNotesGet({
+                action: 'director_transcript_notes',
+                mode: 'list',
+                operatorId: operatorId,
+                userId: operatorId
+            });
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || '讀取摘記失敗');
+            }
+            notesCache = Array.isArray(res.data) ? res.data : [];
+            renderNotes();
+            setStatus(LOCAL_DEMO ? '本地演示' : '', LOCAL_DEMO ? 'is-ok' : '');
+        } catch (e) {
+            el.notesSkeleton.classList.add('hidden');
+            el.notesEmpty.classList.remove('hidden');
+            el.notesEmpty.textContent = (e && e.message) || '讀取失敗，請按「重新整理」再試';
+            setStatus('讀取失敗', 'is-err');
+            notify(el.notesEmpty.textContent, 'error');
+        }
+    }
+
+    async function runSummarize() {
+        if (busy) return;
+        const source = el.composeSource.value.trim();
+        if (!source) {
+            el.composeSourceErr.textContent = '請貼上對話或文字';
+            el.composeSourceErr.classList.remove('hidden');
+            el.composeSource.focus();
+            return;
+        }
+        el.composeSourceErr.classList.add('hidden');
+        el.composeErr.classList.add('hidden');
+        el.composeErr.textContent = '';
+
+        busy = true;
+        el.btnSummarize.disabled = true;
+        el.composeBusy.classList.remove('hidden');
+        setStatus('整理中', 'is-busy');
+
+        try {
+            const res = await postNotes({
+                action: 'director_transcript_notes',
+                op: 'summarize',
+                operatorId: operatorId,
+                userId: operatorId,
+                sourceText: source,
+                // 正式站不開啟發式；localDemo 後端不會打到，前端 demo 自處理
+                allowHeuristicFallback: LOCAL_DEMO ? '1' : '0'
+            });
+            if (!res || !res.success) {
+                throw new Error((res && res.message) || '整理失敗，原文還在可重試');
+            }
+            const summary = (res.data && res.data.summary) || '';
+            const src = (res.data && res.data.sourceText) || source;
+            el.draftNoteId.value = '';
+            showDraft(summary, src, '');
+            notify(res.message || '已整理', 'success');
+            setStatus('已整理', 'is-ok');
+        } catch (e) {
+            const msg = (e && e.message) || '整理失敗，原文還在可重試';
+            el.composeErr.textContent = msg;
+            el.composeErr.classList.remove('hidden');
+            notify(msg, 'error');
+            setStatus('整理失敗', 'is-err');
+        } finally {
+            busy = false;
+            el.btnSummarize.disabled = false;
+            el.composeBusy.classList.add('hidden');
+        }
+    }
+
+    async function saveDraft() {
+        if (busy) return;
+        const summary = el.draftSummary.value.trim();
+        if (!summary) {
+            el.draftSummaryErr.textContent = '請填寫一行摘要';
+            el.draftSummaryErr.classList.remove('hidden');
+            el.draftSummary.focus();
+            return;
+        }
+        el.draftSummaryErr.classList.add('hidden');
+        const source = draftSourceText || el.composeSource.value.trim();
+        if (!source) {
+            notify('缺少原文，請重新貼上並產生摘要', 'error');
+            return;
+        }
+        const linkType = selectedLinkType();
+        const linkId = el.draftLinkId.value.trim();
+        if (linkType !== 'private' && !linkId) {
+            notify(linkType === 'project' ? '請填專案編號' : '請填員工編號或 UID', 'error');
+            return;
+        }
+
+        const noteId = el.draftNoteId.value.trim();
+        busy = true;
+        el.btnSaveDraft.disabled = true;
+        el.btnSaveDraft.textContent = '處理中…';
+        el.draftMsg.textContent = '處理中，請稍候';
+        el.draftMsg.className = 'text-sm text-indigo-700 min-h-[1.25rem]';
+        setStatus('處理中', 'is-busy');
+
+        const payload = {
+            action: 'director_transcript_notes',
+            op: noteId ? 'update' : 'create',
+            operatorId: operatorId,
+            userId: operatorId,
+            userName: operatorName,
+            summary: summary,
+            sourceText: source,
+            linkType: linkType,
+            linkId: linkType === 'private' ? '' : linkId
+        };
+        if (noteId) payload.noteId = noteId;
+
+        try {
+            const res = await postNotes(payload);
+            if (!res || !res.success) {
+                throw new Error((res && res.message) || '存檔失敗，請再試一次');
+            }
+            el.draftMsg.textContent = res.message || '已存進筆記本';
+            el.draftMsg.className = 'text-sm text-emerald-700 min-h-[1.25rem]';
+            notify(res.message || '已存進筆記本', 'success');
+            resetDraftUi();
+            el.composeSource.value = '';
+            await loadNotes();
+            if (res.data && res.data.noteId) {
+                expandedNoteId = res.data.noteId;
+                renderNotes();
+            }
+            setStatus('已存', 'is-ok');
+        } catch (e) {
+            el.draftMsg.textContent = (e && e.message) || '存檔失敗，請再試一次';
+            el.draftMsg.className = 'text-sm text-red-600 min-h-[1.25rem]';
+            notify(el.draftMsg.textContent, 'error');
+            setStatus('存檔失敗', 'is-err');
+        } finally {
+            busy = false;
+            el.btnSaveDraft.disabled = false;
+            el.btnSaveDraft.textContent = '存進筆記本';
+        }
+    }
+
+    async function deleteNoteById(noteId) {
+        if (!noteId || busy) return;
+        if (!window.confirm('確定刪除這筆摘記？刪除後列表就看不到了。')) return;
+        busy = true;
+        setStatus('處理中', 'is-busy');
+        try {
+            const res = await postNotes({
+                action: 'director_transcript_notes',
+                op: 'delete',
+                operatorId: operatorId,
+                userId: operatorId,
+                noteId: noteId
+            });
+            if (!res || !res.success) throw new Error((res && res.message) || '刪除失敗，請再試一次');
+            notify(res.message || '已刪除', 'success');
+            // 刪除進行中 busy=true；必須用內部清草稿，避免 clearDraft 被擋、畫面留已刪內容再 update
+            if (el.draftNoteId.value === noteId) {
+                resetDraftUi();
+                el.composeSource.value = '';
+            }
+            expandedNoteId = '';
+            await loadNotes();
+            setStatus('已刪除', 'is-ok');
+        } catch (e) {
+            notify((e && e.message) || '刪除失敗，請再試一次', 'error');
+            setStatus('刪除失敗', 'is-err');
+        } finally {
+            busy = false;
+        }
+    }
+
+    function wireHash(id, hash) {
+        const a = document.getElementById(id);
+        if (!a) return;
+        a.addEventListener('click', (ev) => {
+            if (window.parent && window.parent !== window) {
+                ev.preventDefault();
+                window.parent.location.hash = hash;
+            }
+        });
+    }
+
+    function boot() {
+        wireHash('link-hr', '#/director-hr-notes');
+        wireHash('link-project', '#/director-project-notes');
+        wireHash('link-party', '#/director-party-notes');
+        wireHash('link-decision', '#/director-decision-notes');
+        wireHash('link-followup', '#/director-followup-notes');
+
+        document.querySelectorAll('input[name="linkType"]').forEach((r) => {
+            r.addEventListener('change', syncLinkIdVisibility);
+        });
+        syncLinkIdVisibility();
+
+        if (!LOCAL_DEMO && permission < MIN_PERM) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '只有總監／高權限可以使用對話摘記。若您應有權限，請從主控台重新進入。';
+            setStatus('');
+            return;
+        }
+        if (!LOCAL_DEMO && !operatorId) {
+            el.denied.classList.remove('hidden');
+            el.deniedMsg.textContent = '找不到登入身分。請從主控台進入本頁，不要直接開網址。';
+            setStatus('');
+            return;
+        }
+        el.main.classList.remove('hidden');
+        loadNotes();
+        el.btnSummarize.addEventListener('click', runSummarize);
+        el.btnSaveDraft.addEventListener('click', saveDraft);
+        el.btnClearDraft.addEventListener('click', clearDraft);
+        el.btnReload.addEventListener('click', () => loadNotes());
+        el.btnToggleSource.addEventListener('click', () => {
+            sourceExpanded = !sourceExpanded;
+            el.draftSourceView.classList.toggle('hidden', !sourceExpanded);
+            el.btnToggleSource.textContent = sourceExpanded ? '收合原文' : '展開原文';
+        });
+    }
+
+    boot();
+</script>
+</body>
+</html>

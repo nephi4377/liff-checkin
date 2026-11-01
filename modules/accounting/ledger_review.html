@@ -9,7 +9,7 @@
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
   <script src="../../shared/js/accounting_tax_mode.js?v=10"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=105"></script>
+  <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
@@ -1973,6 +1973,10 @@
             emptyHint = '目前篩選下沒有已標示「錯誤記帳」的請款。可改審核狀態為「全部」，或到「歷史記帳」確認是否已標示。';
           }
           box.innerHTML = '<p class="sub">' + emptyHint + '</p>';
+        } else if (data.truncated && data.empty_hint) {
+          setMsg(data.empty_hint);
+        } else if (data.truncated) {
+          setMsg('列表較長，已先顯示較新的 ' + listItems.length + ' 筆。可改「待審」或加關鍵字。');
         }
         updateBulkBar();
       }

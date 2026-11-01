@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { buildLayout3DDescriptor, openingAssociatesWithWall, openingCutsWall } from './LP_3D_scene.js';
 import {
     WALK_BODY_RADIUS_CM,
@@ -10,10 +11,12 @@ import {
     moveWithWalkCollision,
     openingSpanOnEdge,
     partitionSegmentToObb,
+    partitionRotationY,
     pushCircleOffObb,
     resolveWalkBodyRadiusCm,
     resolveWalkPosition,
     resolveWalkSpawnXZ,
+    resolveOpeningCutterCenterOnWall,
     WALK_SPAWN_NUDGE_CABINET_MAX_EXTENT_CM,
 } from './LP_3D_walk_collision.js';
 
@@ -71,6 +74,40 @@ function layoutRoomWithDoorAndWindow() {
         ],
     };
 }
+
+describe('resolveOpeningCutterCenterOnWall', () => {
+    it('旋轉門中心在室內時，CSG 中心落在牆內圈邊（SWEEP-2 B6）', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [{
+                id: 'w1',
+                type: 'wall',
+                thickness: 15,
+                points: [
+                    { x: 300, y: 300 },
+                    { x: 900, y: 300 },
+                    { x: 900, y: 800 },
+                    { x: 300, y: 800 },
+                ],
+            }],
+            placedCabinets: [{
+                id: 'door-rot',
+                x: 500,
+                y: 312,
+                rotation: 90,
+                currentW: 90,
+                currentH: 15,
+                data: { name: '房門', group: '門窗工程', width: 90, depth: 15 },
+            }],
+        });
+        const wall = desc.walls[0];
+        const door = desc.fixtures.find((f) => f.kind === 'door');
+        const cut = resolveOpeningCutterCenterOnWall(wall, door);
+        expect(openingCutsWall(wall, door)).toBe(true);
+        expect(Math.abs(cut.centerZ - wall.inner[0].z)).toBeLessThan(12);
+        expect(Math.abs(cut.centerX - door.centerX)).toBeLessThan(50);
+    });
+});
 
 describe('buildWallInnerCollisionSegments', () => {
     it('門洞區段不產生牆碰撞線，窗洞仍保留', () => {
@@ -168,6 +205,28 @@ describe('buildWallInnerCollisionSegments', () => {
 });
 
 describe('fixture OBB 與隔間牆', () => {
+    it('partitionRotationY：+45° 段以真實 Object3D 將局部 +X 對齊段向', () => {
+        const obb = partitionSegmentToObb(100, 200, 300, 400, 15);
+        const mesh = new THREE.Object3D();
+        mesh.rotation.y = partitionRotationY(obb);
+        const localX = new THREE.Vector3(1, 0, 0);
+        localX.applyQuaternion(mesh.quaternion);
+        expect(localX.x).toBeCloseTo(0.7071, 3);
+        expect(localX.y).toBeCloseTo(0, 5);
+        expect(localX.z).toBeCloseTo(0.7071, 3);
+        expect(obb.halfW).toBeCloseTo(Math.hypot(200, 200) / 2, 5);
+    });
+
+    it('partitionRotationY：−45° 段局部 +X 方向', () => {
+        const obb = partitionSegmentToObb(0, 0, 200, -200, 15);
+        const mesh = new THREE.Object3D();
+        mesh.rotation.y = partitionRotationY(obb);
+        const localX = new THREE.Vector3(1, 0, 0);
+        localX.applyQuaternion(mesh.quaternion);
+        expect(localX.x).toBeCloseTo(0.7071, 3);
+        expect(localX.z).toBeCloseTo(-0.7071, 3);
+    });
+
     it('櫃體 OBB 依寬深與旋轉阻擋（非固定 20cm 圓）', () => {
         const desc = buildLayout3DDescriptor({
             workspaceSize: 2000,

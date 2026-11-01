@@ -14,6 +14,11 @@ function assert(cond, msg) {
 
 var navJs = fs.readFileSync(path.join(shared, 'js/accounting_nav.js'), 'utf8');
 var css = fs.readFileSync(path.join(shared, 'css/accounting_layout.css'), 'utf8');
+var navVer = cacheBust.extractCacheBustVer(
+  fs.readFileSync(path.join(root, 'payment_request.html'), 'utf8'),
+  cacheBust.RE.accountingNav
+);
+assert(navVer, 'reference page has accounting_nav cache bust');
 
 assert(navJs.indexOf('querySelectorAll(\'.nav, #userLine') < 0, 'must not wholesale hide .nav');
 assert(navJs.indexOf('acct-nav-back') >= 0, 'embed chrome respects acct-nav-back');

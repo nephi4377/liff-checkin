@@ -141,11 +141,13 @@ var AccountingShell = (function () {
         bustQuickReviewListCache_();
       }
       if (attr === src) {
-        // 同 URL 瀏覽器可能不重載：先 blank 再設回
+        // 同 URL 瀏覽器可能不重載：先 blank 再設回（雙 rAF 降低 LINE WebView 卡空白）
         frameEl.setAttribute('src', 'about:blank');
-        setTimeout(function () {
-          if (currentPage === page) frameEl.setAttribute('src', src);
-        }, 0);
+        requestAnimationFrame(function () {
+          requestAnimationFrame(function () {
+            if (currentPage === page) frameEl.setAttribute('src', src);
+          });
+        });
       } else {
         frameEl.setAttribute('src', src);
       }
