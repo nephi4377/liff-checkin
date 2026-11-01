@@ -62,6 +62,14 @@ var CustomerFinanceUi = (function () {
     return failMsg;
   }
 
+  function humanReceiptConfirmFail(errOrMsg) {
+    var fallback = '這次沒送到，還沒幫您記下確認。請再按一次。這不代表款項有問題。';
+    if (typeof RecConfirmFail !== 'undefined' && RecConfirmFail.humanReceiptConfirmFail) {
+      return RecConfirmFail.humanReceiptConfirmFail(errOrMsg);
+    }
+    return humanCustomerFail(errOrMsg, fallback);
+  }
+
   function runBtnAsync(btn, fn, opts) {
     opts = opts || {};
     if (btn && (btn.disabled || btn.getAttribute('aria-busy') === 'true')) {
@@ -85,6 +93,7 @@ var CustomerFinanceUi = (function () {
   return {
     runBtnAsync: runBtnAsync,
     applyBtnBusy: applyBtnBusy,
-    humanCustomerFail: humanCustomerFail
+    humanCustomerFail: humanCustomerFail,
+    humanReceiptConfirmFail: humanReceiptConfirmFail
   };
 })();
