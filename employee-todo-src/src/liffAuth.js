@@ -2,6 +2,7 @@ import {
   missingEmployeeTodoLiffMessage,
   resolveEmployeeTodoLiffId,
 } from './config.js';
+import { isEmployeeTodoPreviewMode } from './localDev.js';
 import { waitForLiffSdk } from './liffSdk.js';
 import {
   buildEmployeeTodoLoginRedirectUri,
@@ -17,8 +18,7 @@ export async function ensureLiffSession() {
     return { idToken: TEST_TOKEN, displayName: '測試員', loggedIn: true };
   }
 
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('preview') === '1') {
+  if (isEmployeeTodoPreviewMode()) {
     return {
       idToken: TEST_TOKEN,
       displayName: '預覽模式（不寫入正式資料）',
@@ -61,7 +61,7 @@ export async function ensureLiffSession() {
 
 export async function refreshIdToken() {
   if (import.meta.env?.MODE === 'test' || import.meta.env?.VITEST) return TEST_TOKEN;
-  if (new URLSearchParams(window.location.search).get('preview') === '1') return '';
+  if (isEmployeeTodoPreviewMode()) return TEST_TOKEN;
   if (!resolveEmployeeTodoLiffId()) return '';
   await waitForLiffSdk().catch(() => null);
   const liff = window.liff;

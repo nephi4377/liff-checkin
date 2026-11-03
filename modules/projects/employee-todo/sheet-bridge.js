@@ -1,7 +1,8 @@
 /**
  * Mantle UI → Google Sheet（project-console todo_*）資料橋。
  * 攔截 mantledb.sh fetch；不寫回 Mantle。
- * ?preview=1／?demo=1：本機示範文件，不打 GAS。
+ * ?preview=1／?demo=1：僅 localhost 示範，不打 GAS。
+ * 正式站：LIFF 登入後 todo_list 成功才回傳清單（CONSOLE-REVIEW-3 精神）。
  */
 (function employeeTodoSheetBridge() {
   'use strict';
@@ -11,6 +12,7 @@
   var LIFF_ID = '2007974938-U374uwei';
   var CACHE_KEY = 'employee-todo-sheet-bridge-v1';
   var MANTLE_HOST = 'mantledb.sh';
+  var LIFF_TOKEN_SKEW_SEC = 60;
   /** Mantle 內建示範單：未登入／空文件時必須 tombstone，否則會看起來像「又變回舊版」 */
   var MANTLE_SEED_DELETED_IDS = [
     'task-ende-751-putu',
@@ -24,8 +26,48 @@
 
   var lastRemote = null;
   var liffReady = null;
+  var sessionListVerified = false;
+
+  function isLocalhost() {
+    try {
+      var h = window.location.hostname;
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function decodeJwtPayload(token) {
+    try {
+      if (!token) return null;
+      var parts = String(token).split('.');
+      if (parts.length < 2) return null;
+      var b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (b64.length % 4) b64 += '=';
+      var json = decodeURIComponent(
+        Array.prototype.map
+          .call(atob(b64), function (c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          })
+          .join(''),
+      );
+      return JSON.parse(json);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function isTokenFresh(token) {
+    if (!token) return false;
+    var payload = decodeJwtPayload(token);
+    if (!payload || payload.exp == null) return false;
+    var expSec = parseInt(payload.exp, 10) || 0;
+    if (!expSec) return false;
+    return expSec > Math.floor(Date.now() / 1000) + LIFF_TOKEN_SKEW_SEC;
+  }
 
   function isPreview() {
+    if (!isLocalhost()) return false;
     try {
       var q = new URLSearchParams(window.location.search);
       return q.get('preview') === '1' || q.get('demo') === '1';
@@ -264,40 +306,10 @@
     return u.href.split('#')[0];
   }
 
-  /** 外開瀏覽器勿自動導向 LINE Login（否則整頁被蓋掉，看起來像「沒有變」） */
-  function showLoginHint() {
-    if (document.getElementById('et-sheet-login-hint')) return;
-    function mount() {
-      if (document.getElementById('et-sheet-login-hint')) return;
-      var el = document.createElement('button');
-      el.id = 'et-sheet-login-hint';
-      el.type = 'button';
-      el.textContent = '用 LINE 登入同步試算表';
-      el.setAttribute(
-        'style',
-        'position:fixed;z-index:40;left:50%;top:max(.65rem,env(safe-area-inset-top));' +
-          'transform:translateX(-50%);border:0;border-radius:999px;padding:.55rem 1rem;' +
-          'font:700 .82rem/1 "Noto Sans TC",sans-serif;color:#fff;background:#06c755;' +
-          'box-shadow:0 6px 18px #00000033;cursor:pointer;max-width:min(92vw,22rem);',
-      );
-      el.addEventListener('click', function () {
-        if (!window.liff || typeof window.liff.login !== 'function') {
-          window.alert('LINE 登入尚未就緒，請稍後再試或用 LINE 內建瀏覽器開啟');
-          return;
-        }
-        window.liff.login({ redirectUri: buildLoginRedirectUri() });
-      });
-      document.body.appendChild(el);
-      try {
-        document.documentElement.style.setProperty('--et-login-hint-pad', '3.25rem');
-        if (document.body) {
-          document.body.style.paddingTop =
-            'max(3.25rem, calc(env(safe-area-inset-top) + 2.6rem))';
-        }
-      } catch (e) {}
-    }
-    if (document.body) mount();
-    else document.addEventListener('DOMContentLoaded', mount);
+  function triggerLiffLogin() {
+    if (!window.liff || typeof window.liff.login !== 'function') return false;
+    window.liff.login({ redirectUri: buildLoginRedirectUri() });
+    return true;
   }
 
   function waitForLiff() {
@@ -305,41 +317,37 @@
     if (liffReady) return liffReady;
     liffReady = new Promise(function (resolve) {
       var tries = 0;
+      function finish(token) {
+        resolve(token || null);
+      }
       function tick() {
         tries += 1;
         if (window.liff && typeof window.liff.init === 'function') {
           window.liff
             .init({ liffId: LIFF_ID })
             .then(function () {
-              if (window.liff.isLoggedIn()) {
-                var hint = document.getElementById('et-sheet-login-hint');
-                if (hint) hint.remove();
-                try {
-                  if (document.body) document.body.style.paddingTop = '';
-                } catch (e) {}
-                resolve(window.liff.getIDToken() || null);
+              if (!window.liff.isLoggedIn()) {
+                triggerLiffLogin();
+                finish(null);
                 return;
               }
-              // 已在 LINE App 內可自動登入；外開只顯示按鈕，不整頁跳轉
-              var inClient =
-                typeof window.liff.isInClient === 'function' && window.liff.isInClient();
-              if (inClient) {
-                window.liff.login({ redirectUri: buildLoginRedirectUri() });
-                resolve(null);
+              var token = window.liff.getIDToken() || '';
+              if (!isTokenFresh(token)) {
+                triggerLiffLogin();
+                finish(null);
                 return;
               }
-              showLoginHint();
-              resolve(null);
+              finish(token);
             })
-            .catch(function () {
-              showLoginHint();
-              resolve(null);
+            .catch(function (err) {
+              console.warn('[employee-todo bridge] liff.init', err);
+              triggerLiffLogin();
+              finish(null);
             });
           return;
         }
         if (tries > 80) {
-          showLoginHint();
-          resolve(null);
+          finish(null);
           return;
         }
         setTimeout(tick, 50);
@@ -347,6 +355,19 @@
       tick();
     });
     return liffReady;
+  }
+
+  /** 每次 POST 前重新取 token（過期則導向 login） */
+  function requireFreshToken() {
+    if (isPreview()) return Promise.resolve(null);
+    try {
+      if (window.liff && window.liff.isLoggedIn && window.liff.isLoggedIn()) {
+        var live = window.liff.getIDToken() || '';
+        if (isTokenFresh(live)) return Promise.resolve(live);
+      }
+    } catch (e) {}
+    liffReady = null;
+    return waitForLiff();
   }
 
   function clientRoleFromUrl() {
@@ -362,6 +383,9 @@
 
   function postGas(body) {
     var payload = Object.assign({}, body);
+    if (!isPreview() && !payload.liff_id_token) {
+      return Promise.reject(new Error('缺少 liff_id_token'));
+    }
     var cr = clientRoleFromUrl();
     if (cr && !payload.clientRole) payload.clientRole = cr;
     return fetch(GAS_WEB_APP_URL, {
@@ -494,33 +518,30 @@
     });
   }
 
+  function authBlockedDoc(message) {
+    var doc = withSeedTombstones(emptyDoc());
+    doc.authRequired = true;
+    if (message) doc.authMessage = message;
+    return doc;
+  }
+
   async function handlePull() {
     if (isPreview()) {
       var local = withSeedTombstones(loadCache() || previewDoc());
       lastRemote = JSON.parse(JSON.stringify(local));
       return jsonResponse(local);
     }
-    var cached = loadCache();
-    var token = await waitForLiff();
+    var token = await requireFreshToken();
     if (!token) {
-      // 未登入：絕不能回「空 deletedIds」，否則 Mantle 會灌回 751 補土等舊種子
-      if (cached) {
-        var safeCached = withSeedTombstones(cached);
-        lastRemote = JSON.parse(JSON.stringify(safeCached));
-        return jsonResponse(safeCached);
-      }
-      return jsonResponse(emptyDoc());
+      return jsonResponse(authBlockedDoc('請先以 LINE 登入'), 401);
     }
     try {
       var doc = withSeedTombstones(await pullFromSheet(token));
+      sessionListVerified = true;
       return jsonResponse(doc);
     } catch (e) {
-      if (cached) {
-        var safeErr = withSeedTombstones(cached);
-        lastRemote = JSON.parse(JSON.stringify(safeErr));
-        return jsonResponse(safeErr);
-      }
-      return jsonResponse(emptyDoc(), 200);
+      var msg = (e && e.message) || '無法載入待辦';
+      return jsonResponse(authBlockedDoc(msg), sessionListVerified ? 200 : 401);
     }
   }
 
@@ -538,11 +559,9 @@
       saveCache(next);
       return jsonResponse({ ok: true });
     }
-    var token = await waitForLiff();
+    var token = await requireFreshToken();
     if (!token) {
-      // 無 token：只存本機，不碰 Sheet／Mantle
-      saveCache(next);
-      return jsonResponse({ ok: true });
+      return jsonResponse({ ok: false, message: '請先 LINE 登入' }, 401);
     }
     try {
       await applyPushDiff(lastRemote || loadCache(), next, token);
@@ -571,6 +590,7 @@
 
   window.__employeeTodoSheetBridge = {
     isPreview: isPreview,
+    isLocalhost: isLocalhost,
     cacheKey: CACHE_KEY,
   };
 })();

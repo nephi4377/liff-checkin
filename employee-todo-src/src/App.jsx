@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildAuthPayload, postTodoAction } from './api.js';
-import { readDocumentCache, writeDocumentCache } from './documentCache.js';
+import { writeDocumentCache } from './documentCache.js';
 import { ensureLiffSession, refreshIdToken } from './liffAuth.js';
 import { resolveRoleFromLocation, roleLabel } from './role.js';
 import { startSyncLoop } from './sync.js';
@@ -15,18 +15,7 @@ export default function App() {
   const [newAssignee, setNewAssignee] = useState('ops-ende');
   const [listAwaitingFetch, setListAwaitingFetch] = useState(true);
 
-  useEffect(() => {
-    const cached = readDocumentCache(role);
-    if (cached) {
-      setDoc({
-        tasks: cached.tasks || [],
-        officeTasks: cached.officeTasks || [],
-        assigners: cached.assigners || [],
-        updatedAt: cached.updatedAt || 0,
-      });
-      setListAwaitingFetch(false);
-    }
-  }, [role]);
+  // 待辦清單須等後端 todo_list 驗證 token 後才顯示（不先灌快取）
 
   const loadDocument = useCallback(async () => {
     const token = await refreshIdToken();

@@ -22,4 +22,4 @@ npm test
 npm run test:e2e   # 測 modules/projects/employee-todo/（Mantle＋bridge）
 ```
 
-預覽：`?preview=1`（bridge 示範資料，不打 GAS）。
+預覽：`?preview=1` 或 `?demo=1`（**僅 localhost**；bridge 示範資料，不打 GAS）。
