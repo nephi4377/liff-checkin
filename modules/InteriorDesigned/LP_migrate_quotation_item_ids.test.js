@@ -103,10 +103,12 @@ describe('migrateDuplicateItemIdsOnly', () => {
 
     it('[X,X,X_2] 逐列佔用與解析器 assignUniqueItemIdForSheet 一致', () => {
         const rawIds = ['ITEM_Z', 'ITEM_Z', 'ITEM_Z_2'];
+        const reserved = new Set(rawIds);
         const used = new Set();
         const parserIds = rawIds.map((id) =>
-            BudgetQuoteParser.assignUniqueItemIdForSheet(used, id),
+            BudgetQuoteParser.assignUniqueItemIdForSheet(used, id, reserved),
         );
+        expect(parserIds).toEqual(['ITEM_Z', 'ITEM_Z_3', 'ITEM_Z_2']);
         const items = rawIds.map((id, i) => ({ id, name: `row${i}` }));
         const { items: migrated } = migrateDuplicateItemIdsOnly(items);
         expect(migrated.map((r) => r.id)).toEqual(parserIds);
