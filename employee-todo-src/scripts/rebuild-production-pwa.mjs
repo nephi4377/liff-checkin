@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const PROD = join(__dir, '../../modules/projects/employee-todo');
-const BUILD = process.env.ET_BUILD || '20261103b';
+const BUILD = process.env.ET_BUILD || '20261103c';
 
 const PRECACHE = [
   'registerSW.js',
