@@ -309,6 +309,65 @@
     return u.href.split('#')[0];
   }
 
+  function hideLoginRetry() {
+    var panel = document.getElementById('et-sheet-login-retry-panel');
+    if (panel) panel.remove();
+    try {
+      if (document.body) document.body.style.paddingTop = '';
+    } catch (e) {}
+  }
+
+  /** 一次性 login 被取消時，讓使用者手動重試並清掉 session 旗標 */
+  function showLoginRetry(hintText) {
+    if (isPreview()) return;
+    function mount() {
+      if (document.getElementById('et-sheet-login-retry-panel')) return;
+      var panel = document.createElement('div');
+      panel.id = 'et-sheet-login-retry-panel';
+      panel.setAttribute(
+        'style',
+        'position:fixed;z-index:40;left:50%;top:max(.65rem,env(safe-area-inset-top));' +
+          'transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:.45rem;' +
+          'max-width:min(92vw,22rem);pointer-events:auto;',
+      );
+      var msg = document.createElement('p');
+      msg.textContent =
+        hintText || '請用 LINE 登入後才能載入試算表上的待辦';
+      msg.setAttribute(
+        'style',
+        'margin:0;padding:0 .35rem;font:500 .78rem/1.35 "Noto Sans TC",sans-serif;color:#1e2a32;text-align:center;',
+      );
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '用 LINE 登入';
+      btn.setAttribute(
+        'style',
+        'border:0;border-radius:999px;padding:.55rem 1.1rem;' +
+          'font:700 .82rem/1 "Noto Sans TC",sans-serif;color:#fff;background:#06c755;' +
+          'box-shadow:0 6px 18px #00000033;cursor:pointer;width:100%;',
+      );
+      btn.addEventListener('click', function () {
+        clearLoginAttemptFlag();
+        liffReady = null;
+        hideLoginRetry();
+        if (!triggerLiffLogin()) {
+          showLoginRetry('若未跳轉，請再按一次或改用 LINE 內建瀏覽器開啟');
+        }
+      });
+      panel.appendChild(msg);
+      panel.appendChild(btn);
+      document.body.appendChild(panel);
+      try {
+        if (document.body) {
+          document.body.style.paddingTop =
+            'max(3.5rem, calc(env(safe-area-inset-top) + 2.8rem))';
+        }
+      } catch (e) {}
+    }
+    if (document.body) mount();
+    else document.addEventListener('DOMContentLoaded', mount);
+  }
+
   function clearLoginAttemptFlag() {
     try {
       sessionStorage.removeItem(LOGIN_ATTEMPT_KEY);
@@ -316,10 +375,13 @@
   }
 
   function triggerLiffLogin() {
-    if (!window.liff || typeof window.liff.login !== 'function') return false;
+    if (!window.liff || typeof window.liff.login !== 'function') {
+      showLoginRetry('LINE 登入尚未就緒，請稍後再按');
+      return false;
+    }
     try {
       if (sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === '1') {
-        console.warn('[employee-todo bridge] login already attempted this session');
+        showLoginRetry('登入未完成，請再按下方按鈕');
         return false;
       }
       sessionStorage.setItem(LOGIN_ATTEMPT_KEY, '1');
@@ -344,26 +406,31 @@
             .then(function () {
               if (!window.liff.isLoggedIn()) {
                 triggerLiffLogin();
+                showLoginRetry();
                 finish(null);
                 return;
               }
               var token = window.liff.getIDToken() || '';
               if (!isTokenFresh(token)) {
                 triggerLiffLogin();
+                showLoginRetry('登入已過期，請重新登入');
                 finish(null);
                 return;
               }
               clearLoginAttemptFlag();
+              hideLoginRetry();
               finish(token);
             })
             .catch(function (err) {
               console.warn('[employee-todo bridge] liff.init', err);
               triggerLiffLogin();
+              showLoginRetry('無法初始化 LINE 登入');
               finish(null);
             });
           return;
         }
         if (tries > 80) {
+          showLoginRetry('LINE 登入元件載入逾時');
           finish(null);
           return;
         }
@@ -561,6 +628,7 @@
     var token = await requireFreshToken();
     if (!token) {
       savesBlocked = true;
+      showLoginRetry();
       return jsonResponse(authBlockedDoc('請先以 LINE 登入'), 401);
     }
     try {

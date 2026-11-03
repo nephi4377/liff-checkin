@@ -11,6 +11,7 @@
 | 工務自建 | `?role=ende`／`ayong` 可「＋ 新增工作」；來源＝`工務自建`（派自）；確認後鎖定，點「編輯」才改（僅自建） |
 | 派工 | 任務卡只讀顯示「工務說明」；誰派的／限期等亦需點「編輯」才改 |
 | 預覽 | `?preview=1`／`?demo=1` **僅 localhost**，示範資料不打 GAS |
-| 換包標記 | `et-build=20261103a`；資產 `?v=20261103a` |
+| 登入取消 | 頂部 **「用 LINE 登入」** 可清一次性旗標並重試 |
+| 換包標記 | **`et-build=20261103b`**；改 bridge 後跑 `npm run build:pwa --prefix employee-todo-src` |
 
 正式舊站 `/employee-todo/` 仍為 Mantle 只讀回滾；勿對 Mantle POST。

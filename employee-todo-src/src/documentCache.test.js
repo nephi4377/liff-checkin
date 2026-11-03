@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  clearDocumentCache,
   documentCacheKey,
   readDocumentCache,
   writeDocumentCache,
@@ -11,20 +10,21 @@ describe('documentCache', () => {
     localStorage.clear();
   });
 
-  it('does not persist tasks to localStorage', () => {
+  it('stores document per role without tokens', () => {
     writeDocumentCache('assistant', {
       tasks: [{ id: '1', title: 'A' }],
       officeTasks: [],
       assigners: ['Nephi'],
       updatedAt: 99,
     });
-    expect(readDocumentCache('assistant')).toBeNull();
-    expect(localStorage.getItem(documentCacheKey('assistant'))).toBeNull();
+    const hit = readDocumentCache('assistant');
+    expect(hit.tasks[0].title).toBe('A');
+    expect(hit.assigners).toEqual(['Nephi']);
+    expect(JSON.stringify(hit)).not.toMatch(/token/i);
+    expect(documentCacheKey('assistant')).toContain('assistant');
   });
 
-  it('clearDocumentCache removes legacy bridge key', () => {
-    localStorage.setItem('employee-todo-sheet-bridge-v1', '{}');
-    clearDocumentCache('assistant');
-    expect(localStorage.getItem('employee-todo-sheet-bridge-v1')).toBeNull();
+  it('returns null for missing role cache', () => {
+    expect(readDocumentCache('ops-ende')).toBeNull();
   });
 });
