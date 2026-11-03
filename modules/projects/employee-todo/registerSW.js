@@ -1,7 +1,7 @@
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
-      .register('./sw.js?v=20261029g', { scope: './' })
+      .register('./sw.js?v=20261103b', { scope: './' })
       .then((reg) => {
         reg.update();
         if (reg.waiting) {

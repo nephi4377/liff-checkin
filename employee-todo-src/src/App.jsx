@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { buildAuthPayload, postTodoAction } from './api.js';
-import { writeDocumentCache } from './documentCache.js';
 import { ensureLiffSession, refreshIdToken } from './liffAuth.js';
 import { resolveRoleFromLocation, roleLabel } from './role.js';
 import { startSyncLoop } from './sync.js';
@@ -28,7 +27,6 @@ export default function App() {
       updatedAt: data.updatedAt || 0,
     };
     setDoc(next);
-    writeDocumentCache(role, next);
     setListAwaitingFetch(false);
     setSyncState({ status: 'ok', lastAt: Date.now(), error: '' });
   }, [role]);

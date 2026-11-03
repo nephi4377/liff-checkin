@@ -10,7 +10,8 @@
   var GAS_WEB_APP_URL =
     'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec';
   var LIFF_ID = '2007974938-U374uwei';
-  var CACHE_KEY = 'employee-todo-sheet-bridge-v1';
+  var LEGACY_CACHE_KEY = 'employee-todo-sheet-bridge-v1';
+  var LOGIN_ATTEMPT_KEY = 'et-liff-login-attempt-v1';
   var MANTLE_HOST = 'mantledb.sh';
   var LIFF_TOKEN_SKEW_SEC = 60;
   /** Mantle 內建示範單：未登入／空文件時必須 tombstone，否則會看起來像「又變回舊版」 */
@@ -27,6 +28,24 @@
   var lastRemote = null;
   var liffReady = null;
   var sessionListVerified = false;
+  var savesBlocked = false;
+
+  function purgeLegacyTaskCache() {
+    try {
+      localStorage.removeItem(LEGACY_CACHE_KEY);
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i += 1) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf('employee-todo-doc-v1:') === 0) keys.push(k);
+      }
+      keys.forEach(function (k) {
+        localStorage.removeItem(k);
+      });
+    } catch (e) {
+      /* ignore */
+    }
+  }
+  purgeLegacyTaskCache();
 
   function isLocalhost() {
     try {
@@ -226,24 +245,8 @@
     };
   }
 
-  function loadCache() {
-    try {
-      var raw = localStorage.getItem(CACHE_KEY);
-      if (!raw) return null;
-      var data = JSON.parse(raw);
-      if (!data || !Array.isArray(data.tasks)) return null;
-      return data;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function saveCache(doc) {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(doc));
-    } catch (e) {
-      /* ignore */
-    }
+  function saveCache(_doc) {
+    /* tasks 不再寫 localStorage */
   }
 
   function jsonResponse(obj, status) {
@@ -306,8 +309,21 @@
     return u.href.split('#')[0];
   }
 
+  function clearLoginAttemptFlag() {
+    try {
+      sessionStorage.removeItem(LOGIN_ATTEMPT_KEY);
+    } catch (e) {}
+  }
+
   function triggerLiffLogin() {
     if (!window.liff || typeof window.liff.login !== 'function') return false;
+    try {
+      if (sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === '1') {
+        console.warn('[employee-todo bridge] login already attempted this session');
+        return false;
+      }
+      sessionStorage.setItem(LOGIN_ATTEMPT_KEY, '1');
+    } catch (e) {}
     window.liff.login({ redirectUri: buildLoginRedirectUri() });
     return true;
   }
@@ -337,6 +353,7 @@
                 finish(null);
                 return;
               }
+              clearLoginAttemptFlag();
               finish(token);
             })
             .catch(function (err) {
@@ -525,23 +542,36 @@
     return doc;
   }
 
+  function pullErrorResponse(message) {
+    if (sessionListVerified && lastRemote) {
+      var stale = JSON.parse(JSON.stringify(lastRemote));
+      stale.syncError = message || '無法載入待辦';
+      stale.syncStale = true;
+      return jsonResponse(stale, 503);
+    }
+    return jsonResponse(authBlockedDoc(message), 401);
+  }
+
   async function handlePull() {
     if (isPreview()) {
-      var local = withSeedTombstones(loadCache() || previewDoc());
+      var local = withSeedTombstones(lastRemote || previewDoc());
       lastRemote = JSON.parse(JSON.stringify(local));
       return jsonResponse(local);
     }
     var token = await requireFreshToken();
     if (!token) {
+      savesBlocked = true;
       return jsonResponse(authBlockedDoc('請先以 LINE 登入'), 401);
     }
     try {
       var doc = withSeedTombstones(await pullFromSheet(token));
       sessionListVerified = true;
+      savesBlocked = false;
       return jsonResponse(doc);
     } catch (e) {
+      savesBlocked = true;
       var msg = (e && e.message) || '無法載入待辦';
-      return jsonResponse(authBlockedDoc(msg), sessionListVerified ? 200 : 401);
+      return pullErrorResponse(msg);
     }
   }
 
@@ -556,17 +586,23 @@
     if (isPreview()) {
       next.updatedAt = Date.now();
       lastRemote = JSON.parse(JSON.stringify(next));
-      saveCache(next);
       return jsonResponse({ ok: true });
+    }
+    if (savesBlocked || !sessionListVerified || !lastRemote) {
+      return jsonResponse(
+        { ok: false, message: '伺服器同步未完成，已阻擋儲存以免誤刪試算表' },
+        409,
+      );
     }
     var token = await requireFreshToken();
     if (!token) {
       return jsonResponse({ ok: false, message: '請先 LINE 登入' }, 401);
     }
     try {
-      await applyPushDiff(lastRemote || loadCache(), next, token);
+      await applyPushDiff(lastRemote, next, token);
       return jsonResponse({ ok: true });
     } catch (e) {
+      savesBlocked = true;
       return jsonResponse({ ok: false, message: String(e && e.message) }, 500);
     }
   }
@@ -591,6 +627,6 @@
   window.__employeeTodoSheetBridge = {
     isPreview: isPreview,
     isLocalhost: isLocalhost,
-    cacheKey: CACHE_KEY,
+    legacyCacheKey: LEGACY_CACHE_KEY,
   };
 })();

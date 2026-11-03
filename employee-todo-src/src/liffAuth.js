@@ -9,6 +9,28 @@ import {
 } from './liffRedirectUri.js';
 
 const TEST_TOKEN = 'test-liff-token-for-vitest';
+const LOGIN_ATTEMPT_KEY = 'et-liff-login-attempt-v1';
+
+function clearLoginAttemptFlag() {
+  try {
+    sessionStorage.removeItem(LOGIN_ATTEMPT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function triggerLoginOnce(liff, redirectUri) {
+  try {
+    if (sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === '1') {
+      return { blocked: true };
+    }
+    sessionStorage.setItem(LOGIN_ATTEMPT_KEY, '1');
+  } catch {
+    /* ignore */
+  }
+  liff.login({ redirectUri });
+  return { blocked: false };
+}
 
 /**
  * 初始化 LIFF 並取得 id token（專用派工待辦 LIFF app，非主控台 LIFF）
@@ -44,9 +66,16 @@ export async function ensureLiffSession() {
   await liff.init({ liffId });
   if (!liff.isLoggedIn()) {
     const redirectUri = buildEmployeeTodoLoginRedirectUri(window.location);
-    liff.login({ redirectUri });
-    return { idToken: '', displayName: '', loggedIn: false, pendingLogin: true };
+    const attempt = triggerLoginOnce(liff, redirectUri);
+    return {
+      idToken: '',
+      displayName: '',
+      loggedIn: false,
+      pendingLogin: !attempt.blocked,
+      loginLoopBlocked: attempt.blocked,
+    };
   }
+  clearLoginAttemptFlag();
   const idToken = liff.getIDToken();
   if (!idToken) throw new Error('無法取得 LIFF id token');
   let displayName = '';
@@ -58,6 +87,8 @@ export async function ensureLiffSession() {
   }
   return { idToken, displayName, loggedIn: true };
 }
+
+export { clearLoginAttemptFlag, LOGIN_ATTEMPT_KEY };
 
 export async function refreshIdToken() {
   if (import.meta.env?.MODE === 'test' || import.meta.env?.VITEST) return TEST_TOKEN;
