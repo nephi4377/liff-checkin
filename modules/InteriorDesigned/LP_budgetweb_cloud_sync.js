@@ -29,10 +29,322 @@ export function buildNameSpecKey(it) {
     return `${normStr(it.name)}||${normStr(it.spec)}`;
 }
 
+/** 舊解析器：ITEM_<純數字>（例 ITEM_6、ITEM_185） */
+export function isLegacyRowNumberQuotationItemId(id) {
+    return /^ITEM_\d+$/i.test(normStr(id));
+}
+
+export function inferSheetTokenFromNewItemId(id) {
+    const m = normStr(id).match(/^ITEM_([^_]+)_/i);
+    return m ? m[1] : '';
+}
+
+function inferDominantLocalSheetToken(localItems) {
+    const counts = new Map();
+    (localItems || []).forEach((it) => {
+        const s = inferSheetTokenFromNewItemId(it?.id) || normStr(it.sheet_source);
+        if (!s) return;
+        counts.set(s, (counts.get(s) || 0) + 1);
+    });
+    let best = '';
+    let max = 0;
+    counts.forEach((c, s) => {
+        if (c > max) {
+            max = c;
+            best = s;
+        }
+    });
+    return best;
+}
+
+/**
+ * 表名＋名稱＋規格＋單位（舊雲端 778／0818 對新 ITEM_0818_*）
+ * @param {object} item
+ * @param {string} [sheetFallback]
+ */
+export function buildLegacyQuotationMatchKey(item, sheetFallback = '') {
+    const sheet = normStr(
+        item?.sheet_source
+            || item?.sheet
+            || item?.sheetName
+            || sheetFallback
+            || inferSheetTokenFromNewItemId(item?.id),
+    );
+    return `${sheet}\u0001${normStr(item?.name)}\u0001${normStr(item?.spec)}\u0001${normStr(item?.unit)}`;
+}
+
+/**
+ * @param {Array<object>} localItems
+ * @param {Array<object>} remoteItems
+ */
+export function planLegacyQuotationIdRemap(localItems, remoteItems) {
+    const locals = localItems || [];
+    const remotes = remoteItems || [];
+    const legacyRemotes = remotes.filter((r) => r?.id && isLegacyRowNumberQuotationItemId(r.id));
+    if (!legacyRemotes.length) {
+        return {
+            active: false,
+            effectiveRemote: remotes,
+            matched: [],
+            unmapped: [],
+            ambiguous: [],
+            blockingErrors: [],
+            progressByLocalId: new Map(),
+            sheetFallback: '',
+        };
+    }
+
+    const sheetFallback = inferDominantLocalSheetToken(locals);
+    const localByKey = new Map();
+    locals.forEach((loc) => {
+        const key = buildLegacyQuotationMatchKey(loc, sheetFallback);
+        if (!normStr(loc?.name)) return;
+        if (!localByKey.has(key)) localByKey.set(key, []);
+        localByKey.get(key).push(loc);
+    });
+
+    const effectiveRemote = [];
+    const matched = [];
+    const unmapped = [];
+    const ambiguous = [];
+    /** @type {Map<string, object>} */
+    const progressByLocalId = new Map();
+
+    remotes.forEach((rem) => {
+        if (!rem?.id || !isLegacyRowNumberQuotationItemId(rem.id)) {
+            effectiveRemote.push(rem);
+            return;
+        }
+        const key = buildLegacyQuotationMatchKey(rem, sheetFallback);
+        const candidates = localByKey.get(key) || [];
+        if (candidates.length === 1) {
+            const localId = String(candidates[0].id);
+            matched.push({ legacyId: String(rem.id), localId, name: rem.name || '' });
+            progressByLocalId.set(localId, rem);
+            effectiveRemote.push({ ...rem, id: localId });
+        } else if (candidates.length > 1) {
+            ambiguous.push({
+                legacyId: String(rem.id),
+                name: rem.name || '',
+                localIds: candidates.map((c) => String(c.id)),
+            });
+        } else {
+            unmapped.push({ legacyId: String(rem.id), name: rem.name || '' });
+        }
+    });
+
+    const blockingErrors = [];
+    if (ambiguous.length) {
+        blockingErrors.push(
+            `舊版 id 對應衝突（一對多）共 ${ambiguous.length} 筆，整次同步已中止；例：${ambiguous[0].legacyId} ↔ ${ambiguous[0].localIds.join(', ')}`,
+        );
+    }
+    if (unmapped.length) {
+        blockingErrors.push(
+            `舊版 id 無法對應本地新 id 共 ${unmapped.length} 筆，整次同步已中止（不會部分寫入）；例：${unmapped[0].legacyId} ${unmapped[0].name}`,
+        );
+    }
+
+    return {
+        active: true,
+        effectiveRemote,
+        matched,
+        unmapped,
+        ambiguous,
+        blockingErrors,
+        progressByLocalId,
+        sheetFallback,
+    };
+}
+
+/** @param {number} localCount @param {number} preservedRemoteOnlyCount */
+export function shouldSuggestCancelRemoteInflation(localCount, preservedRemoteOnlyCount) {
+    if (!localCount || localCount <= 0) return false;
+    return preservedRemoteOnlyCount / localCount > 0.1;
+}
+
 /**
  * @param {Array<object>|null|undefined} items
  * @returns {string[]} duplicate ids
  */
+/**
+ * 同步前 id 檢查（等同 check-quotation-duplicate-ids，不 migrate）
+ * @param {Array<object>} localItems
+ */
+export function fingerprintLocalItemsForSyncCheck(localItems) {
+    return (localItems || [])
+        .map((it, index) => {
+            const id = normStr(it?.id);
+            return id ? id : `__missing@${index}`;
+        })
+        .join('|');
+}
+
+export function runLocalQuotationIdDuplicateCheck(localItems) {
+    const missing = findItemsMissingId(localItems, 'local');
+    const duplicateIds = findDuplicateItemIds(localItems);
+    const fingerprint = fingerprintLocalItemsForSyncCheck(localItems);
+    const ok = missing.length === 0 && duplicateIds.length === 0;
+    let message = '工項 id 檢查通過，可進行同步前確認。';
+    if (!ok) {
+        const parts = [];
+        if (duplicateIds.length) parts.push(`重複 id：${duplicateIds.join(', ')}`);
+        if (missing.length) {
+            parts.push(
+                `缺 id：${missing.map((r) => `第 ${r.index + 1} 筆 ${r.name}`).join('；')}`,
+            );
+        }
+        message = `工項 id 檢查未通過（請修正後再同步，勿自動 migrate）：\n${parts.join('\n')}`;
+    }
+    return { ok, fingerprint, duplicateIds, missingRows: missing, message };
+}
+
+/**
+ * 寫回前重讀比對：雲端 items 進度指紋 + last_updated
+ * @param {object|null} existingData quotations/{projectNo} 節點
+ */
+/** FNV-1a 32-bit（瀏覽器／Node 共用，無 crypto 依賴） */
+export function stableHashString(input) {
+    const s = String(input ?? '');
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
+ * 寫回安全閘：單筆工項完整欄位（穩定排序前正規化）
+ * @param {object} it
+ */
+export function normalizeItemForRemoteSyncGuard(it) {
+    if (!it?.id || !normStr(it.id)) return null;
+    const v = it.verification?.is_ok;
+    return {
+        id: normStr(it.id),
+        name: normStr(it.name),
+        spec: normStr(it.spec),
+        qty: normStr(it.qty),
+        unit: normStr(it.unit),
+        price: normStr(it.price),
+        zone: normStr(it.zone),
+        category_tag: normStr(it.category_tag),
+        completion_percent:
+            it.completion_percent === undefined || it.completion_percent === null
+                ? null
+                : Number(it.completion_percent),
+        verification_is_ok: v === true ? true : v === false ? false : null,
+    };
+}
+
+/**
+ * 整份 items 內容 hash（id 排序後 JSON，含名稱／單價／數量／進度等）
+ * @param {Array<object>} items
+ */
+export function fingerprintRemoteItemsForSyncGuard(items) {
+    const normalized = (items || [])
+        .map(normalizeItemForRemoteSyncGuard)
+        .filter(Boolean)
+        .sort((a, b) => a.id.localeCompare(b.id, 'en'));
+    return stableHashString(JSON.stringify(normalized));
+}
+
+/**
+ * 舊 RTDB 形狀：工項／摘要可能在節點根層（無 context 包裝），僅 total_summary 亦視為有效節點。
+ * @param {object|null|undefined} nodeVal quotations/{案號} 整包
+ * @returns {object|null} 標準形狀（含 context）或 null
+ */
+export function normalizeQuotationFirebaseSnapshot(nodeVal) {
+    if (!nodeVal || typeof nodeVal !== 'object') return null;
+    if (nodeVal.context && typeof nodeVal.context === 'object') {
+        return nodeVal;
+    }
+    const hasLegacyShape =
+        nodeVal.total_summary != null
+        || Array.isArray(nodeVal.items)
+        || normStr(nodeVal.案號);
+    if (!hasLegacyShape) return null;
+    const {
+        total_summary,
+        items,
+        案號,
+        is_closed,
+        closed_at,
+        closed_by,
+        audit_last_updated,
+        last_updated,
+        sync_by,
+        ...metaRest
+    } = nodeVal;
+    return {
+        ...metaRest,
+        audit_last_updated: audit_last_updated ?? null,
+        last_updated: last_updated ?? null,
+        sync_by,
+        is_closed: is_closed ?? undefined,
+        closed_at: closed_at ?? undefined,
+        closed_by: closed_by ?? undefined,
+        context: {
+            total_summary: total_summary || {},
+            items: Array.isArray(items) ? items : [],
+            ...(normStr(案號) ? { 案號: normStr(案號) } : {}),
+            ...(is_closed != null ? { is_closed } : {}),
+            ...(closed_at != null ? { closed_at } : {}),
+            ...(closed_by != null ? { closed_by } : {}),
+        },
+    };
+}
+
+export function buildRemoteQuotationSyncBaseline(existingData) {
+    const isNewQuotationNode = !existingData;
+    const normalized = existingData ? normalizeQuotationFirebaseSnapshot(existingData) : null;
+    const node = normalized || existingData;
+    const remoteContext = node?.context || null;
+    const remoteItems = remoteContext?.items || [];
+    return {
+        isNewQuotationNode,
+        auditLastUpdated: node?.audit_last_updated ?? null,
+        quotationLastUpdated: node?.last_updated ?? null,
+        itemCount: remoteItems.length,
+        itemsContentHash: fingerprintRemoteItemsForSyncGuard(remoteItems),
+    };
+}
+
+/**
+ * @param {ReturnType<typeof buildRemoteQuotationSyncBaseline>} baseline
+ * @param {object|null} freshExistingData
+ */
+export function remoteQuotationSyncBaselineChanged(baseline, freshExistingData) {
+    const freshExists = Boolean(freshExistingData);
+    if (baseline.isNewQuotationNode) {
+        return freshExists;
+    }
+    if (!freshExists) {
+        return true;
+    }
+    const fresh = buildRemoteQuotationSyncBaseline(freshExistingData);
+    return (
+        fresh.auditLastUpdated !== baseline.auditLastUpdated
+        || fresh.quotationLastUpdated !== baseline.quotationLastUpdated
+        || fresh.itemsContentHash !== baseline.itemsContentHash
+        || fresh.itemCount !== baseline.itemCount
+    );
+}
+
+/** 雲端節點已存在但無法建立寫回 baseline 時應阻擋寫入 */
+export function shouldBlockQuotationWriteWithoutBaseline(remoteNodeExists, baseline) {
+    return Boolean(remoteNodeExists) && !baseline;
+}
+
+export function formatRemoteChangedAbortMessage() {
+    return (
+        '雲端報價資料在您確認後已變更（last_updated 或工項完整內容與開始同步時的快照不同）。\n' +
+        '為避免覆蓋他人更新，同步已中止。\n' +
+        '請重新載入雲端資料、再次檢查 id 後再同步。'
+    );
+}
+
 export function findDuplicateItemIds(items) {
     const seen = new Set();
     const dups = new Set();
@@ -148,10 +460,13 @@ export function findNameSpecHintsForSync(localItems, remoteItems) {
  * @param {Array<object>} mergedItems
  * @param {Array<object>} remoteItems
  */
-export function applyRemoteProgressByExactId(mergedItems, remoteItems) {
+export function applyRemoteProgressByExactId(mergedItems, remoteItems, legacyPlan = null) {
     const remote = remoteItems || [];
     return (mergedItems || []).map((newItem) => {
-        const oldMatch = matchRemoteItemByExactId(newItem, remote);
+        let oldMatch = matchRemoteItemByExactId(newItem, remote);
+        if (!oldMatch && legacyPlan?.active && legacyPlan.progressByLocalId) {
+            oldMatch = legacyPlan.progressByLocalId.get(String(newItem.id)) || null;
+        }
         if (!oldMatch) return { ...newItem };
         const out = { ...newItem };
         out.completion_percent = oldMatch.completion_percent ?? out.completion_percent ?? 0;
@@ -192,9 +507,14 @@ export function computeQuotationSyncDiff(remoteItems, localItems, mergedItems) {
             changed.push({ id, before: rem, after: loc });
         }
     });
-    const preservedRemoteOnly = remote.filter((i) => i?.id && !localById.has(String(i.id)));
+    const preservedRemoteOnly = merged.filter((i) => i?.id && !localById.has(String(i.id)));
 
     const blockingErrors = validateQuotationItemsForSync(local, remote);
+
+    const suggestCancelInflation = shouldSuggestCancelRemoteInflation(
+        local.length,
+        preservedRemoteOnly.length,
+    );
 
     return {
         added,
@@ -205,6 +525,7 @@ export function computeQuotationSyncDiff(remoteItems, localItems, mergedItems) {
         localMissingId,
         blockingErrors,
         hasChanges: added.length > 0 || removed.length > 0 || changed.length > 0,
+        suggestCancelInflation,
     };
 }
 
@@ -220,11 +541,29 @@ export function prepareCloudQuotationSync(input) {
             mergedItems: [],
             diff: computeQuotationSyncDiff(remoteItems, localItems, []),
             blockingErrors,
+            legacyRemap: null,
         };
     }
-    const mergedItems = mergeQuotationItemsById(localItems, remoteItems);
+
+    const legacyRemap = planLegacyQuotationIdRemap(localItems, remoteItems);
+    if (legacyRemap.blockingErrors.length) {
+        return {
+            mergedItems: [],
+            diff: computeQuotationSyncDiff(remoteItems, localItems, []),
+            blockingErrors: legacyRemap.blockingErrors,
+            legacyRemap,
+        };
+    }
+
+    const mergedItems = mergeQuotationItemsById(localItems, legacyRemap.effectiveRemote);
     const diff = computeQuotationSyncDiff(remoteItems, localItems, mergedItems);
-    return { mergedItems, diff, blockingErrors: [] };
+    diff.legacyRemap = legacyRemap;
+    if (legacyRemap.active && legacyRemap.matched?.length) {
+        const legacyIdsRemapped = new Set(legacyRemap.matched.map((m) => String(m.legacyId)));
+        diff.removed = diff.removed.filter((r) => !legacyIdsRemapped.has(String(r.id)));
+        diff.hasChanges = diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0;
+    }
+    return { mergedItems, diff, blockingErrors: [], legacyRemap };
 }
 
 /**
@@ -253,7 +592,24 @@ export function buildQuotationFirebaseUpdatePayload(params) {
  * @returns {string}
  */
 export function formatSyncDiffForConfirm(diff, nameSpecHints = []) {
-    const lines = ['同步前請確認（合併後不會默默刪除僅存在於雲端的工項）：', ''];
+    const lines = ['同步前請確認：', ''];
+    if (diff.suggestCancelInflation) {
+        lines.push(
+            '【強烈建議按「取消」】同步後「雲端獨有」工項超過本地 10%，可能造成筆數膨脹或重複。',
+        );
+        lines.push('僅在已核對舊版 id 對應與下列清單後，才按「確定」繼續。');
+        lines.push('');
+    }
+    if (diff.legacyRemap?.active && diff.legacyRemap.matched?.length) {
+        lines.push(`【舊版 ITEM_<列號> 已對應新 id：${diff.legacyRemap.matched.length} 筆】（表名+名稱+規格+單位，進度將帶入）`);
+        diff.legacyRemap.matched.slice(0, 12).forEach((m) => {
+            lines.push(`  ↔ ${m.legacyId} → ${m.localId} ${m.name || ''}`);
+        });
+        if (diff.legacyRemap.matched.length > 12) {
+            lines.push(`  …另有 ${diff.legacyRemap.matched.length - 12} 筆`);
+        }
+        lines.push('');
+    }
     if (diff.blockingErrors?.length) {
         lines.push('【無法同步】');
         diff.blockingErrors.forEach((e) => lines.push(`  ! ${e}`));
@@ -298,7 +654,7 @@ export function formatSyncDiffForConfirm(diff, nameSpecHints = []) {
         lines.push('');
     }
     if (diff.preservedRemoteOnly.length) {
-        lines.push(`【保留雲端獨有 ${diff.preservedRemoteOnly.length} 筆】（未在本地列表，仍會保留）`);
+        lines.push(`【保留雲端獨有 ${diff.preservedRemoteOnly.length} 筆】（未在本地列表；非舊版 id 對應者）`);
         diff.preservedRemoteOnly.slice(0, 15).forEach((i) => lines.push(`  · ${i.id} ${i.name || ''}`));
         if (diff.preservedRemoteOnly.length > 15) {
             lines.push(`  …另有 ${diff.preservedRemoteOnly.length - 15} 筆`);
