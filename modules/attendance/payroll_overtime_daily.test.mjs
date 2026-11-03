@@ -76,7 +76,7 @@ describe('validatePayrollOvertimeDailyHours', () => {
 describe('validatePayrollOvertimeSubmit', () => {
     const snap = { reportOvertimeMinutes: 480, payrollDailyOvertime: { '2026-05-01': 8 } };
 
-    it('allows manual override when note provided', () => {
+    it('blocks manual override when daily total still matches report not entered hours', () => {
         const v = validatePayrollOvertimeSubmit({
             overtimeHours: 10,
             overtimeNote: '專案趕工',
@@ -84,9 +84,23 @@ describe('validatePayrollOvertimeSubmit', () => {
             snapshot: snap,
             overtimeDailyHours: { '2026-05-01': 8 }
         });
+        assert.equal(v.ok, false);
+        assert.equal(v.block, true);
+        assert.match(v.message, /600/);
+    });
+
+    it('allows manual 10h with reason when daily breakdown sums to 10h (report 8h)', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 10,
+            overtimeNote: '專案趕工',
+            overtimeDays: 1,
+            snapshot: snap,
+            overtimeDailyHours: { '2026-05-01': 10 }
+        });
         assert.equal(v.ok, true);
         assert.equal(v.warn, true);
         assert.equal(v.block, false);
+        assert.deepEqual(v.payload.overtimeDailyHours, { '2026-05-01': 10 });
     });
 
     it('blocks manual override without note', () => {
@@ -123,6 +137,18 @@ describe('validatePayrollOvertimeSubmit', () => {
         });
         assert.equal(v.ok, true);
         assert.equal(v.warn, false);
+    });
+
+    it('omits overtimeDailyHours when report is 0 and no daily data', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 8,
+            overtimeNote: '補登',
+            overtimeDays: 0,
+            snapshot: { reportOvertimeMinutes: 0 },
+            overtimeDailyHours: {}
+        });
+        assert.equal(v.ok, true);
+        assert.equal(v.payload.overtimeDailyHours, undefined);
     });
 });
 

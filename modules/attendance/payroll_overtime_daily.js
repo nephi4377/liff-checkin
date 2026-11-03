@@ -93,8 +93,8 @@ export function sumOvertimeDailyHours(daily) {
 }
 
 /**
- * 逐日合計須與報表／上方小時一致（整數分鐘比對）。
- * @param {{ overtimeHours: number, overtimeDays?: number, overtimeDailyHours?: object|array, reportOvertimeMinutes?: number, hoursPerDay?: number }} input
+ * 逐日合計須與上方小時一致；可選是否須同時等於報表（手動校正時只比對上方小時）。
+ * @param {{ overtimeHours: number, overtimeDays?: number, overtimeDailyHours?: object|array, reportOvertimeMinutes?: number, hoursPerDay?: number, requireReportMatch?: boolean }} input
  */
 export function validatePayrollOvertimeDailyHours(input) {
     const enteredMin = hoursToPayrollOvertimeMinutes(input.overtimeHours);
@@ -103,12 +103,13 @@ export function validatePayrollOvertimeDailyHours(input) {
     }
     const hpd = Number(input.hoursPerDay) || PAYROLL_OVERTIME_HOURS_PER_DAY;
     const overtimeDays = Number(input.overtimeDays) || 0;
+    const requireReportMatch = input.requireReportMatch !== false;
     const reportMin = input.reportOvertimeMinutes != null
         ? Math.round(Number(input.reportOvertimeMinutes))
         : hoursToPayrollOvertimeMinutes(overtimeDays * hpd);
     const dailyMin = sumOvertimeDailyMinutes(input.overtimeDailyHours);
     const matchEntered = dailyMin === enteredMin;
-    const matchReport = dailyMin === reportMin;
+    const matchReport = !requireReportMatch || dailyMin === reportMin;
     if (matchEntered && matchReport) {
         return {
             ok: true,
@@ -122,7 +123,7 @@ export function validatePayrollOvertimeDailyHours(input) {
     if (!matchEntered) {
         parts.push(`每日加班合計 ${payrollOvertimeMinutesToHours(dailyMin)} 小時（${dailyMin} 分），須等於上方「加班（小時）」${payrollOvertimeMinutesToHours(enteredMin)} 小時（${enteredMin} 分）`);
     }
-    if (!matchReport) {
+    if (requireReportMatch && !matchReport) {
         parts.push(`每日加班合計須等於報表加班 ${fmtPayrollOvertimeDays(overtimeDays)} 天 × ${hpd} 小時＝${payrollOvertimeMinutesToHours(reportMin)} 小時（${reportMin} 分）`);
     }
     return {
@@ -134,8 +135,31 @@ export function validatePayrollOvertimeDailyHours(input) {
     };
 }
 
+export function isEmptyPayrollDailyOvertime(snapshot, dailyObject) {
+    const snapRows = normalizePayrollDailyOvertime(snapshot && snapshot.payrollDailyOvertime);
+    const userDays = Object.keys(dailyObject || {}).filter((k) => Number(dailyObject[k]) > 0);
+    return snapRows.length === 0 && userDays.length === 0;
+}
+
+/** 報表 0 分且無任何逐日資料 → 不送 overtimeDailyHours，後端併成單一平日 */
+export function shouldOmitOvertimeDailyHours(snapshot, overtimeDays, hoursPerDay, dailyObject) {
+    const reportMin = reportOvertimeMinutesFromSnapshot(snapshot, overtimeDays, hoursPerDay);
+    return reportMin === 0 && isEmptyPayrollDailyOvertime(snapshot, dailyObject);
+}
+
+export function buildOvertimeSubmitPayload(overtimeHours, overtimeNote, dailyObject, snapshot, overtimeDays, hoursPerDay) {
+    const payload = {
+        overtimeHours,
+        overtimeNote: overtimeNote || ''
+    };
+    if (!shouldOmitOvertimeDailyHours(snapshot, overtimeDays, hoursPerDay, dailyObject)) {
+        payload.overtimeDailyHours = dailyObject;
+    }
+    return payload;
+}
+
 /**
- * 送審前整體判定（含手動校正：與報表不同但有原因 → 允許、僅警告）。
+ * 送審前整體判定（手動校正：須填原因，且逐日合計仍須等於上方小時）。
  */
 export function validatePayrollOvertimeSubmit(input) {
     const overtimeHours = Number(input.overtimeHours) || 0;
@@ -171,18 +195,45 @@ export function validatePayrollOvertimeSubmit(input) {
     }
 
     if (manualOverride && overtimeNote) {
+        if (shouldOmitOvertimeDailyHours(snapshot, overtimeDays, input.hoursPerDay, dailyObject)) {
+            const enteredHours = payrollOvertimeMinutesToHours(enteredMin);
+            return {
+                ok: true,
+                block: false,
+                warn: true,
+                message: `加班 ${enteredHours} 小時；報表無逐日資料，後端將併成單一平日`,
+                payload: buildOvertimeSubmitPayload(
+                    overtimeHours, overtimeNote, dailyObject, snapshot, overtimeDays, input.hoursPerDay
+                )
+            };
+        }
+        const manualDaily = validatePayrollOvertimeDailyHours({
+            overtimeHours,
+            overtimeDays,
+            overtimeDailyHours: dailyObject,
+            reportOvertimeMinutes: reportMin,
+            hoursPerDay: input.hoursPerDay,
+            requireReportMatch: false
+        });
+        if (!manualDaily.ok) {
+            return {
+                ok: false,
+                block: true,
+                warn: false,
+                message: manualDaily.message,
+                payload: null
+            };
+        }
         const reportHours = payrollOvertimeMinutesToHours(reportMin);
         const enteredHours = payrollOvertimeMinutesToHours(enteredMin);
         return {
             ok: true,
             block: false,
             warn: true,
-            message: `加班 ${enteredHours} 小時與報表 ${reportHours} 小時不同；已填原因，後端將以手動校正處理`,
-            payload: {
-                overtimeHours,
-                overtimeNote,
-                overtimeDailyHours: dailyObject
-            }
+            message: `加班 ${enteredHours} 小時與報表 ${reportHours} 小時不同；已填原因，請確認逐日合計已調整`,
+            payload: buildOvertimeSubmitPayload(
+                overtimeHours, overtimeNote, dailyObject, snapshot, overtimeDays, input.hoursPerDay
+            )
         };
     }
 
@@ -191,7 +242,8 @@ export function validatePayrollOvertimeSubmit(input) {
         overtimeDays,
         overtimeDailyHours: dailyObject,
         reportOvertimeMinutes: reportMin,
-        hoursPerDay: input.hoursPerDay
+        hoursPerDay: input.hoursPerDay,
+        requireReportMatch: true
     });
     if (!dailyValidation.ok) {
         return {
@@ -208,11 +260,9 @@ export function validatePayrollOvertimeSubmit(input) {
         block: false,
         warn: false,
         message: '',
-        payload: {
-            overtimeHours,
-            overtimeNote,
-            overtimeDailyHours: dailyObject
-        }
+        payload: buildOvertimeSubmitPayload(
+            overtimeHours, overtimeNote, dailyObject, snapshot, overtimeDays, input.hoursPerDay
+        )
     };
 }
 
