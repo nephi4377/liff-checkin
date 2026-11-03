@@ -15,10 +15,21 @@ describe('budget-quote-parser-lib item ids', () => {
 
     it('已有 ITEM_X_2 時，重複 base 跳號為 _3', () => {
         const used = new Set();
-        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X')).toBe('ITEM_X');
-        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X_2')).toBe('ITEM_X_2');
-        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X')).toBe('ITEM_X_3');
+        const reserved = new Set(['ITEM_X', 'ITEM_X_2']);
+        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X', reserved)).toBe('ITEM_X');
+        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X_2', reserved)).toBe('ITEM_X_2');
+        expect(BudgetQuoteParser.assignUniqueItemIdForSheet(used, 'ITEM_X', reserved)).toBe('ITEM_X_3');
         expect(used.size).toBe(3);
+    });
+
+    it('[X,X,X_2] 保留原生 ITEM_X_2，第 2 列重複改 _3', () => {
+        const rawIds = ['ITEM_X', 'ITEM_X', 'ITEM_X_2'];
+        const reserved = new Set(rawIds);
+        const used = new Set();
+        const out = rawIds.map((id) =>
+            BudgetQuoteParser.assignUniqueItemIdForSheet(used, id, reserved),
+        );
+        expect(out).toEqual(['ITEM_X', 'ITEM_X_3', 'ITEM_X_2']);
     });
 
     it('stableItemContentHash 相同內容產生相同 hash', () => {

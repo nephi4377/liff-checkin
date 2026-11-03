@@ -6,16 +6,22 @@
 /**
  * @param {Set<string>} usedIds
  * @param {string} baseId
+ * @param {Set<string>|undefined} reservedPlannedIds
  * @returns {string}
  */
-export function claimUniqueItemIdForSheet(usedIds, baseId) {
+export function claimUniqueItemIdForSheet(usedIds, baseId, reservedPlannedIds) {
     const id = String(baseId);
     if (!usedIds.has(id)) {
         usedIds.add(id);
         return id;
     }
     let n = 2;
-    while (usedIds.has(`${id}_${n}`)) n += 1;
+    while (
+        usedIds.has(`${id}_${n}`) ||
+        (reservedPlannedIds && reservedPlannedIds.has(`${id}_${n}`))
+    ) {
+        n += 1;
+    }
     const next = `${id}_${n}`;
     usedIds.add(next);
     return next;
@@ -24,11 +30,17 @@ export function claimUniqueItemIdForSheet(usedIds, baseId) {
 /**
  * @param {Set<string>} usedIds
  * @param {string} baseId
+ * @param {Set<string>|undefined} reservedPlannedIds
  * @returns {string}
  */
-export function allocateDuplicateGroupSuffixId(usedIds, baseId) {
+export function allocateDuplicateGroupSuffixId(usedIds, baseId, reservedPlannedIds) {
     let n = 2;
-    while (usedIds.has(`${baseId}_${n}`)) n += 1;
+    while (
+        usedIds.has(`${baseId}_${n}`) ||
+        (reservedPlannedIds && reservedPlannedIds.has(`${baseId}_${n}`))
+    ) {
+        n += 1;
+    }
     const next = `${baseId}_${n}`;
     usedIds.add(next);
     return next;
@@ -50,6 +62,11 @@ export function migrateDuplicateItemIdsOnly(items) {
     });
 
     const usedIds = new Set();
+    const reservedPlannedIds = new Set();
+    list.forEach((it) => {
+        const id = it?.id != null && String(it.id).trim() !== '' ? String(it.id) : null;
+        if (id) reservedPlannedIds.add(id);
+    });
     const changes = [];
 
     for (let index = 0; index < list.length; index++) {
@@ -61,7 +78,7 @@ export function migrateDuplicateItemIdsOnly(items) {
 
         const group = positionsById.get(id);
         if (!group || group.length <= 1) {
-            const claimed = claimUniqueItemIdForSheet(usedIds, id);
+            const claimed = claimUniqueItemIdForSheet(usedIds, id, reservedPlannedIds);
             if (claimed !== id) {
                 changes.push({
                     index,
@@ -76,12 +93,12 @@ export function migrateDuplicateItemIdsOnly(items) {
 
         const rank = group.indexOf(index);
         if (rank === 0) {
-            claimUniqueItemIdForSheet(usedIds, id);
+            claimUniqueItemIdForSheet(usedIds, id, reservedPlannedIds);
             continue;
         }
 
         const prev = String(list[index]?.id);
-        const newId = allocateDuplicateGroupSuffixId(usedIds, id);
+        const newId = allocateDuplicateGroupSuffixId(usedIds, id, reservedPlannedIds);
         if (prev !== newId) {
             changes.push({
                 index,
