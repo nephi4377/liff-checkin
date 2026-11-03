@@ -324,6 +324,80 @@
     }
 
     /**
+     * 同表內 id：與 quotation-item-id-migrate.mjs claimUniqueItemIdForSheet 邏輯一致。
+     * @param {Set<string>} sheetUsedIds 本表已佔用的 id（逐列）
+     * @param {string} baseId
+     * @param {Set<string>|undefined} reservedPlannedIds 本表各列「原始 base id」聯集；補重複後綴時跳過，避免搶走如 ITEM_X_2
+     */
+    function assignUniqueItemIdForSheet(sheetUsedIds, baseId, reservedPlannedIds) {
+        const id = String(baseId);
+        if (!sheetUsedIds.has(id)) {
+            sheetUsedIds.add(id);
+            return id;
+        }
+        let n = 2;
+        while (
+            sheetUsedIds.has(`${id}_${n}`) ||
+            (reservedPlannedIds && reservedPlannedIds.has(`${id}_${n}`))
+        ) {
+            n += 1;
+        }
+        const next = `${id}_${n}`;
+        sheetUsedIds.add(next);
+        return next;
+    }
+
+    /** 預掃本表將產生的 item base id（供 reservedPlannedIds） */
+    function collectPlannedBaseItemIdsForSheet(json, sheetName, options) {
+        const metadataKeywords = (options && options.metadataKeywords) || [];
+        const planned = new Set();
+        if (!json || json.length < 3) return planned;
+
+        const { colMapping, startRow } = detectColMappingFromHeaderRows(json);
+        if (colMapping.name === -1) return planned;
+
+        let currentZone = '未分類';
+        let inAdjustSection = false;
+        let sheetFooterClosed = false;
+
+        for (let i = 0; i < json.length; i++) {
+            const row = json[i];
+            if (!row || row.length === 0) continue;
+            if (i < startRow) continue;
+
+            if (rowHasAdjustSectionStart(row)) sheetFooterClosed = false;
+            if (rowHasAdjustSectionEnd(row)) inAdjustSection = false;
+            if (rowSignalsFinalFooterBlock(row, colMapping)) sheetFooterClosed = true;
+            if (isStandardWorkItemRow(row, colMapping)) sheetFooterClosed = false;
+
+            const zoneName = resolveZoneHeaderName(row, colMapping, sheetFooterClosed, inAdjustSection);
+            if (zoneName) {
+                if (ADJUST_SECTION_START_RE.test(zoneName)) {
+                    inAdjustSection = true;
+                    sheetFooterClosed = false;
+                } else if (ADJUST_SECTION_END_RE.test(zoneName)) {
+                    inAdjustSection = false;
+                }
+                currentZone = zoneName;
+                continue;
+            }
+
+            if (sheetFooterClosed && !inAdjustSection) continue;
+
+            let picked = pickItemFields(row, colMapping);
+            if (!picked && inAdjustSection) picked = pickAdjustCompactItemFields(row);
+            if (!picked) continue;
+            if (metadataBlocksItem(picked, i, startRow, metadataKeywords)) continue;
+
+            const baseItemId = picked.indexVal
+                ? `ITEM_${sheetName}_${picked.indexVal}`
+                : `ITEM_${sheetName}_R${i}`;
+            planned.add(baseItemId);
+        }
+        return planned;
+    }
+
+    /**
      * @param {Array<Array>} json sheet_to_json header:1
      * @param {string} sheetName
      * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
@@ -332,6 +406,7 @@
         const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
         const items = [];
+        const sheetUsedIds = new Set();
         if (!json || json.length < 3) {
             return { items, taxInclusiveTotal: null };
         }
@@ -341,6 +416,7 @@
             return { items, taxInclusiveTotal: findTaxInclusiveTotal(json) };
         }
 
+        const reservedPlannedIds = collectPlannedBaseItemIdsForSheet(json, sheetName, options);
         let currentZone = '未分類';
         let inAdjustSection = false;
         let sheetFooterClosed = false;
@@ -400,12 +476,17 @@
 
             if (metadataBlocksItem(picked, i, startRow, metadataKeywords)) continue;
 
+            const baseItemId = picked.indexVal
+                ? `ITEM_${sheetName}_${picked.indexVal}`
+                : `ITEM_${sheetName}_R${i}`;
+            const itemId = assignUniqueItemIdForSheet(sheetUsedIds, baseItemId, reservedPlannedIds);
+
             items.push({
                 type: 'item',
                 zone: currentZone,
                 raw: rawLine,
                 data: {
-                    id: picked.indexVal ? `ITEM_${sheetName}_${picked.indexVal}` : `ITEM_${sheetName}_R${i}`,
+                    id: itemId,
                     zone: currentZone,
                     name: picked.name,
                     spec: picked.spec,
@@ -530,6 +611,8 @@
         classifyItemCounts,
         findTaxInclusiveTotal,
         sanitizeItemForExport,
-        exportPayloadContainsForbiddenKeys
+        exportPayloadContainsForbiddenKeys,
+        assignUniqueItemIdForSheet,
+        collectPlannedBaseItemIdsForSheet,
     };
 });
