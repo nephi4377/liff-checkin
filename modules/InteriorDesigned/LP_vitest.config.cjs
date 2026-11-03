@@ -16,7 +16,8 @@ module.exports = defineConfig({
             'LP_layout_group_logic.test.js',
             'LP_quotation_budgetweb_export.test.js',
             'LP_3DViewer_lifecycle.test.js',
-            'LP_3D_pixel_rgb.test.js',
+            'LP_budget_quote_parser_lib.test.js',
+            'LP_migrate_quotation_item_ids.test.js',
         ],
     },
 });
