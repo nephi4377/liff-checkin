@@ -6,7 +6,11 @@ import {
     mergeOvertimeDailyRows,
     overtimeDailyRowsToObject,
     sumOvertimeDailyRows,
+    sumOvertimeDailyMinutes,
+    payrollOvertimeMinutesToHours,
+    reportOvertimeMinutesFromSnapshot,
     validatePayrollOvertimeDailyHours,
+    validatePayrollOvertimeSubmit,
     overtimeDailyMismatchMessage
 } from './payroll_overtime_daily.js';
 
@@ -589,70 +593,94 @@ function renderOvertimeDailyRowInputs(rowsEl, rows, escFn) {
     `).join('');
 }
 
+function applyOvertimeFeedbackEl(warnEl, blockMsg, warnMsg) {
+    if (!warnEl) return;
+    warnEl.classList.remove(
+        'hidden', 'text-red-700', 'bg-red-50', 'border-red-100',
+        'text-amber-900', 'bg-amber-50', 'border-amber-200'
+    );
+    const text = blockMsg || warnMsg;
+    if (!text) {
+        warnEl.textContent = '';
+        warnEl.classList.add('hidden');
+        return;
+    }
+    warnEl.textContent = text;
+    warnEl.classList.remove('hidden');
+    if (blockMsg) {
+        warnEl.classList.add('text-red-700', 'bg-red-50', 'border-red-100');
+    } else {
+        warnEl.classList.add('text-amber-900', 'bg-amber-50', 'border-amber-200');
+    }
+}
+
 function syncOvertimeDailyUi(state) {
     const {
         wrapEl, rowsEl, sumEl, warnEl, rows,
-        overtimeHours, overtimeDays, readOnly
+        overtimeHours, overtimeNote, overtimeDays, snapshot, readOnly
     } = state;
     const otH = Number(overtimeHours) || 0;
     if (wrapEl) wrapEl.classList.toggle('hidden', otH <= 0);
     if (otH <= 0) {
-        if (warnEl) {
-            warnEl.textContent = '';
-            warnEl.classList.add('hidden');
-        }
+        applyOvertimeFeedbackEl(warnEl, '', '');
         return { validation: { ok: true }, dailyObject: {} };
     }
     const currentRows = readOnly ? rows : readOvertimeDailyRowsFromContainer(rowsEl);
     const dailyObject = overtimeDailyRowsToObject(currentRows);
-    const dailyTotal = sumOvertimeDailyRows(currentRows);
-    if (sumEl) sumEl.textContent = `每日合計：${dailyTotal} 小時`;
+    const dailyMin = sumOvertimeDailyMinutes(dailyObject);
+    if (sumEl) {
+        sumEl.textContent = `每日合計：${payrollOvertimeMinutesToHours(dailyMin)} 小時（${dailyMin} 分）`;
+    }
+    const submitCheck = validatePayrollOvertimeSubmit({
+        overtimeHours: otH,
+        overtimeNote: String(overtimeNote || '').trim(),
+        overtimeDays,
+        snapshot,
+        overtimeDailyHours: dailyObject
+    });
+    let blockMsg = '';
+    let warnMsg = '';
+    if (submitCheck.block && submitCheck.message) {
+        blockMsg = submitCheck.message;
+    } else if (submitCheck.warn && submitCheck.message) {
+        warnMsg = submitCheck.message;
+    } else if (!submitCheck.ok) {
+        blockMsg = submitCheck.message || overtimeDailyMismatchMessage(
+            validatePayrollOvertimeDailyHours({
+                overtimeHours: otH,
+                overtimeDays,
+                overtimeDailyHours: dailyObject,
+                reportOvertimeMinutes: reportOvertimeMinutesFromSnapshot(snapshot, overtimeDays)
+            })
+        );
+    }
+    applyOvertimeFeedbackEl(warnEl, blockMsg, warnMsg);
     const validation = validatePayrollOvertimeDailyHours({
         overtimeHours: otH,
         overtimeDays,
-        overtimeDailyHours: dailyObject
+        overtimeDailyHours: dailyObject,
+        reportOvertimeMinutes: reportOvertimeMinutesFromSnapshot(snapshot, overtimeDays)
     });
-    const msg = overtimeDailyMismatchMessage(validation);
-    if (warnEl) {
-        if (msg) {
-            warnEl.textContent = msg;
-            warnEl.classList.remove('hidden');
-        } else {
-            warnEl.textContent = '';
-            warnEl.classList.add('hidden');
-        }
-    }
-    return { validation, dailyObject, dailyTotal };
+    return { validation, dailyObject, dailyTotal: payrollOvertimeMinutesToHours(dailyMin), submitCheck };
 }
 
 function collectOvertimeSubmitFields(els, snapshot) {
     const overtimeHours = Number(els.overtimeHours?.value) || 0;
     const overtimeNote = String(els.overtimeNote?.value || '').trim();
     const overtimeDays = Number(snapshot?.stats?.overtimeDays) || 0;
-    if (overtimeHours <= 0) {
-        return { ok: true, payload: { overtimeHours: 0, overtimeNote: '' } };
-    }
-    if (!overtimeNote) {
-        return { ok: false, message: '有加班時數時請填寫加班原因' };
-    }
     const rows = readOvertimeDailyRowsFromContainer(els.overtimeDailyRows);
     const dailyObject = overtimeDailyRowsToObject(rows);
-    const validation = validatePayrollOvertimeDailyHours({
+    const result = validatePayrollOvertimeSubmit({
         overtimeHours,
+        overtimeNote,
         overtimeDays,
+        snapshot,
         overtimeDailyHours: dailyObject
     });
-    if (!validation.ok) {
-        return { ok: false, message: overtimeDailyMismatchMessage(validation) };
+    if (!result.ok) {
+        return { ok: false, message: result.message || '加班資料不符，無法送出' };
     }
-    return {
-        ok: true,
-        payload: {
-            overtimeHours,
-            overtimeNote,
-            overtimeDailyHours: dailyObject
-        }
-    };
+    return { ok: true, payload: result.payload, warn: result.warn, message: result.message };
 }
 
 export function initPayrollReviewPanel(ctx) {
@@ -907,10 +935,15 @@ export function initPayrollReviewPanel(ctx) {
         if (!contextData) return;
         const st = contextData.snapshot?.stats || {};
         const otH = Number(els.overtimeHours?.value) || 0;
+        const reportMin = reportOvertimeMinutesFromSnapshot(contextData.snapshot, st.overtimeDays);
         if (!els.overtimeHours?.dataset.userEdited && !overtimeDailyUiInitialized) {
             employeeOvertimeDailyRows = mergeOvertimeDailyRows(contextData.snapshot, employeeOvertimeDailyRows);
-            const sum = sumOvertimeDailyRows(employeeOvertimeDailyRows);
-            if (sum > 0 && els.overtimeHours) els.overtimeHours.value = String(sum);
+            if (reportMin > 0 && els.overtimeHours) {
+                els.overtimeHours.value = String(payrollOvertimeMinutesToHours(reportMin));
+            } else {
+                const sum = sumOvertimeDailyRows(employeeOvertimeDailyRows);
+                if (sum > 0 && els.overtimeHours) els.overtimeHours.value = String(sum);
+            }
         }
         renderOvertimeDailyRowInputs(els.overtimeDailyRows, employeeOvertimeDailyRows, esc);
         syncOvertimeDailyUi({
@@ -920,7 +953,9 @@ export function initPayrollReviewPanel(ctx) {
             warnEl: els.overtimeDailyWarn,
             rows: employeeOvertimeDailyRows,
             overtimeHours: otH,
+            overtimeNote: els.overtimeNote?.value,
             overtimeDays: st.overtimeDays,
+            snapshot: contextData.snapshot,
             readOnly: false
         });
         overtimeDailyUiInitialized = true;
@@ -1246,8 +1281,13 @@ export function initPayrollAdminPreview(ctx) {
         const otH = Number(adminOvertimeEls.overtimeHours?.value) || 0;
         if (!adminOvertimeEls.overtimeHours?.dataset.userEdited && !adminOvertimeUiInitialized) {
             adminOvertimeDailyRows = mergeOvertimeDailyRows(adminContext.snapshot, adminOvertimeDailyRows);
-            const sum = sumOvertimeDailyRows(adminOvertimeDailyRows);
-            if (sum > 0 && adminOvertimeEls.overtimeHours) adminOvertimeEls.overtimeHours.value = String(sum);
+            const reportMin = reportOvertimeMinutesFromSnapshot(adminContext.snapshot, st.overtimeDays);
+            if (reportMin > 0 && adminOvertimeEls.overtimeHours) {
+                adminOvertimeEls.overtimeHours.value = String(payrollOvertimeMinutesToHours(reportMin));
+            } else {
+                const sum = sumOvertimeDailyRows(adminOvertimeDailyRows);
+                if (sum > 0 && adminOvertimeEls.overtimeHours) adminOvertimeEls.overtimeHours.value = String(sum);
+            }
         }
         renderOvertimeDailyRowInputs(adminOvertimeEls.overtimeDailyRows, adminOvertimeDailyRows, esc);
         syncOvertimeDailyUi({
@@ -1257,7 +1297,9 @@ export function initPayrollAdminPreview(ctx) {
             warnEl: adminOvertimeEls.overtimeDailyWarn,
             rows: adminOvertimeDailyRows,
             overtimeHours: otH,
+            overtimeNote: adminOvertimeEls.overtimeNote?.value,
             overtimeDays: st.overtimeDays,
+            snapshot: adminContext.snapshot,
             readOnly: false
         });
         adminOvertimeUiInitialized = true;

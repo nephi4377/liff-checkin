@@ -3,9 +3,14 @@ import assert from 'node:assert/strict';
 import {
     normalizePayrollDailyOvertime,
     sumOvertimeDailyHours,
+    sumOvertimeDailyMinutes,
+    hoursToPayrollOvertimeMinutes,
+    reportOvertimeMinutesFromSnapshot,
     validatePayrollOvertimeDailyHours,
+    validatePayrollOvertimeSubmit,
     overtimeDailyRowsToObject,
     mergeOvertimeDailyRows,
+    enteredOvertimeDiffersFromReport,
     PAYROLL_OVERTIME_HOURS_PER_DAY
 } from './payroll_overtime_daily.js';
 
@@ -28,13 +33,26 @@ describe('normalizePayrollDailyOvertime', () => {
     });
 });
 
+describe('minutes rounding', () => {
+    it('converts hours with round(h*60)', () => {
+        assert.equal(hoursToPayrollOvertimeMinutes(8), 480);
+        assert.equal(hoursToPayrollOvertimeMinutes(8.5), 510);
+        assert.equal(sumOvertimeDailyMinutes({ '2026-05-01': 4.25, '2026-05-02': 4.25 }), 510);
+    });
+
+    it('report minutes prefers snapshot.reportOvertimeMinutes', () => {
+        assert.equal(reportOvertimeMinutesFromSnapshot({ reportOvertimeMinutes: 510 }, 1), 510);
+        assert.equal(reportOvertimeMinutesFromSnapshot({}, 1), 480);
+    });
+});
+
 describe('validatePayrollOvertimeDailyHours', () => {
     it('passes when overtime is zero', () => {
         const v = validatePayrollOvertimeDailyHours({ overtimeHours: 0, overtimeDays: 1, overtimeDailyHours: {} });
         assert.equal(v.ok, true);
     });
 
-    it('requires daily total to match hours and days×8', () => {
+    it('requires daily total minutes to match hours and report', () => {
         const daily = { '2026-05-01': 8 };
         const ok = validatePayrollOvertimeDailyHours({
             overtimeHours: 8,
@@ -51,16 +69,68 @@ describe('validatePayrollOvertimeDailyHours', () => {
             hoursPerDay: PAYROLL_OVERTIME_HOURS_PER_DAY
         });
         assert.equal(bad.ok, false);
-        assert.match(bad.message, /8/);
+        assert.match(bad.message, /480/);
     });
+});
 
-    it('allows zero overtimeDays when only hours match', () => {
-        const v = validatePayrollOvertimeDailyHours({
-            overtimeHours: 4,
-            overtimeDays: 0,
-            overtimeDailyHours: { '2026-05-01': 4 }
+describe('validatePayrollOvertimeSubmit', () => {
+    const snap = { reportOvertimeMinutes: 480, payrollDailyOvertime: { '2026-05-01': 8 } };
+
+    it('allows manual override when note provided', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 10,
+            overtimeNote: '專案趕工',
+            overtimeDays: 1,
+            snapshot: snap,
+            overtimeDailyHours: { '2026-05-01': 8 }
         });
         assert.equal(v.ok, true);
+        assert.equal(v.warn, true);
+        assert.equal(v.block, false);
+    });
+
+    it('blocks manual override without note', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 10,
+            overtimeNote: '',
+            overtimeDays: 1,
+            snapshot: snap,
+            overtimeDailyHours: { '2026-05-01': 8 }
+        });
+        assert.equal(v.ok, false);
+        assert.equal(v.block, true);
+    });
+
+    it('blocks daily mismatch when hours match report', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 8,
+            overtimeNote: '',
+            overtimeDays: 1,
+            snapshot: snap,
+            overtimeDailyHours: { '2026-05-01': 4 }
+        });
+        assert.equal(v.ok, false);
+        assert.match(v.message, /480/);
+    });
+
+    it('does not require note when hours match report', () => {
+        const v = validatePayrollOvertimeSubmit({
+            overtimeHours: 8,
+            overtimeNote: '',
+            overtimeDays: 1,
+            snapshot: snap,
+            overtimeDailyHours: { '2026-05-01': 8 }
+        });
+        assert.equal(v.ok, true);
+        assert.equal(v.warn, false);
+    });
+});
+
+describe('enteredOvertimeDiffersFromReport', () => {
+    it('detects minute-level difference', () => {
+        const snap = { reportOvertimeMinutes: 480 };
+        assert.equal(enteredOvertimeDiffersFromReport(8, snap, 1), false);
+        assert.equal(enteredOvertimeDiffersFromReport(10, snap, 1), true);
     });
 });
 
@@ -83,7 +153,8 @@ describe('mergeOvertimeDailyRows', () => {
 });
 
 describe('sumOvertimeDailyHours', () => {
-    it('sums object values', () => {
+    it('sums via minutes', () => {
         assert.equal(sumOvertimeDailyHours({ a: 1.5, b: 2.5 }), 4);
+        assert.equal(sumOvertimeDailyMinutes({ a: 1.5, b: 2.5 }), 240);
     });
 });
