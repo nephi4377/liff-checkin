@@ -14,12 +14,20 @@ Endpoint：`https://info.tanxin.space/modules/projects/employee-todo/`
 
 ## 本目錄（employee-todo-src）
 
-SEC-1 stub／單元測試與 LIFF redirect 測試。**`npm run build` 只輸出到 `dist-stub/`**，不會覆寫正式 Mantle 產物。
+**不上正式站**：正式 UI 是 `modules/projects/employee-todo/` 的 Mantle bundle（`index-B0wpJKiW.js`）＋ `sheet-bridge.js`。本目錄 React stub 僅供單元／e2e；`npm run build` 只輸出 `dist-stub/`，**不會**覆寫 Mantle 產物。
+
+| 會跟著 PR 動的 | 不會上線 |
+| --- | --- |
+| `scripts/rebuild-production-pwa.mjs`、`npm run build:pwa` | `src/App.jsx`、`src/liffAuth.js`（維持 main 與正式無關） |
+| `src/localDev.js`（localhost 預覽規則測試） | `npm run build` → dist-stub |
+
+目前換包標記：**`et-build=20261103b`**（與 `modules/projects/employee-todo/index.html` 一致）。
 
 ```bash
 npm ci
 npm test
 npm run test:e2e   # 測 modules/projects/employee-todo/（Mantle＋bridge）
+npm run build:pwa  # 重算 sw.js precache 與 index ?v=（不改 Mantle bundle）
 ```
 
-預覽：`?preview=1`（bridge 示範資料，不打 GAS）。
+預覽：`?preview=1` 或 `?demo=1`（**僅 localhost**；bridge 示範資料，不打 GAS）。
