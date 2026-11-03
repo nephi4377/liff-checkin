@@ -324,11 +324,6 @@
     }
 
     /**
-     * @param {Array<Array>} json sheet_to_json header:1
-     * @param {string} sheetName
-     * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
-     */
-    /**
      * 同表內 id：與 quotation-item-id-migrate.mjs claimUniqueItemIdForSheet 邏輯一致。
      * @param {Set<string>} sheetUsedIds 本表已佔用的 id（逐列）
      * @param {string} baseId
@@ -354,7 +349,6 @@
 
     /** 預掃本表將產生的 item base id（供 reservedPlannedIds） */
     function collectPlannedBaseItemIdsForSheet(json, sheetName, options) {
-        const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
         const planned = new Set();
         if (!json || json.length < 3) return planned;
@@ -403,19 +397,11 @@
         return planned;
     }
 
-    function stableItemContentHash(data) {
-        const parts = ['name', 'spec', 'qty', 'unit', 'zone', 'sheet_source'].map((f) =>
-            String(data && data[f] != null ? data[f] : '').trim(),
-        );
-        const s = parts.join('\x1f');
-        let h = 2166136261;
-        for (let i = 0; i < s.length; i++) {
-            h ^= s.charCodeAt(i);
-            h = Math.imul(h, 16777619);
-        }
-        return (h >>> 0).toString(36).padStart(7, '0').slice(0, 7);
-    }
-
+    /**
+     * @param {Array<Array>} json sheet_to_json header:1
+     * @param {string} sheetName
+     * @param {{ getCategory?: Function, metadataKeywords?: string[] }} options
+     */
     function parseSheetRows(json, sheetName, options) {
         const getCategory = options && options.getCategory ? options.getCategory : () => '其他';
         const metadataKeywords = (options && options.metadataKeywords) || [];
@@ -628,6 +614,5 @@
         exportPayloadContainsForbiddenKeys,
         assignUniqueItemIdForSheet,
         collectPlannedBaseItemIdsForSheet,
-        stableItemContentHash,
     };
 });

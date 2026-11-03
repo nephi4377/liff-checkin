@@ -31,11 +31,4 @@ describe('budget-quote-parser-lib item ids', () => {
         );
         expect(out).toEqual(['ITEM_X', 'ITEM_X_3', 'ITEM_X_2']);
     });
-
-    it('stableItemContentHash 相同內容產生相同 hash', () => {
-        const a = { name: '測試', spec: 'A', qty: '1', unit: '式', zone: '客廳' };
-        expect(BudgetQuoteParser.stableItemContentHash(a)).toBe(
-            BudgetQuoteParser.stableItemContentHash({ ...a }),
-        );
-    });
 });

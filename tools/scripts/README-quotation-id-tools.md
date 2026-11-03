@@ -1,27 +1,22 @@
-# 報價 context 重複 id 工具（不連 Firebase）
+# 報價 context 重複 id（不連 Firebase）
 
-## 合併後、同步至雲端前（須豪哥核准）
+本 repo **main** 提供可 `import` 的模組 `tools/quotation-item-id-migrate.mjs`（`migrateDuplicateItemIdsOnly`、`findDuplicateItemIds`），邏輯與 `tools/budget-quote-parser-lib.js` 的 `assignUniqueItemIdForSheet` 一致。**尚無** `tools/scripts/check-quotation-duplicate-ids.mjs`／`migrate-quotation-item-ids.mjs` CLI；日後若 #212 合併會另補。
 
-1. `node tools/scripts/check-quotation-duplicate-ids.mjs <context.json>`
-2. 若有重複：`node tools/scripts/migrate-quotation-item-ids.mjs <context.json>`（dry-run）
-3. **豪哥核准** dry-run 的 `changeCount`／`changes` 後：  
-   `node tools/scripts/migrate-quotation-item-ids.mjs <context.json> --write-out <out.json>`
-4. 從 BudgetWeb／Firebase 匯出之 **雲端 budget context JSON**（含 `context.items` 或頂層 `items`）以 `<out.json>` 的 `items` **取代**對應陣列；上傳時**只**用 Firebase `update()` 寫回 `context/items`（或等價路徑），**勿** `set()` 整份覆蓋（保留 `is_closed` 等欄位）。寫回會**整段覆蓋** `items` 陣列，寫入期間若他人更新進度會被蓋掉——請在**無人操作報價／驗收**時執行；**寫回前先重讀**雲端 context 並比對（例如 `updated_at`、筆數、抽查 id），有變動則**中止**並重新匯出／migrate。**正式寫入雲端前再次須豪哥核准。**
+## 程式用法（dry-run）
 
-**不先 migrate** 時，778 等同表多列共用 `ITEM_表名_項次` 會讓同步永遠被 id 驗證擋下。
+```javascript
+import {
+    migrateDuplicateItemIdsOnly,
+    findDuplicateItemIds,
+} from '../quotation-item-id-migrate.mjs';
 
-## 只讀檢查
-
-```bash
-node tools/scripts/check-quotation-duplicate-ids.mjs path/to/budget_context.json
+const { items, changes } = migrateDuplicateItemIdsOnly(contextItems);
+console.log(findDuplicateItemIds(items), changes);
 ```
 
-## 一次性補 id（僅真重複 id；第 1 筆不變，第 2 筆起 `_2`、`_3`）
+正式寫入雲端前須豪哥核准；寫回 `items` 時用 Firebase `update()` 局部更新，勿 `set()` 整份覆蓋（保留 `is_closed` 等欄位）。寫入期間若他人更新進度會被蓋掉——請在**無人操作報價／驗收**時執行；**寫回前先重讀**雲端 context 並比對（例如 `updated_at`、筆數、抽查 id），有變動則**中止**並重新匯出／migrate。
 
-```bash
-node tools/scripts/migrate-quotation-item-ids.mjs path/to/in.json
-node tools/scripts/migrate-quotation-item-ids.mjs path/to/in.json --write-out path/to/out.json
-```
+**不先處理重複 id** 時，778 等同表多列共用 `ITEM_表名_項次` 會讓同步永遠被 id 驗證擋下。
 
 ### 驗收進度
 
