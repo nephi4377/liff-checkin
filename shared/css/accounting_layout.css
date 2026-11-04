@@ -57,19 +57,29 @@ body.acct-page .acct-main {
   }
 }
 
-/* 表單頁：卡片內距稍大 */
+/* 表單頁：卡片內距稍大；卡片隨內容長高、不裁切欄位 */
 @media (min-width: 960px) {
   body.acct-page-form .card {
     padding: 20px 24px;
   }
 }
 
+body.acct-page-form .card {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
 /*
  * 瀏覽／列表頁（如歷史記帳）：不要再套 60vw＋左留白，
  * 否則窄桌機會與右側狀態欄重疊，篩選與列表變擠。
+ * 寬表單（待付款請款兩欄）同樣需要實際內容寬，不可只看視窗 media。
  */
 @media (min-width: 960px) {
-  body.acct-page-browse.acct-page .acct-main {
+  body.acct-page-browse.acct-page .acct-main,
+  body.acct-page-wide.acct-page .acct-main {
     width: 100%;
     max-width: min(1100px, calc(100% - 8px));
     margin-left: 0;
@@ -77,29 +87,75 @@ body.acct-page .acct-main {
   }
 }
 
-/* 待付款申請：寬螢幕左傳檔、右填表 */
-@media (min-width: 1100px) {
+/*
+ * 待付款申請：左傳檔、右填表。
+ * 主控台／殼層 iframe 實際寬常遠小於視窗寬；用 container query 依「卡片寬」開兩欄，
+ * 避免 @media(min-width:1100px) 在窄 iframe 裡仍開兩欄，欄位溢出白卡。
+ */
+.acct-payment-form {
+  container-type: inline-size;
+  container-name: acct-pay;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.acct-pay-layout {
+  display: block;
+  min-width: 0;
+  height: auto;
+  overflow: visible;
+}
+
+.acct-pay-col-upload,
+.acct-pay-col-fields {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@container acct-pay (min-width: 820px) {
   .acct-pay-layout {
     display: grid;
-    grid-template-columns: minmax(300px, 1fr) minmax(380px, 1.25fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
     gap: 28px 32px;
     align-items: start;
   }
 
-  .acct-payment-form .photo-grid {
+  /* 選擇器相對於 container 後代；容器本身是 .acct-payment-form，勿再寫一層 */
+  .photo-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .acct-payment-form .alloc-row .row2 {
-    grid-template-columns: 1fr 1fr 1.5fr;
+  .alloc-row .row2 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
   }
 }
 
-/* 通用表單：寬螢幕兩欄區塊（加 class acct-form-2col 於容器） */
+/* 無 container 支援時的後備：僅在夠寬視窗開兩欄，且欄寬可收縮 */
+@supports not (container-type: inline-size) {
+  @media (min-width: 1200px) {
+    .acct-pay-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+      gap: 28px 32px;
+      align-items: start;
+    }
+
+    .acct-payment-form .photo-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .acct-payment-form .alloc-row .row2 {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+    }
+  }
+}
+
+/* 通用表單：寬螢幕兩欄區塊（加 class acct-form-2col 於容器；此 class 在容器自身，只能用 media） */
 @media (min-width: 1100px) {
   .acct-form-2col {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 20px 28px;
     align-items: start;
   }
@@ -124,15 +180,17 @@ body.acct-shell-host #shellBack a {
   text-decoration: none;
 }
 
-/* iframe 在 .acct-main 內，寬度跟外層主欄，勿再套一層左右留白 */
+/* iframe 在 .acct-main 內，寬度跟外層主欄，勿再套一層左右留白；高度至少一屏，可隨內容捲動 */
 body.acct-shell-host #acctContentFrame {
   display: block;
   width: 100%;
   max-width: 100%;
   min-height: calc(100vh - 140px);
+  height: auto;
   margin: 0;
   border: none;
   background: transparent;
+  overflow: auto;
 }
 
 body.acct-shell-host #acctContentFrame.hidden {
@@ -158,6 +216,16 @@ body.acct-embed.acct-page .acct-main {
   min-width: 0 !important;
   margin-left: 0 !important;
   margin-right: 0 !important;
+}
+
+/* 目前頁導覽（勿與可點連結混淆） */
+.acct-nav-current,
+.nav .acct-nav-current {
+  color: #0f766e;
+  font-weight: 700;
+  pointer-events: none;
+  cursor: default;
+  text-decoration: none;
 }
 
 /* 金額 =算式：欄位下方小字預覽 */
