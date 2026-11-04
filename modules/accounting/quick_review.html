@@ -764,15 +764,34 @@
         }
       }
 
+      /** 認領下拉：只用在職／啟用廠商，依名稱排序（與名冊一致） */
+      function claimVendorList() {
+        return (vendors || []).filter(function (v) {
+          if (!v || !v.vendor_id) return false;
+          return String(v.is_active || '是') !== '否';
+        }).slice().sort(function (a, b) {
+          return String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant');
+        });
+      }
       function vendorOptionsHtml(selectedId) {
+        var list = claimVendorList();
         var opts = ['<option value="">— 選擇廠商 —</option>'];
-        vendors.forEach(function (v) {
+        if (!list.length) {
+          opts.push('<option value="" disabled>廠商名冊載入中或尚無啟用廠商</option>');
+          return opts.join('');
+        }
+        list.forEach(function (v) {
           var id = v.vendor_id || '';
-          if (!id) return;
           var sel = id === selectedId ? ' selected' : '';
           opts.push('<option value="' + esc(id) + '"' + sel + '>' + esc(v.name || id) + '</option>');
         });
         return opts.join('');
+      }
+      function applyVendors(list) {
+        vendors = list || [];
+        // 清單／主檔常在第一輪 renderList 之後才到；一定要重畫認領下拉
+        if (items.length) renderList();
+        fillVendorDropdown();
       }
 
       function shortTime(s) {
@@ -1113,11 +1132,43 @@
             return;
           }
           if (category === '已登記') {
-            setOk('已標「已登記」：可在上方「已登記」分頁查看（約保留兩個月）');
+            // 先切「已登記」分頁並立刻秀出這一筆，再跟伺服器對一次
+            var registeredRow = row
+              ? Object.assign({}, row, {
+                  status: '已登記',
+                  category: '已登記'
+                })
+              : null;
+            if (registeredRow && vendorId) {
+              registeredRow.vendor_id = vendorId;
+              var picked = claimVendorList().filter(function (v) {
+                return v.vendor_id === vendorId;
+              })[0];
+              if (picked) registeredRow.vendor_name = picked.name || registeredRow.vendor_name;
+            }
+            if (data && data.item) {
+              registeredRow = Object.assign({}, registeredRow || {}, data.item, {
+                status: '已登記',
+                category: '已登記'
+              });
+            }
+            var selReg = document.getElementById('filterStatus');
+            if (selReg) selReg.value = '已登記';
+            syncStatusChips();
+            items = registeredRow ? [registeredRow] : [];
+            cacheWrite(items, '已登記');
+            renderList();
+            setOk('已標「已登記」：已轉到上方「已登記」分頁（約保留兩個月）');
             setFlowBanner('ok',
-              '已標<strong>已登記</strong>。單據不會消失，已移到上方「已登記」分頁，約保留兩個月；逾時自動封存。');
-            // 直接切到已登記分頁，讓人看到還在
-            setFilterStatus('已登記');
+              '已標<strong>已登記</strong>，並切到上方<strong>已登記</strong>分頁。單據還在這裡約兩個月；逾時自動封存。標錯可再改分類。');
+            // 捲到篩選列，確認分頁有亮
+            try {
+              var chips = document.getElementById('statusChips');
+              if (chips && chips.scrollIntoView) {
+                chips.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              }
+            } catch (eScroll) {}
+            reload({ silent: true });
             return;
           }
           setOk('已標為「' + category + '」' + (leaveList ? '（已從待處理移出）' : ''));
@@ -1346,14 +1397,16 @@
           await reload({ silent: !!(cached && cached.items && cached.items.length) });
           if (typeof AccountingCache !== 'undefined') {
             try {
-              vendors = AccountingCache.vendors(session) || AccountingCache.peekVendors() || [];
-              if (vendors.length) fillVendorDropdown();
-              if (!vendors.length && AccountingCache.needsStaffBootstrap(session)) {
-                AccountingCache.load(session, false).then(function () {
-                  vendors = AccountingCache.vendors(session) || [];
-                  if (vendors.length && items.length) renderList();
-                  fillVendorDropdown();
-                }).catch(function () {});
+              applyVendors(
+                AccountingCache.vendors(session) || AccountingCache.peekVendors() || []
+              );
+              // 認領下拉依賴主檔；空的就強制再載（先前只 fill 手動存檔下拉、沒重畫認領選項）
+              if (!vendors.length) {
+                AccountingCache.load(session, !!AccountingCache.needsStaffBootstrap(session))
+                  .then(function () {
+                    applyVendors(AccountingCache.vendors(session) || []);
+                  })
+                  .catch(function () {});
               }
             } catch (eCache) {}
           }
