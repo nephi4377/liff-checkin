@@ -249,9 +249,10 @@
       <button type="button" data-tab="archive">手動存檔</button>
     </div>
     <p class="hint" id="reviewHint">
-      點分類即可。「請款」會開填表頁；<strong>沒送出成功前，單據會留在這裡並標「請款中」</strong>，不會不見。
-      「已登記」＝帳上已有、不必再請款；<strong>待認領也可直接點、不必先選廠商</strong>；標完進上方<strong>已登記</strong>分頁，約保留兩個月。
-      「其他」標完進上方<strong>其他</strong>分頁（有選廠商才寫入手動存檔；待認領也可先不選）；報價／出貨標完進「已完成」；廢棄可不選廠商，會再問一次確認。
+      點分類即可。<strong>只有「請款」會開填表頁</strong>；其餘分類<strong>不會自動跳分頁</strong>，單據從待處理移出後可手動點上方「已登記／其他／已完成」查看。
+      「請款」沒送出成功前會留在這裡並標「請款中」。
+      「已登記」＝帳上已有、不必再請款；待認領可不選廠商；約保留兩個月。
+      「其他」有選廠商才寫入手動存檔；報價／出貨進「已完成」；廢棄會再問一次確認。
     </p>
     <p class="hint hidden" id="archiveHint">
       報價、合約、型錄等：選廠商後上傳，會進該廠資料夾。不必走請款審核。
@@ -950,7 +951,7 @@
               ? ('共 ' + items.length + ' 筆其他（可再改標；已列入手動存檔）')
               : (filterStatus === '已分類'
                 ? ('共 ' + items.length + ' 筆已完成（請款送出成功或已標報價／出貨等）')
-                : ('共 ' + items.length + ' 筆（請款須送出成功才移出；已登記／其他進對應分頁）'))));
+                : ('共 ' + items.length + ' 筆（請款須送出成功才移出；已登記／其他標完可手動點對應分頁）'))));
         box.innerHTML = items.map(function (it) {
           var unclaimed = it.status === '待認領';
           var payPending = it.status === '請款中';
@@ -1108,7 +1109,7 @@
         var row = items.filter(function (x) { return x.quick_review_id === id; })[0];
         var vendorId = resolveVendorId(itemEl, row);
         var unclaimed = row && row.status === '待認領';
-        // 已登記／其他／廢棄：可不選廠商也能標完並轉分頁（其他有廠商才寫入手動存檔）
+        // 已登記／其他／廢棄：可不選廠商（其他有廠商才寫入手動存檔）；除請款外不自動跳分頁
         var skipVendorOk = category === '已登記' || category === '其他' || category === '廢棄';
         var needVendor = (category === '請款') || (unclaimed && !skipVendorOk);
         if (needVendor && !vendorId) {
@@ -1197,87 +1198,51 @@
             }
             return;
           }
-          if (category === '已登記' || category === '其他') {
-            // 先切對應分頁並立刻秀出這一筆，再跟伺服器對一次（同 已登記 UX）
-            var tabStatus = category;
-            var movedRow = row
-              ? Object.assign({}, row, {
-                  status: tabStatus,
-                  category: category
-                })
-              : null;
-            if (movedRow && vendorId) {
-              movedRow.vendor_id = vendorId;
-              var picked = claimVendorList().filter(function (v) {
+          // 已登記／其他／報價／出貨／廢棄：留在目前分頁，不自動跳轉（只有請款會開填表）
+          var stayStatus = (category === '已登記' || category === '其他')
+            ? category
+            : '已分類';
+          if (!leaveList && row) {
+            row.status = stayStatus;
+            row.category = category;
+            if (vendorId) {
+              row.vendor_id = vendorId;
+              var pickedStay = claimVendorList().filter(function (v) {
                 return v.vendor_id === vendorId;
               })[0];
-              if (picked) movedRow.vendor_name = picked.name || movedRow.vendor_name;
+              if (pickedStay) row.vendor_name = pickedStay.name || row.vendor_name;
             }
-            if (data && data.item) {
-              movedRow = Object.assign({}, movedRow || {}, data.item, {
-                status: tabStatus,
-                category: category
-              });
+            // 若目前在「已登記／其他／已完成」且新狀態不符，從列表拿掉（仍不切分頁）
+            if ((filterStatus === '已登記' || filterStatus === '其他' || filterStatus === '已分類') &&
+                filterStatus !== stayStatus) {
+              items = items.filter(function (x) { return x.quick_review_id !== id; });
             }
-            var selTab = document.getElementById('filterStatus');
-            if (selTab) selTab.value = tabStatus;
-            // 作廢進行中的清單請求，避免稍後把「其他／已登記」蓋回待處理結果
-            reloadSeq++;
-            syncStatusChips();
-            items = movedRow ? [movedRow] : [];
-            cacheWrite(items, tabStatus);
-            renderList();
-            if (category === '已登記') {
-              setOk('已標「已登記」：已轉到上方「已登記」分頁（約保留兩個月）');
-              setFlowBanner('ok',
-                '已標<strong>已登記</strong>，並切到上方<strong>已登記</strong>分頁。單據還在這裡約兩個月；逾時自動封存。標錯可再改分類。');
-            } else {
-              var otherArchiveHint = vendorId
-                ? '同一份檔也會進手動存檔；'
-                : '若之後補選廠商再標一次，才會寫入手動存檔；';
-              setOk('已標「其他」：已轉到上方「其他」分頁');
-              setFlowBanner('ok',
-                '已標<strong>其他</strong>，並切到上方<strong>其他</strong>分頁。' +
-                otherArchiveHint + '標錯可再改分類。');
-            }
-            try {
-              var chips = document.getElementById('statusChips');
-              if (chips && chips.scrollIntoView) {
-                chips.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-              }
-            } catch (eScroll) {}
-            var optimistic = movedRow;
-            // 等進行中的清單請求結束再拉「其他／已登記」，避免舊 open 結果蓋掉剛切的分頁
-            (async function () {
-              var spins = 0;
-              while (reloadBusy && spins < 50) {
-                await new Promise(function (r) { setTimeout(r, 40); });
-                spins++;
-              }
-              reloadQueued = null;
-              await reload({ silent: true });
-              if (optimistic && !items.length) {
-                var stillTab = document.getElementById('filterStatus');
-                if (stillTab && stillTab.value === tabStatus) {
-                  items = [optimistic];
-                  cacheWrite(items, tabStatus);
-                  renderList();
-                }
-              }
-            })();
-            return;
           }
-          setOk('已標為「' + category + '」' + (leaveList ? '（已從待處理移出）' : ''));
-          setFlowBanner(leaveList ? 'ok' : '',
-            leaveList
-              ? ('已標「' + esc(category) + '」，這筆已從待處理移出。標錯了可按上方「已完成」找回再重標。')
-              : '');
+          if (category === '已登記') {
+            setOk('已標「已登記」' + (leaveList ? '（已從待處理移出）' : '') + '；約保留兩個月');
+            setFlowBanner('ok',
+              '已標<strong>已登記</strong>' +
+              (leaveList ? '，這筆已從待處理移出' : '') +
+              '。要查看可手動點上方「已登記」；約兩個月後自動封存。標錯可再改分類。');
+          } else if (category === '其他') {
+            var otherArchiveHint = vendorId
+              ? '同一份檔也會進手動存檔；'
+              : '若之後補選廠商再標一次，才會寫入手動存檔；';
+            setOk('已標「其他」' + (leaveList ? '（已從待處理移出）' : ''));
+            setFlowBanner('ok',
+              '已標<strong>其他</strong>' +
+              (leaveList ? '，這筆已從待處理移出' : '') +
+              '。' + otherArchiveHint +
+              '要查看可手動點上方「其他」。標錯可再改分類。');
+          } else {
+            setOk('已標為「' + category + '」' + (leaveList ? '（已從待處理移出）' : ''));
+            setFlowBanner(leaveList ? 'ok' : '',
+              leaveList
+                ? ('已標「' + esc(category) + '」，這筆已從待處理移出。標錯了可按上方「已完成」找回再重標。')
+                : '');
+          }
           cacheWrite(items, filterStatus);
           if (!leaveList) {
-            if (row) {
-              row.status = '已分類';
-              row.category = category;
-            }
             renderList();
           } else if (!items.length) {
             renderList();
