@@ -54,6 +54,7 @@
       padding: 10px 12px; font-size: 15px;
     }
     .btn-cat.pay { background: #e6f4ea; color: #137333; }
+    .btn-cat.registered { background: #e8f0fe; color: #174ea6; }
     .btn-cat.drop { background: #fce8e6; color: #c5221f; }
     /* 縮圖｜說明｜操作：同一列對齊，避免按鈕擠到縮圖底下 */
     .item {
@@ -225,7 +226,7 @@
     </div>
     <p class="hint" id="reviewHint">
       點分類即可。「請款」會開填表頁；<strong>沒送出成功前，單據會留在這裡並標「請款中」</strong>，不會不見。
-      報價等其他類標完會移出；廢棄會再問一次確認。
+      「已登記」＝帳上已有、不必再請款，標完會移出。報價等其他類標完也會移出；廢棄會再問一次確認。
     </p>
     <p class="hint hidden" id="archiveHint">
       報價、合約、型錄等：選廠商後上傳，會進該廠資料夾。不必走請款審核。
@@ -876,6 +877,7 @@
                   '<button type="button" class="btn btn-cat" data-cat="報價">報價</button>' +
                   '<button type="button" class="btn btn-cat" data-cat="出貨">出貨</button>' +
                   '<button type="button" class="btn btn-cat" data-cat="其他">其他</button>' +
+                  '<button type="button" class="btn btn-cat registered" data-cat="已登記">已登記</button>' +
                   '<button type="button" class="btn btn-cat drop" data-cat="廢棄">廢棄</button>' +
                 '</div>' +
               '</div>' +
