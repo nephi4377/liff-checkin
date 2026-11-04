@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>待付款請款</title>
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=9" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
@@ -22,11 +22,16 @@
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.5; }
-    .card { background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .card {
+      background: #fff; border-radius: 12px; padding: 14px; margin: 12px 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      height: auto; max-height: none; overflow: visible; box-sizing: border-box; min-width: 0;
+    }
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
     input, select, textarea { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
     input:read-only { background: #f1f3f4; color: #555; }
-    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; min-width: 0; }
+    .row2 > div { min-width: 0; }
     .btn { padding: 10px 14px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 14px; }
     .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
     .btn-secondary { background: #e8eaed; color: #333; width: 100%; padding: 12px; margin-top: 8px; }
@@ -39,8 +44,11 @@
     .alloc-empty { color: #666; font-size: 14px; padding: 12px 0; }
     .btn-finance { background: #fff; color: #34a853; border: 2px solid #34a853; width: 100%; padding: 10px; margin-top: 8px; font-size: 13px; }
     .btn-ghost { background: #fff; border: 1px dashed #1a73e8; color: #1a73e8; width: 100%; padding: 10px; margin-top: 8px; }
-    .seg { display: flex; gap: 6px; margin-top: 6px; }
-    .seg button { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 8px; background: #fff; font-weight: 600; cursor: pointer; }
+    .seg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-width: 0; }
+    .seg button {
+      flex: 1 1 auto; min-width: 0; padding: 10px; border: 1px solid #ccc; border-radius: 8px;
+      background: #fff; font-weight: 600; cursor: pointer; box-sizing: border-box;
+    }
     .seg button.active { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
     #msg { color: #c5221f; font-size: 14px; margin: 8px 0; }
     #ok { color: #137333; font-size: 14px; margin: 8px 0; }
@@ -128,7 +136,12 @@
     }
     .vendor-combo-item:hover, .vendor-combo-item.active { background: #e8f0fe; }
     .vendor-combo-empty { padding: 10px 12px; font-size: 13px; color: #777; }
-    #formCard { position: relative; }
+    #formCard {
+      position: relative;
+      height: auto;
+      max-height: none;
+      overflow: visible;
+    }
     .form-submit-overlay {
       position: absolute; inset: 0; z-index: 15;
       background: rgba(255,255,255,.78); border-radius: 12px;
@@ -160,17 +173,17 @@
       width: auto; min-width: 0; margin-top: 0; padding: 10px 14px; flex: 0 1 auto;
     }
     .acct-pay-col-upload,
-    .acct-pay-col-fields { min-width: 0; }
+    .acct-pay-col-fields { min-width: 0; max-width: 100%; }
     .acct-pay-col-fields > label:first-of-type { margin-top: 0; }
     @media (min-width: 560px) {
       .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
   </style>
 </head>
-<body class="acct-page acct-page-form">
+<body class="acct-page acct-page-form acct-page-wide">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
+    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><span class="acct-nav-current" aria-current="page">待付款請款</span><span> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>待付款請款</h2>
     <p class="sub" id="userLine">—</p>
     <div class="seg hidden" id="pageModeSeg" style="margin:10px 0 6px">
