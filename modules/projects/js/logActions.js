@@ -548,19 +548,20 @@ export function handleCreateNewPost() {
       if (result.success) {
         window.replaceOptimisticCard(optimisticLog.LogID, result.data);
         showGlobalNotification(result.message || '日誌已成功建立！', 3000, 'success');
+        textarea.value = '';
+        if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
+        if (titleSelect) titleSelect.selectedIndex = 0;
       } else {
-        showGlobalNotification(`建立日誌失敗: ${result.error || '未知錯誤'}`, 8000, 'error');
-        newCard.style.border = '2px solid red';
+        showGlobalNotification(`發佈失敗：${result.error || result.message || '請再試一次'}`, 8000, 'error');
+        if (newCard && newCard.parentNode) newCard.remove();
       }
     })
     .catch(error => {
-      showGlobalNotification(`請求失敗: ${error.message}`, 8000, 'error');
-      newCard.style.border = '2px solid red';
+      showGlobalNotification(`發佈失敗：${error.message || '請再試一次'}`, 8000, 'error');
+      if (newCard && newCard.parentNode) newCard.remove();
+    })
+    .finally(() => {
+      submitBtn.disabled = false;
+      submitBtn.textContent = '發佈';
     });
-
-  submitBtn.disabled = false;
-  submitBtn.textContent = '發佈';
-  textarea.value = '';
-  if (photoPreviewContainer) photoPreviewContainer.innerHTML = '';
-  if (titleSelect) titleSelect.selectedIndex = 0;
 }
