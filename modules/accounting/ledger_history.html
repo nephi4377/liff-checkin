@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=7" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
-  <script src="../../shared/js/ledger_entry_map.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=111"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=6"></script>
+  <script src="../../shared/js/accounting_api.js?v=112"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
   <script src="../../shared/js/accounting_ui.js?v=33"></script>
@@ -333,7 +333,7 @@
     <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
     <h2>歷史記帳紀錄</h2>
     <p class="sub" id="userLine">—</p>
-    <p class="sub" id="pageModeHint">權限 ≥1 可查<strong>自己記的收支登錄</strong>（列表依伺服器回傳）。權限 5 可看全部並審核疑重。本人或權限 5 可改帳／作廢；作廢列仍可看、不計入合計。預設近 30 天。</p>
+    <p class="sub" id="pageModeHint">權限 ≥3 預設查<strong>全部人</strong>收支登錄（可改「只看我記的」）。權限 1～2 只看自己。本人或權限 5 可改帳／作廢；作廢列仍可看、不計入合計。日期＝新增時間（不是交易日）；預設近 30 天。</p>
 
     <div class="card" id="historyFiltersCard">
       <div class="hist-head">
@@ -368,14 +368,14 @@
         </div>
         <div>
           <label for="histAmount">金額（選填）</label>
-          <input id="histAmount" type="text" inputmode="numeric" placeholder="例：1500 或 1,500" autocomplete="off" />
+          <input id="histAmount" type="text" inputmode="numeric" placeholder="例：12285（請款原額也可）" autocomplete="off" />
         </div>
         <div class="full">
           <label for="histKeyword">關鍵字（廠商／對象／事由／備註）</label>
           <input id="histKeyword" type="text" placeholder="例：廠商名、訂金（可部分符合）" autocomplete="off" />
         </div>
         <div class="full">
-          <p class="hint" style="margin:0 0 8px">日期區間依<strong>新增時間</strong>（不是交易日）；預設近 30 天。本頁僅收支登錄；已送出請款見「送出紀錄」。</p>
+          <p class="hint" style="margin:0 0 8px">日期＝你<strong>按下送出的時間</strong>（不是表單交易日）。金額可填入帳額或請款原額。本頁僅收支登錄；已送出請款見「送出紀錄」。</p>
           <div class="hist-actions">
             <button type="button" class="btn-ghost btn-primary-hist" id="historySearchBtn">查詢</button>
             <button type="button" class="btn-ghost" id="historyClearBtn">重設為近 30 天</button>
@@ -674,7 +674,7 @@
         if (row) row.classList.toggle('hidden', !canAll);
         if (!hint) return;
         if (!canAll) {
-          var base = '權限 ≥1 可查<strong>自己記的帳</strong>（列表依伺服器回傳）。可用廠商名／金額篩選；本人可改帳／作廢。權限 5 可看全部人。預設近 30 天。';
+          var base = '權限 1～2 只查<strong>自己記的帳</strong>。可用廠商名／金額篩選；本人可改帳／作廢。權限 ≥3 可看全部人。日期＝新增時間；預設近 30 天。';
           if (hubPermissionAheadOfAuth()) {
             base += ' <span class="hint">權限更新中，請重新整理</span>';
           }
@@ -683,8 +683,8 @@
         }
         var mineOnly = readHistoryMineOnlyFlag();
         hint.innerHTML = mineOnly
-          ? '目前為<strong>只看我記的</strong>。權限 5 可改回「全部」看他人紀錄。'
-          : '權限 5 可<strong>查全部人</strong>或改選只看我記的。點列可改帳／作廢（本人或權限 5）。';
+          ? '目前為<strong>只看我記的</strong>。可改回「全部」看他人紀錄（權限 ≥3）。'
+          : '目前查<strong>全部人</strong>；可改選只看我記的。點列可看詳情；改帳／作廢限本人或權限 5。';
       }
 
       function sessionAuthPermForLedger() {
@@ -1384,6 +1384,10 @@
         var meta = [];
         if (it.party_name) meta.push(it.party_name);
         if (it.desc && it.desc !== it.party_name) meta.push(it.desc);
+        var who = typeof LedgerEntryMap !== 'undefined'
+          ? LedgerEntryMap.recorderDisplay(it)
+          : '';
+        if (who && who !== '—') meta.push('記帳 ' + who);
         if (it.project_no) meta.push('案號 ' + it.project_no);
         if (it.payment_method) meta.push(it.payment_method);
         if (it.note) meta.push(it.note);
@@ -1646,7 +1650,9 @@
             renderHistoryItems(sortHistoryByRecordedAtOnly(data.items || []));
           } else {
             var hint = (data.empty_hint && String(data.empty_hint).trim())
-              || ('這段時間沒有符合條件的' + kindLabel + '。可改查近 ' + HISTORY_EXPAND_DAYS + ' 天，或自訂更早區間／關鍵字後再查。');
+              || ('這段時間沒有符合條件的' + kindLabel +
+                '。若用交易日找會落空——請用「新增時間」區間；金額可試請款原額；或改查近 ' +
+                HISTORY_EXPAND_DAYS + ' 天／清關鍵字後再查。');
             setStatus(hint + '（' + bits.join(' · ') + '）', 'empty');
             listEl.innerHTML = '';
             renderHistoryTotals([]);
