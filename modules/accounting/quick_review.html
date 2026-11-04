@@ -837,35 +837,33 @@
         return st || '';
       }
 
-      /** 快審 source 代碼 → 人話（勿只顯示 accounting_group） */
-      function sourceDisplayLabel(code) {
-        var c = String(code || '').trim();
-        if (!c) return '';
-        if (c === 'accounting_group') return '會計群組';
-        if (c === 'invoice_group') return '轉貼群';
-        if (c === 'line_vendor') return 'LINE 廠商群';
-        if (c === 'line_group') return 'LINE 群組';
-        if (c === 'line_dm') return 'LINE 私訊';
-        if (c === 'staff_request') return '員工申請';
-        return c;
-      }
-
-      /** 傳圖者無法辨識時，至少顯示「來自哪裡」 */
+      /** 假人名／硬編來源：畫面不要出現 */
       function isUnresolvedSender(name) {
         var s = String(name || '').trim();
         if (!s) return true;
-        if (s === '未知使用者' || s === '未知' || /^unknown/i.test(s)) return true;
+        if (s === '未知使用者' || s === '未知' || s === '未知來源' || s === '會計群組') return true;
+        if (/^unknown/i.test(s)) return true;
+        if (/^來自/.test(s)) return true;
         // LINE userId（U + 32 hex）不當作顯示名
         if (/^U[0-9a-fA-F]{32}$/.test(s)) return true;
         return false;
       }
 
+      /**
+       * 來源標籤：真實群名／對話名（後端 origin_label／line_group_name）
+       * → 沒有才退回 source 代碼。禁止硬編「會計群組」。
+       */
+      function originDisplayLabel(it) {
+        var o = String((it && (it.origin_label || it.line_group_name)) || '').trim();
+        if (o && !isUnresolvedSender(o)) return o;
+        return String((it && it.source) || '').trim();
+      }
+
+      /** 時間列只顯示真實傳圖者；沒有就空（來源已在標籤） */
       function senderDisplayText(it) {
         var who = String((it && it.created_by) || '').trim();
-        var origin = sourceDisplayLabel(it && it.source);
-        if (!isUnresolvedSender(who)) return who;
-        if (origin) return '來自' + origin;
-        return '未知來源';
+        if (isUnresolvedSender(who)) return '';
+        return who;
       }
 
       function renderList() {
@@ -920,8 +918,8 @@
                 '<div class="meta-row">' +
                   '<span class="tag' + tagClass + '">' + esc(statusLabel) + '</span>' +
                   (it.category && !payPending && !registered ? ('<span class="tag">' + esc(it.category) + '</span>') : '') +
-                  (sourceDisplayLabel(it.source)
-                    ? ('<span class="tag">' + esc(sourceDisplayLabel(it.source)) + '</span>')
+                  (originDisplayLabel(it)
+                    ? ('<span class="tag">' + esc(originDisplayLabel(it)) + '</span>')
                     : '') +
                 '</div>' +
                 (payPending
@@ -931,7 +929,7 @@
                   ? '<p class="pay-help" style="color:#174ea6">已標已登記，約保留兩個月。標錯可改點其他分類。</p>'
                   : '') +
                 '<p class="time-line">' + esc(shortTime(it.reviewed_at || it.created_at)) +
-                  ' · ' + esc(senderDisplayText(it)) + '</p>' +
+                  (senderDisplayText(it) ? (' · ' + esc(senderDisplayText(it))) : '') + '</p>' +
                 '<p class="mono">' + esc(it.filename || '') + '</p>' +
               '</div>' +
               '<div class="item-body">' +
