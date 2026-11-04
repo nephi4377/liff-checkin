@@ -1,9 +1,10 @@
 // @ts-check
 const path = require('path');
 
-/** BudgetWeb RTDB 登入層 E2E（根目錄 serve） */
+/** BudgetWeb RTDB 登入層 E2E（根目錄 serve；console smoke 見 playwright.console.config.cjs） */
 module.exports = {
   testDir: path.join(__dirname, 'e2e'),
+  testIgnore: ['**/console/**'],
   timeout: 60_000,
   fullyParallel: false,
   workers: 1,

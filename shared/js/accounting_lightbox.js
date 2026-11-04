@@ -78,7 +78,7 @@ var AccountingLightbox = (function () {
       link.href = u;
       link.style.display = '';
       link.textContent = '在新分頁開啟';
-    } else if (/^data:/i.test(String(u || ''))) {
+    } else if (/^data:image\//i.test(String(u || ''))) {
       link.href = u;
       link.style.display = '';
       link.textContent = '在新分頁開啟';
@@ -134,6 +134,37 @@ var AccountingLightbox = (function () {
     }
   }
 
+  function localAttachFailMock() {
+    var host = window.location && window.location.hostname;
+    if (host !== '127.0.0.1' && host !== 'localhost') return false;
+    try {
+      return String(new URLSearchParams(window.location.search).get('mock') || '') === 'attachfail';
+    } catch (eMock) {
+      return false;
+    }
+  }
+
+  function mapAttachmentUrls_(data) {
+    return (data && data.data ? data.data : []).map(function (r) {
+      return String(r.drive_url || '').trim();
+    }).filter(Boolean);
+  }
+
+  async function fetchAttachmentUrlsOnce_(session, filter) {
+    if (localAttachFailMock()) {
+      var mockErr = new Error('單據讀不到，請再試');
+      mockErr.code = 'ATTACH_FETCH_FAILED';
+      throw mockErr;
+    }
+    var data = await AccountingApi.crudList(session, 'attachment', filter);
+    if (!data || !data.success) {
+      var err = new Error((data && data.message) || '單據讀不到，請再試');
+      err.code = 'ATTACH_FETCH_FAILED';
+      throw err;
+    }
+    return mapAttachmentUrls_(data);
+  }
+
   /**
    * 成功回傳 URL 陣列（可為空＝真的沒附件）。
    * API／網路失敗會 throw，勿當成空陣列。
@@ -142,7 +173,7 @@ var AccountingLightbox = (function () {
     ref = ref || {};
     if (ref.attachment_urls && ref.attachment_urls.length) return ref.attachment_urls;
     if (!session || typeof AccountingApi === 'undefined') {
-      var noApi = new Error('附件讀不到，請再試');
+      var noApi = new Error('單據暫時讀不到，請再試');
       noApi.code = 'ATTACH_FETCH_FAILED';
       throw noApi;
     }
@@ -150,13 +181,18 @@ var AccountingLightbox = (function () {
     if (ref.payment_request_id) filter.payment_request_id = ref.payment_request_id;
     else if (ref.ingest_id) filter.ingest_id = ref.ingest_id;
     else return [];
-    var data = await AccountingApi.crudList(session, 'attachment', filter);
-    if (!data || !data.success) {
-      var err = new Error((data && data.message) || '附件讀不到，請再試');
-      err.code = 'ATTACH_FETCH_FAILED';
-      throw err;
+    try {
+      return await fetchAttachmentUrlsOnce_(session, filter);
+    } catch (e1) {
+      await new Promise(function (r) { setTimeout(r, 400); });
+      try {
+        return await fetchAttachmentUrlsOnce_(session, filter);
+      } catch (e2) {
+        var finalErr = new Error((e2 && e2.message) || (e1 && e1.message) || '單據讀不到，請再試');
+        finalErr.code = 'ATTACH_FETCH_FAILED';
+        throw finalErr;
+      }
     }
-    return (data.data || []).map(function (r) { return String(r.drive_url || '').trim(); }).filter(Boolean);
   }
 
   async function openForRef(session, ref) {
@@ -168,7 +204,7 @@ var AccountingLightbox = (function () {
       }
       return open(list);
     } catch (e) {
-      notifyErr((e && e.message) || '附件讀不到，請再試');
+      notifyErr((e && e.message) || '單據讀不到，請再試');
       return false;
     }
   }
@@ -197,18 +233,19 @@ var AccountingLightbox = (function () {
     function showFail(msg) {
       clearHandlers();
       btn.classList.add('acct-lb-error');
-      btn.textContent = '附件讀不到';
+      btn.textContent = '單據讀不到，再試';
       btn.style.display = '';
       btn.disabled = false;
-      notifyErr(msg || '附件讀不到，請再試');
+      notifyErr(msg || '單據讀不到，請再試');
       btn.onclick = function () { load(); };
     }
 
     function showEmpty() {
       clearHandlers();
       btn.classList.remove('acct-lb-error');
-      btn.style.display = 'none';
-      btn.disabled = false;
+      btn.textContent = '沒有單據';
+      btn.style.display = '';
+      btn.disabled = true;
     }
 
     function load() {
@@ -221,7 +258,7 @@ var AccountingLightbox = (function () {
         if (list.length) bindOpen(list);
         else showEmpty();
       }).catch(function (e) {
-        showFail((e && e.message) || '附件讀不到，請再試');
+        showFail((e && e.message) || '單據讀不到，請再試');
       });
     }
 

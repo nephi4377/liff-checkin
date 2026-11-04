@@ -1,0 +1,245 @@
+/**
+ * Shared cache-bust (?v=) assertions for accounting HTML smoke tests.
+ */
+'use strict';
+
+var VERSION_LOOKAHEAD = '(?=["\'&\\s>)`#]|$)';
+
+var RE = {
+  accountingApi: new RegExp('(?:^|["\'\\/])accounting_api\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingShell: new RegExp('(?:^|["\'\\/])accounting_shell\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingTaxMode: new RegExp('(?:^|["\'\\/])accounting_tax_mode\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingLightbox: new RegExp('(?:^|["\'\\/])accounting_lightbox\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingLayout: new RegExp('(?:^|["\'\\/])accounting_layout\\.css\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingBoot: new RegExp('(?:^|["\'\\/])accounting_boot\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingCache: new RegExp('(?:^|["\'\\/])accounting_cache\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingUi: new RegExp('(?:^|["\'\\/])accounting_ui\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  accountingNav: new RegExp('(?:^|["\'\\/])accounting_nav\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  operatorContext: new RegExp('(?:^|["\'\\/])operator_context\\.js\\?v=(\\d+)' + VERSION_LOOKAHEAD, 'g'),
+  hubAppJs: new RegExp('(?:^|["\'\\/])app\\.js\\?v=([\\w.+-]+)' + VERSION_LOOKAHEAD, 'g')
+};
+
+/** Floors from LIFF-INTEGRATE-1 audit (main + #197/#203 subset on ledger_history). */
+var LEDGER_HISTORY_CACHE_BUST_FLOORS = [
+  { reKey: 'accountingLayout', min: 8, label: 'accounting_layout.css' },
+  { reKey: 'operatorContext', min: 4, label: 'operator_context.js' },
+  { reKey: 'accountingApi', min: 106, label: 'accounting_api.js' },
+  { reKey: 'accountingCache', min: 34, label: 'accounting_cache.js' },
+  { reKey: 'accountingLightbox', min: 22, label: 'accounting_lightbox.js' },
+  { reKey: 'accountingUi', min: 33, label: 'accounting_ui.js' },
+  { reKey: 'accountingNav', min: 4, label: 'accounting_nav.js' },
+  { reKey: 'accountingBoot', min: 15, label: 'accounting_boot.js' }
+];
+
+function assertLedgerHistoryCacheBustFloors(html) {
+  LEDGER_HISTORY_CACHE_BUST_FLOORS.forEach(function (row) {
+    assertNumericCacheBust(html, RE[row.reKey], 'ledger_history ' + row.label + ' cache bust', row.min);
+  });
+}
+
+var HUB_APP_JS_MIN_TOKEN = '26.10.13.1';
+
+function globalRe(assetRe) {
+  if (assetRe.global) return assetRe;
+  return new RegExp(assetRe.source, assetRe.flags + 'g');
+}
+
+function extractAllCacheBustVers(html, assetRe) {
+  var s = String(html || '');
+  var re = globalRe(assetRe);
+  var vers = [];
+  var m;
+  re.lastIndex = 0;
+  while ((m = re.exec(s)) !== null) {
+    vers.push(m[1]);
+  }
+  return vers;
+}
+
+/** @deprecated use extractAllCacheBustVers */
+function extractCacheBustVer(html, assetRe) {
+  var all = extractAllCacheBustVers(html, assetRe);
+  return all.length ? all[0] : null;
+}
+
+function compareDottedVersion(actual, minimum) {
+  var aParts = String(actual).split('.');
+  var mParts = String(minimum).split('.');
+  var len = Math.max(aParts.length, mParts.length);
+  for (var i = 0; i < len; i++) {
+    var av = parseInt(aParts[i] || '0', 10);
+    var mv = parseInt(mParts[i] || '0', 10);
+    if (isNaN(av) || isNaN(mv)) return false;
+    if (av > mv) return true;
+    if (av < mv) return false;
+  }
+  return true;
+}
+
+function assertNumericCacheBust(html, assetRe, msg, minVer) {
+  var vers = extractAllCacheBustVers(html, assetRe);
+  if (!vers.length) {
+    throw new Error((msg || 'expected numeric ?v= cache bust') + ' (no match)');
+  }
+  vers.forEach(function (v, i) {
+    var suffix = vers.length > 1 ? ' match #' + i : '';
+    if (!/^\d+$/.test(v)) {
+      throw new Error((msg || 'expected numeric ?v= cache bust') + suffix + ', got ' + JSON.stringify(v));
+    }
+    if (minVer != null && Number(v) < minVer) {
+      throw new Error(
+        (msg || 'expected numeric ?v= cache bust') + suffix + ': v=' + v + ' below min ' + minVer
+      );
+    }
+  });
+  return vers[0];
+}
+
+function assertCacheBustToken(html, assetRe, msg, minToken) {
+  var vers = extractAllCacheBustVers(html, assetRe);
+  if (!vers.length) {
+    throw new Error((msg || 'expected ?v= cache bust token') + ' (no match)');
+  }
+  var floor = minToken != null ? minToken : (assetRe === RE.hubAppJs ? HUB_APP_JS_MIN_TOKEN : null);
+  vers.forEach(function (v, i) {
+    var suffix = vers.length > 1 ? ' match #' + i : '';
+    if (!/^[\w.+-]+$/.test(v)) {
+      throw new Error((msg || 'expected ?v= cache bust token') + suffix + ', got ' + JSON.stringify(v));
+    }
+    if (floor != null && !compareDottedVersion(v, floor)) {
+      throw new Error(
+        (msg || 'expected ?v= cache bust token') + suffix + ': v=' + v + ' below min ' + floor
+      );
+    }
+  });
+  return vers[0];
+}
+
+function assertSameNumericCacheBust(htmls, assetRe, msg, minVer) {
+  var vers = (htmls || []).map(function (h, i) {
+    try {
+      return assertNumericCacheBust(h, assetRe, msg, minVer);
+    } catch (e) {
+      throw new Error((msg || 'asset') + ' page ' + i + ': ' + e.message);
+    }
+  });
+  if (!vers.length) throw new Error(msg || 'no pages to compare');
+  if (new Set(vers).size !== 1) {
+    throw new Error((msg || 'asset') + ' version mismatch: ' + vers.join(', '));
+  }
+  return vers[0];
+}
+
+function runSelfTests() {
+  var threw;
+
+  threw = false;
+  try {
+    assertNumericCacheBust(
+      '<script src="../../shared/js/accounting_api.js?v=1"></script>',
+      RE.accountingApi,
+      'self v=1',
+      102
+    );
+  } catch (e) {
+    threw = true;
+    if (e.message.indexOf('v=1') < 0 || e.message.indexOf('102') < 0) {
+      throw new Error('self-test v=1: unexpected message: ' + e.message);
+    }
+  }
+  if (!threw) throw new Error('self-test: v=1 should fail minVer 102');
+
+  var oldOnly = extractAllCacheBustVers('old_accounting_api.js?v=999', RE.accountingApi);
+  if (oldOnly.length !== 0) {
+    throw new Error('self-test: old_accounting_api.js?v=999 must not match accounting_api RE');
+  }
+
+  threw = false;
+  try {
+    assertSameNumericCacheBust(
+      [
+        'src="accounting_api.js?v=1"',
+        'src="accounting_api.js?v=1"'
+      ],
+      RE.accountingApi,
+      'self rollback',
+      108
+    );
+  } catch (e) {
+    threw = true;
+    if (e.message.indexOf('v=1') < 0) {
+      throw new Error('self-test rollback: unexpected message: ' + e.message);
+    }
+  }
+  if (!threw) throw new Error('self-test: same v=1 both pages should fail minVer 108');
+
+  threw = false;
+  try {
+    assertCacheBustToken('src="./spa/app.js?v=0"', RE.hubAppJs, 'self hub v=0', HUB_APP_JS_MIN_TOKEN);
+  } catch (e) {
+    threw = true;
+    if (e.message.indexOf('v=0') < 0 || e.message.indexOf(HUB_APP_JS_MIN_TOKEN) < 0) {
+      throw new Error('self-test hub v=0: unexpected message: ' + e.message);
+    }
+  }
+  if (!threw) throw new Error('self-test: app.js v=0 should fail min token');
+
+  var fooApp = extractAllCacheBustVers('foo_app.js?v=99', RE.hubAppJs);
+  if (fooApp.length !== 0) {
+    throw new Error('self-test: foo_app.js must not match hub app.js RE');
+  }
+
+  var multi = extractAllCacheBustVers(
+    'src="a/accounting_api.js?v=50" src="b/accounting_api.js?v=60"',
+    RE.accountingApi
+  );
+  if (multi.length !== 2 || multi[0] !== '50' || multi[1] !== '60') {
+    throw new Error('self-test: expected two anchored accounting_api matches');
+  }
+
+  var endingCases = [
+    { html: '<script src="accounting_api.js?v=108>', expect: '108', label: 'unquoted >' },
+    { html: "import(`./accounting_api.js?v=109`)", expect: '109', label: 'backtick import()' },
+    { html: 'href="accounting_api.js?v=110#ledger"', expect: '110', label: '# fragment' },
+    { html: 'accounting_api.js?v=111 ', expect: '111', label: 'trailing whitespace' },
+    { html: 'accounting_api.js?v=112', expect: '112', label: 'end of string' }
+  ];
+  endingCases.forEach(function (c) {
+    var got = extractAllCacheBustVers(c.html, RE.accountingApi);
+    if (got.length !== 1 || got[0] !== c.expect) {
+      throw new Error(
+        'self-test lookahead (' + c.label + '): expected [' + c.expect + '], got ' + JSON.stringify(got)
+      );
+    }
+  });
+
+  threw = false;
+  try {
+    assertNumericCacheBust('accounting_api.js?v=1>', RE.accountingApi, 'self ending > stale', 102);
+  } catch (e) {
+    threw = true;
+    if (e.message.indexOf('v=1') < 0) {
+      throw new Error('self-test ending > stale: unexpected message: ' + e.message);
+    }
+  }
+  if (!threw) throw new Error('self-test: accounting_api.js?v=1> should fail minVer 102');
+}
+
+module.exports = {
+  RE: RE,
+  LEDGER_HISTORY_CACHE_BUST_FLOORS: LEDGER_HISTORY_CACHE_BUST_FLOORS,
+  assertLedgerHistoryCacheBustFloors: assertLedgerHistoryCacheBustFloors,
+  HUB_APP_JS_MIN_TOKEN: HUB_APP_JS_MIN_TOKEN,
+  extractCacheBustVer: extractCacheBustVer,
+  extractAllCacheBustVers: extractAllCacheBustVers,
+  compareDottedVersion: compareDottedVersion,
+  assertNumericCacheBust: assertNumericCacheBust,
+  assertCacheBustToken: assertCacheBustToken,
+  assertSameNumericCacheBust: assertSameNumericCacheBust,
+  runSelfTests: runSelfTests
+};
+
+if (require.main === module) {
+  runSelfTests();
+  console.log('test-cache-bust-helper self-tests: OK');
+}

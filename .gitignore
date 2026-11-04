@@ -5,6 +5,8 @@ _待開發備份_/
 *.zip
 *.blockmap
 node_modules/
+test-results/
+playwright-report/
 dist/
 release/
 .cache/

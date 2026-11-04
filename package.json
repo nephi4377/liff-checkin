@@ -5,6 +5,7 @@
     "test:layout-planner:unit": "npm run test:unit --prefix modules/InteriorDesigned",
     "test:layout-planner:e2e": "npm run test:e2e --prefix modules/InteriorDesigned",
     "test:layout-planner:ci": "bash scripts/test-layout-planner-ci.sh",
+    "test:console-e2e": "playwright test --config playwright.console.config.cjs",
     "test:rtdb-auth-merge": "vitest run",
     "test:rtdb-rules": "firebase emulators:exec --config firebase/emulator.firebase.json --only database,auth --project demo-tanxin-rtdb-rules \"node firebase/rtdb-rules.quotations.test.mjs\"",
     "test:rtdb-rules-legacy": "firebase emulators:exec --config firebase/emulator.firebase.json --only database,auth --project demo-tanxin-legacy \"node firebase/rtdb-rules.legacy-compat.test.mjs\"",
