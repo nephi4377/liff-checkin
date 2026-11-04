@@ -1,6 +1,6 @@
 /**
- * 假勤審核／假單列表：成功、空白、失敗要分開。
- * 失敗不可當成「目前沒有待審／沒有假單」。
+ * 假勤審核／假單／本人申訴列表：成功、空白、失敗要分開。
+ * 失敗不可當成「目前沒有待審／沒有假單／沒送過說明」。
  */
 export function classifyAttendanceListFetch(result, fallbackMessage) {
     const fallback = fallbackMessage || '載入失敗，請再試';
