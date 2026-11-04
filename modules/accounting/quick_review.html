@@ -814,6 +814,37 @@
         return st || '';
       }
 
+      /** 快審 source 代碼 → 人話（勿只顯示 accounting_group） */
+      function sourceDisplayLabel(code) {
+        var c = String(code || '').trim();
+        if (!c) return '';
+        if (c === 'accounting_group') return '會計群組';
+        if (c === 'invoice_group') return '轉貼群';
+        if (c === 'line_vendor') return 'LINE 廠商群';
+        if (c === 'line_group') return 'LINE 群組';
+        if (c === 'line_dm') return 'LINE 私訊';
+        if (c === 'staff_request') return '員工申請';
+        return c;
+      }
+
+      /** 傳圖者無法辨識時，至少顯示「來自哪裡」 */
+      function isUnresolvedSender(name) {
+        var s = String(name || '').trim();
+        if (!s) return true;
+        if (s === '未知使用者' || s === '未知' || /^unknown/i.test(s)) return true;
+        // LINE userId（U + 32 hex）不當作顯示名
+        if (/^U[0-9a-fA-F]{32}$/.test(s)) return true;
+        return false;
+      }
+
+      function senderDisplayText(it) {
+        var who = String((it && it.created_by) || '').trim();
+        var origin = sourceDisplayLabel(it && it.source);
+        if (!isUnresolvedSender(who)) return who;
+        if (origin) return '來自' + origin;
+        return '未知來源';
+      }
+
       function renderList() {
         var box = document.getElementById('list');
         var summary = document.getElementById('listSummary');
@@ -857,13 +888,15 @@
                 '<div class="meta-row">' +
                   '<span class="tag' + tagClass + '">' + esc(statusLabel) + '</span>' +
                   (it.category && !payPending ? ('<span class="tag">' + esc(it.category) + '</span>') : '') +
-                  '<span class="tag">' + esc(it.source || '') + '</span>' +
+                  (sourceDisplayLabel(it.source)
+                    ? ('<span class="tag">' + esc(sourceDisplayLabel(it.source)) + '</span>')
+                    : '') +
                 '</div>' +
                 (payPending
                   ? '<p class="pay-help">單據還在這裡。按「繼續請款」填表送出；送出成功後才會移到「已完成」。</p>'
                   : '') +
                 '<p class="time-line">' + esc(shortTime(it.created_at)) +
-                  (it.created_by ? (' · ' + esc(it.created_by)) : '') + '</p>' +
+                  ' · ' + esc(senderDisplayText(it)) + '</p>' +
                 '<p class="mono">' + esc(it.filename || '') + '</p>' +
               '</div>' +
               '<div class="item-body">' +
