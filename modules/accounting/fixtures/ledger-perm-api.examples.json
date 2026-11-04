@@ -1,6 +1,6 @@
 {
   "_source": "Backend_GAS accounting-gas/SPEC/LEDGER_PERM_API.md @ cursor/acct-sec-11-ledger-history-own-ba72",
-  "view_all_min_perm": 5,
+  "view_all_min_perm": 3,
   "actions": {
     "recent": "accounting_ledger_recent",
     "detail": "accounting_ledger_detail",
@@ -13,7 +13,7 @@
     "ledger_recent_mine_only": {
       "success": true,
       "mine_only": true,
-      "view_all_min_perm": 5,
+      "view_all_min_perm": 3,
       "items": [
         {
           "sheet": "2026-01",
