@@ -12,7 +12,7 @@
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=111"></script>
+  <script src="../../shared/js/accounting_api.js?v=112"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
@@ -293,9 +293,15 @@
 
       <div class="row2">
         <div>
-          <label>單據日期</label>
+          <label>請款日（記帳／會計月份）</label>
+          <input type="date" id="requestDate" readonly tabindex="-1" />
+          <p class="sub" style="margin:4px 0 0">固定為送出當天（台北）；OCR／單據日不會改這個。</p>
+        </div>
+        <div>
+          <label>單據日期（對照用）</label>
           <input type="date" id="txnDate" />
-          <p class="sub" style="margin:4px 0 0">請款日＝送出當天（會計月份依此）；單據日僅供對照發票／請款單日期。</p>
+          <p class="sub" style="margin:4px 0 0">發票／請款單日期，僅供對照；不決定會計月份。</p>
+          <p class="sub hidden" id="txnDateWarn" style="margin:4px 0 0;color:#b06000"></p>
         </div>
       </div>
 
@@ -907,9 +913,45 @@
         return q;
       }
 
+      /** 台北今日 ISO（yyyy-MM-dd）；請款日／會計月份以此為準（後端仍以伺服器時間覆寫） */
+      function taipeiTodayIso() {
+        try {
+          return new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Taipei',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          }).format(new Date());
+        } catch (eTz) {
+          return new Date().toISOString().slice(0, 10);
+        }
+      }
+
+      function syncRequestDateDisplay() {
+        var el = document.getElementById('requestDate');
+        if (el) el.value = taipeiTodayIso();
+        refreshTxnDateWarn();
+      }
+
+      function refreshTxnDateWarn() {
+        var warn = document.getElementById('txnDateWarn');
+        var txnEl = document.getElementById('txnDate');
+        if (!warn || !txnEl) return;
+        var doc = String(txnEl.value || '').trim().slice(0, 10);
+        var today = taipeiTodayIso();
+        if (doc && doc > today) {
+          warn.textContent = '單據日晚於今天：僅供對照，會計月份仍依上方請款日（送出當天）。';
+          warn.classList.remove('hidden');
+        } else {
+          warn.textContent = '';
+          warn.classList.add('hidden');
+        }
+      }
+
       function showApp() {
         document.getElementById('loading').classList.add('hidden');
         document.getElementById('app').classList.remove('hidden');
+        syncRequestDateDisplay();
       }
 
       function isNewVendorPick() {
@@ -1527,8 +1569,10 @@
         lines.push('模式：' + (payload.submit_mode === 'finance_direct' ? '財務直送待匯款' : '送審'));
         lines.push('單據類型：' + (payload.doc_type || '—'));
         if (payload.project_no) lines.push('案號：' + payload.project_no);
-        if (payload.txn_date) lines.push('單據日期：' + payload.txn_date);
-        lines.push('請款日：送出當天（以伺服器時間為準）');
+        lines.push('請款日：送出當天（會計月份依此；以伺服器時間為準）');
+        if (payload.doc_date || payload.txn_date) {
+          lines.push('單據日期（對照）：' + (payload.doc_date || payload.txn_date));
+        }
         if (payload.vendor_id) {
           var v = vendors.find(function (x) { return x.vendor_id === payload.vendor_id; });
           lines.push('廠商：' + (v ? v.name : payload.vendor_id));
@@ -2150,7 +2194,10 @@
           ocrAttempt = data.attempt_no || (ocrAttempt + 1);
           var ocr = data.ocr || {};
           if (ocr.doc_type) document.getElementById('docType').value = ocr.doc_type;
-          if (ocr.txn_date) document.getElementById('txnDate').value = ocr.txn_date.slice(0, 10);
+          if (ocr.txn_date) {
+            document.getElementById('txnDate').value = ocr.txn_date.slice(0, 10);
+            refreshTxnDateWarn();
+          }
           applyOcrVendor(ocr);
 
           var manualRows = readAllocRows().filter(function (r) {
@@ -2258,7 +2305,9 @@
           draft_id: draftId || undefined,
           doc_type: document.getElementById('docType').value,
           order_no: '',
+          // txn_date／doc_date＝單據對照日；請款日／會計月份由後端依送出當天寫入
           txn_date: document.getElementById('txnDate').value,
+          doc_date: document.getElementById('txnDate').value,
           note: document.getElementById('note').value.trim(),
           allocations: finalizedAllocRows(),
           photos: photosPayload(),
@@ -2620,6 +2669,13 @@
         var initialMode = 'payment';
         if (queryParams.mode === 'payment' || queryParams.pending || queryParams.draft || queryParams.from) {
           initialMode = 'payment';
+        }
+        syncRequestDateDisplay();
+        var txnDateEl = document.getElementById('txnDate');
+        if (txnDateEl && !txnDateEl._ledgerDateBound) {
+          txnDateEl._ledgerDateBound = true;
+          txnDateEl.addEventListener('change', refreshTxnDateWarn);
+          txnDateEl.addEventListener('input', refreshTxnDateWarn);
         }
         if (queryParams.project_no) {
           document.getElementById('archiveProjectNo').value = queryParams.project_no;
