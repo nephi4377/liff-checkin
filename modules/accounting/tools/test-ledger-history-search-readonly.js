@@ -9,7 +9,7 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=111') >= 0, 'cache bust v=111');
+assert(html.indexOf('accounting_api.js?v=112') >= 0, 'cache bust v=111');
 assert(html.indexOf('ledger_entry_map.js?v=5') >= 0, 'ledger map');
 assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
 assert(html.indexOf('id="histScope"') >= 0, 'scope select for boss');

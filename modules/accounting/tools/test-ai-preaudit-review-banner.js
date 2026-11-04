@@ -25,7 +25,7 @@ assert(/預審尚未完成，可直接審/.test(review), '123.1 missing copy');
 assert(/item\.ai_preaudit/.test(review), 'reads item.ai_preaudit');
 var apiVer = cacheBust.readCacheBustVersion(review, 'accounting_api.js');
 assert(apiVer, 'review api cache bust present');
-assert(parseInt(apiVer, 10) >= 105, 'review api cache bust >= v105 (got v=' + apiVer + ')');
+assert(parseInt(apiVer, 10) >= 112, 'review api cache bust >= v112 (got v=' + apiVer + ')');
 assert(!/載入報價對應/.test(review), 'no #140 button-as-product UX');
 assert(!/btn-quote-audit/.test(review), 'no quote-audit button class');
 
