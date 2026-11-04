@@ -11,8 +11,8 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/ledger_entry_map.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=111"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=6"></script>
+  <script src="../../shared/js/accounting_api.js?v=112"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
@@ -211,7 +211,7 @@
         </div>
         <input type="hidden" id="srStatusScope" value="pending" />
         <button type="button" class="sr-mine-toggle" id="srMineToggle"
-          aria-pressed="false" title="選用：只顯示本人送出（權限 5 才可看全部）">
+          aria-pressed="false" title="選用：只顯示本人送出（權限 ≥3 可看全部）">
           <span>
             <span class="sr-mine-title">只看我送的（選用）</span>
             <span class="sr-mine-sub" id="srMineSub">關閉中：顯示區間內全部人的送出紀錄。</span>
@@ -388,7 +388,7 @@
         if (hint && !canAll) {
           hint.innerHTML =
             '請款管線第 2 站：主職是<strong>修改已送出的送審資料</strong>。' +
-            '權限 5 以下<strong>只會看到本人送出的請款</strong>（列表依伺服器回傳）。' +
+            '權限 1～2<strong>只會看到本人送出的請款</strong>（列表依伺服器回傳）。' +
             '可改：待審／退回／待匯；已匯款鎖定。收支查詢用「歷史記帳紀錄」。';
         }
         syncMineUi();
@@ -410,11 +410,11 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           if (!canAll) {
-            sub.textContent = '僅顯示本人送出的請款（權限 5 才可看全部人）。';
+            sub.textContent = '僅顯示本人送出的請款（權限 ≥3 可看全部人）。';
           } else {
             sub.textContent = on
               ? '開啟中：只顯示登入帳號本人送出的請款。'
-              : '關閉中：顯示區間內全部人的送出紀錄（權限 5）。';
+              : '關閉中：顯示區間內全部人的送出紀錄（權限 ≥3）。';
           }
         }
       }

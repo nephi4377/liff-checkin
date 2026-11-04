@@ -15,9 +15,9 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
-  /** LEDGER-PERM-2：歷史記帳查「全部人」與老闆級審核（對齊 Backend_GAS #218） */
-  var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
-  /** 歷史記帳：權限 ≥1 可查／作廢本人；≥5 看全部 */
+  /** LEDGER-PERM-2：歷史記帳查「全部人」（≥3；對齊 Backend_GAS LEDGER_HISTORY_VIEW_ALL_MIN_PERM_） */
+  var LEDGER_VIEW_ALL_MIN_PERMISSION = 3;
+  /** 歷史記帳：權限 ≥1 可查／作廢本人；≥3 看全部；改帳／作廢他人仍 ≥5 */
   var LEDGER_MIN_VIEW_PERMISSION = 1;
   var LEDGER_VIEW_DENIED_MSG = '權限不足（歷史記帳需權限 ≥ 1）';
   /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
@@ -1241,8 +1241,8 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥1 本人；≥5 可選全部；日期窗＝記帳時間／送出時間，不是交易日）
-     * LEDGER-PERM-2／#218：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(5) 一律 mine_only；≥5 可選全部、可選本人。
+    /** 歷史記帳紀錄查詢（權限 ≥1 本人；≥3 可選全部；日期窗＝記帳時間／送出時間，不是交易日）
+     * LEDGER-PERM-2：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(3) 一律 mine_only；≥3 可選全部、可選本人。
      * 預設近 30 天；逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
      * record_kind：all｜ledger｜payment_request。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
@@ -1303,7 +1303,7 @@ var AccountingApi = (function () {
       // 前端維持 90s Abort；歷史查詢不重試 GAS HTML 404（見 postToUrl_）。
       return post(body, 90000);
     },
-    /** 歷史記帳單筆詳情（權限 ≥1 本人；≥5 他人；sheet+row 或 ingest_id；預設略過附件索引） */
+    /** 歷史記帳單筆詳情（權限 ≥1 本人；≥3 他人；sheet+row 或 ingest_id；預設略過附件索引） */
     accountingLedgerDetail: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {

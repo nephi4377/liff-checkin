@@ -1,8 +1,9 @@
 /**
  * LEDGER-PERM API 前端對照（Backend_GAS accounting-gas/SPEC/LEDGER_PERM_API.md）
+ * 看全部歷史：≥3；改帳／作廢他人／疑重清除仍依伺服器 can_*（≥5 或本人）。
  */
 var LedgerEntryMap = (function () {
-  var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
+  var LEDGER_VIEW_ALL_MIN_PERMISSION = 3;
 
   var API = {
     voidAction: 'accounting_ledger_void',
