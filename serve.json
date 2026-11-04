@@ -12,6 +12,14 @@
     {
       "source": "/modules/projects/employee-todo/",
       "destination": "/modules/projects/employee-todo/index.html"
+    },
+    {
+      "source": "/modules/info/sample-finish",
+      "destination": "/modules/info/sample-finish/index.html"
+    },
+    {
+      "source": "/modules/info/sample-finish/",
+      "destination": "/modules/info/sample-finish/index.html"
     }
   ]
 }
