@@ -1381,8 +1381,10 @@ thumbnail.src = '';
                      
                      successCallback = (result) => {
                          let successMessage = result.message;
-                         if (['病假', '公假'].includes(payload.leaveType)) {
-                             successMessage += `<br><br><div class="mt-2 text-sm text-amber-800 bg-amber-50 p-2 rounded-md">提醒：若需補交證明，請稍後至「我的假單」分頁上傳。</div>`;
+                         if (payload.leaveType === '病假') {
+                             successMessage = payload.proofFile
+                                 ? '病假已報備（證明已附上）。主管可在假勤審核看到這張單。'
+                                 : '病假已報備。請到「我的假單」補證明後，才會進主管審核。';
                          }
                          updateStatus(successMessage, 'success');
                          setTimeout(() => {
