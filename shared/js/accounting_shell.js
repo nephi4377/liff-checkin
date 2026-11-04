@@ -83,7 +83,7 @@ var AccountingShell = (function () {
   }
 
   /** 單據與存檔 HTML 常被 LINE／iframe 快取；改版時遞增以免看不到新 chip */
-  var QUICK_REVIEW_ASSET_V = '26.11.04.2';
+  var QUICK_REVIEW_ASSET_V = '26.11.04.3';
 
   function buildFrameSrc(page, pageQuery) {
     var bust = '';
