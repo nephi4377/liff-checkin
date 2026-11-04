@@ -179,6 +179,8 @@ var AccountingApi = (function () {
           err = new Error('等太久了。請先看進出群有沒有「記好了」、或到試算表確認是否已入帳，先不要再按一次。');
         } else if (actionName === 'ledger_review_bundle') {
           err = new Error('讀取審核包逾時。請改回「待審」、或加關鍵字後再載；先不要連按重新載入。');
+        } else if (actionName === 'payment_request_ocr_analyze' || actionName === 'vendor_doc_ocr_analyze') {
+          err = new Error('AI 辨識逾時（約 3 分鐘）。請少勾幾張、或改手填後再試。');
         } else {
           err = new Error('連線逾時，請再試一次');
         }
@@ -1132,6 +1134,8 @@ var AccountingApi = (function () {
       });
     },
     paymentRequestOcrAnalyze: function (sessionOrToken, payload, timeoutMs) {
+      // 預設 180s 與請款頁 Abort 對齊；傳 0 可關閉（不建議）
+      var ocrMs = timeoutMs === undefined ? 180000 : timeoutMs;
       return post({
         action: 'payment_request_ocr_analyze',
         auth: resolveAuth(sessionOrToken),
@@ -1143,7 +1147,7 @@ var AccountingApi = (function () {
         force_vendor_hint: !!payload.force_vendor_hint,
         ocr_stage: payload.ocr_stage || '',
         prefer_vendor_hint: payload.prefer_vendor_hint || ''
-      }, timeoutMs || 0);
+      }, ocrMs);
     },
     vendorPaymentOcrCommonHintGet: function (sessionOrToken) {
       return post({

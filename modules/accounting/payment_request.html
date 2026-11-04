@@ -12,7 +12,7 @@
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=112"></script>
+  <script src="../../shared/js/accounting_api.js?v=113"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
@@ -389,6 +389,10 @@
       var MAX_BYTES = 10 * 1024 * 1024;
       var BLOCKED_EXT = { exe: 1, bat: 1, cmd: 1, com: 1, msi: 1, scr: 1, ps1: 1, vbs: 1, js: 1, jar: 1 };
       var OCR_TIMEOUT_MS = 180000;
+      /** 與後端 PAYMENT_REQUEST_OCR_MAX_IMAGES_ 對齊；多張一次塞 Gemini 易超 180s */
+      var OCR_MAX_IMAGES = 4;
+      var OCR_MAX_EDGE = 1600;
+      var OCR_JPEG_QUALITY = 0.82;
       var REMIT_FEE_AMOUNT = 30;
       var TAX_RATE = 0.05;
       var TAX_NOTE_MARKER = '【稅別】';
@@ -1919,6 +1923,62 @@
         });
       }
 
+      /** OCR 專用：只送勾選檔，並把大圖縮邊（原圖仍留在 photos 供送出） */
+      function shrinkImageBase64ForOcr_(dataBase64, mimeType) {
+        return new Promise(function (resolve) {
+          var mime = String(mimeType || 'image/jpeg').toLowerCase();
+          if (mime.indexOf('image/') !== 0 || mime === 'image/svg+xml') {
+            resolve({ dataBase64: dataBase64, mimeType: mimeType });
+            return;
+          }
+          var img = new Image();
+          img.onload = function () {
+            try {
+              var w = img.naturalWidth || img.width || 0;
+              var h = img.naturalHeight || img.height || 0;
+              if (!w || !h || (w <= OCR_MAX_EDGE && h <= OCR_MAX_EDGE && dataBase64.length < 900000)) {
+                resolve({ dataBase64: dataBase64, mimeType: mimeType });
+                return;
+              }
+              var scale = Math.min(OCR_MAX_EDGE / w, OCR_MAX_EDGE / h, 1);
+              var cw = Math.max(1, Math.round(w * scale));
+              var ch = Math.max(1, Math.round(h * scale));
+              var canvas = document.createElement('canvas');
+              canvas.width = cw;
+              canvas.height = ch;
+              var ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, cw, ch);
+              var out = canvas.toDataURL('image/jpeg', OCR_JPEG_QUALITY);
+              var b64 = out.indexOf(',') >= 0 ? out.split(',')[1] : out;
+              resolve({ dataBase64: b64, mimeType: 'image/jpeg' });
+            } catch (eShrink) {
+              resolve({ dataBase64: dataBase64, mimeType: mimeType });
+            }
+          };
+          img.onerror = function () {
+            resolve({ dataBase64: dataBase64, mimeType: mimeType });
+          };
+          img.src = 'data:' + mime + ';base64,' + dataBase64;
+        });
+      }
+
+      async function buildOcrPhotosPayload_(selectedList) {
+        var out = [];
+        var i;
+        for (i = 0; i < selectedList.length; i++) {
+          var p = selectedList[i];
+          var shrunk = await shrinkImageBase64ForOcr_(p.dataBase64, p.mimeType);
+          out.push({
+            photo_id: p.photo_id,
+            file_id: p.photo_id,
+            mimeType: shrunk.mimeType,
+            dataBase64: shrunk.dataBase64,
+            filename: p.filename
+          });
+        }
+        return out;
+      }
+
       function archiveFilesPayload() {
         return photos.map(function (p) {
           return {
@@ -2146,19 +2206,19 @@
         var status = document.getElementById('ocrStatus');
         submitting = true;
         updateOcrBtn();
+        if (selected.length > OCR_MAX_IMAGES) {
+          setMsg('一次最多辨識 ' + OCR_MAX_IMAGES + ' 張，請少勾幾張後再試');
+          submitting = false;
+          updateOcrBtn();
+          return;
+        }
         if (pageMode === 'archive') {
           await AccountingUi.runAsync(btn, { actionLabel: 'AI 辨識檔案', busyLabel: '辨識中…' }, async function () {
             status.textContent = '辨識中…';
+            var ocrFiles = await buildOcrPhotosPayload_(selected);
             var payload = {
               file_ids: selected.map(function (p) { return p.photo_id; }),
-              files: photos.map(function (p) {
-                return {
-                  file_id: p.photo_id,
-                  filename: p.filename,
-                  mimeType: p.mimeType,
-                  dataBase64: p.dataBase64
-                };
-              })
+              files: ocrFiles
             };
             var data = await AccountingApi.vendorDocOcrAnalyze(session, payload, OCR_TIMEOUT_MS);
             if (!data.success) throw new Error(data.message || '辨識失敗');
@@ -2189,10 +2249,12 @@
           if (vid === NEW_VENDOR_ID) vid = '';
           // 一般辨識不帶上一張選取的 vendor_id，避免單據寫聖黛蘭卻黏住協進；
           // 僅「用此廠商規則再辨一次」才強制帶入。
+          // 只送勾選檔（縮圖）；勿把未勾選大圖一併 POST，否則易撞前端 180s Abort。
+          var ocrPhotos = await buildOcrPhotosPayload_(selected);
           var payload = {
             draft_id: draftId || undefined,
             photo_ids: selected.map(function (p) { return p.photo_id; }),
-            photos: photosPayload(),
+            photos: ocrPhotos,
             vendor_id: (ocrForceVendorHint && vid) ? vid : '',
             force_vendor_hint: !!ocrForceVendorHint
           };
