@@ -10,6 +10,7 @@
 
 // [v554.0 重構] 直接引入 projectApi，移除 config.api 中間層。
 import { request as apiRequest } from '/modules/projects/js/projectApi.js';
+import { resolveHubStaffRecipientIds } from './taskSenderRecipients.js';
 
 /**
  * 初始化任務交辦元件 (Task Sender Component)
@@ -297,6 +298,8 @@ function _injectConsoleStyles(container) {
     container.appendChild(style);
 }
 
+export { resolveHubStaffRecipientIds } from './taskSenderRecipients.js';
+
 /**
  * [內部] 建立要發送給後端的 payload 物件。
  * @param {object} state - 從 config 傳入的 state 物件。
@@ -310,6 +313,13 @@ function _buildPayload(state, styleType) {
     const sendToAll = sendToAllCheckbox ? sendToAllCheckbox.checked : false;
     // 【您的要求】核心修正：改為從 .selected 標籤讀取收件人 ID，解決無法發送的問題
     const selectedRecipients = Array.from(document.querySelectorAll('#task-sender-recipient-list .recipient-tag.selected')).map(tag => tag.dataset.userId);
+    const resolved = resolveHubStaffRecipientIds(state.allEmployees, {
+        sendToAll,
+        selectedIds: selectedRecipients
+    });
+    if (!resolved.ok) {
+        return { _recipientError: resolved.error, recipients: [], content };
+    }
 
     let actionType = 'None';
     if (styleType === 'console') {
@@ -332,7 +342,7 @@ function _buildPayload(state, styleType) {
         // [v558.0] 'action' 已移至 handleSend 中處理，此處不再需要
         senderId: state.currentUserId,
         senderName: state.currentUserName,
-        recipients: sendToAll ? ['ALL'] : selectedRecipients,
+        recipients: resolved.recipients,
         content: content,
         projectId: state.projectId || document.getElementById('task-sender-related-project-id').value,
         actionType: actionType,
@@ -348,10 +358,10 @@ function _buildPayload(state, styleType) {
  * @returns {object} - 一個模擬的通知物件。
  */
 function _createOptimisticNotification(payload, state) {
-    const recipientNames = (payload.recipients[0] === 'ALL')
-        ? ['所有員工']
+    const recipientNames = payload.recipients.length > 5
+        ? [`${payload.recipients.length} 位員工`]
         : payload.recipients.map(id => {
-            const emp = state.allEmployees.find(e => e.userId === id);
+            const emp = (state.allEmployees || []).find(e => e.userId === id);
             return emp ? emp.userName : id;
         });
 
@@ -366,6 +376,18 @@ function _createOptimisticNotification(payload, state) {
         ActionType: payload.actionType,
         ActionDeadline: payload.deadline,
         Status: '傳送中...'
+    };
+}
+
+/** 除錯用摘要：不含收件人／發送人 UID 與交辦全文 */
+function _payloadLogMeta(payload) {
+    if (!payload) return {};
+    return {
+        recipientCount: Array.isArray(payload.recipients) ? payload.recipients.length : 0,
+        actionType: payload.actionType,
+        projectId: payload.projectId || '',
+        contentLength: (payload.content || '').length,
+        hasDeadline: Boolean(payload.deadline)
     };
 }
 
@@ -397,10 +419,10 @@ async function handleSend(event, config, styleType, recipientSelector) {
     const statusEl = document.getElementById('task-sender-status');
     const submitBtn = document.getElementById('task-sender-submit-btn');
     const payload = _buildPayload(state, styleType);
-    console.log('[TaskSender] 建立的 payload:', payload);
+    console.log('[TaskSender] 建立的 payload（摘要）:', _payloadLogMeta(payload));
     // 驗證輸入
-    if (payload.recipients.length === 0 && !payload.recipients.includes('ALL')) {
-        statusEl.textContent = '錯誤：請至少選擇一位收件人。';
+    if (payload._recipientError || payload.recipients.length === 0) {
+        statusEl.textContent = payload._recipientError || '錯誤：請至少選擇一位收件人。';
         return;
     }
     console.log('[TaskSender] 收件人驗證通過');
@@ -421,13 +443,11 @@ async function handleSend(event, config, styleType, recipientSelector) {
         callbacks.onOptimisticUpdate(optimisticNotification);
         console.log('[TaskSender] 執行樂觀更新回呼');
     }
-    console.log('[TaskSender] 發送 payload 給後端:', payload);
     // 發送請求到後端
     try {
-        console.log('[TaskSender] 發送 payload:', payload);
         // [v554.0 重構] 直接呼叫 apiRequest，不再透過 config.api.sendRequest
         const result = await apiRequest({ action: 'sendNotification', payload: payload });
-        console.log('[TaskSender] 後端回應:', result);
+        console.log('[TaskSender] 後端回應 success:', Boolean(result?.success));
         // [v551.0] 因為後端現在只回傳 "OK" 文字，我們只需檢查回應是否為 "OK"。
         // 如果不是 "OK"，則將整個回應文字視為錯誤訊息。
         if (!result.success) {
