@@ -52,6 +52,7 @@ export default {
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
+        const shopOrdersUrl = computed(() => '#/shop/orders');
         const materialSelectionUrl = computed(() => '#/material-selection');
 
         /** 副本文字冒險：外部靜態站（非 iframe）；完整 URL 供開啟／複製 */
@@ -447,6 +448,7 @@ export default {
             budgetWebUrl,
             budgetAuditUrl,
             accountingHubUrl,
+            shopOrdersUrl,
             storyAdventurePublicUrl,
             storyAdventureUrlCopied,
             copyStoryAdventureUrl,
@@ -623,6 +625,16 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">會計系統</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">收支登錄、請款、追加減與收款；財務審核依權限顯示。</p>
+                    </div>
+                </a>
+
+                <!-- 2b. 官網商店訂單（員工標記已付款；非自動改狀態） -->
+                <a v-if="currentUser && currentUser.permission >= 3" :href="shopOrdersUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-xl">🛒</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">官網商店訂單</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">查 Woo 訂單、重送需付款；客人 LINE 付完後在此「標記已付款」。</p>
                     </div>
                 </a>
 

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LINE 商店下單</title>
+  <style>
+    body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: #f5f3f0; color: #222; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.1rem; }
+    .sub { font-size: 13px; color: #666; line-height: 1.45; }
+    .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 14px; margin-top: 12px; }
+    button { width: 100%; margin-top: 12px; padding: 12px; border: none; border-radius: 8px; background: #5c4a1f; color: #fff; font-weight: 700; }
+    .ok { margin-top: 12px; padding: 10px; background: #ecfdf5; border-radius: 8px; font-size: 13px; line-height: 1.45; display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>LINE 內下單（骨架）</h1>
+    <p class="sub">建立<strong>待付款</strong>訂單並取得訂單編號；系統應立刻 LINE 通知「需付款」。付完後需店員在 Hub「標記已付款」。未付滿 3 天將刪單。</p>
+    <div class="card">
+      <div><strong>示意商品</strong> K&amp;B 旋轉鏡架組</div>
+      <div>NT$ 3,500</div>
+      <button type="button" id="btnOrder">送出訂單</button>
+      <div class="ok" id="ok"></div>
+    </div>
+    <p style="margin-top:14px;font-size:13px"><a href="customer-orders.html">我的訂單</a></p>
+  </div>
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.CONFIG = CONFIG;
+  </script>
+  <script src="../../shared/js/shop_api.js"></script>
+  <script>
+    document.getElementById('btnOrder').onclick = function () {
+      ShopApi.createOrder({}, {
+        total: 3500,
+        items_summary: 'K&B 旋轉鏡架組（摩卡色）×1'
+      }).then(function (res) {
+        if (!res.success) { alert(res.message || '下單失敗'); return; }
+        var o = res.data.order;
+        var ex = res.data.expire || ShopApi.expireInfo(o);
+        var ok = document.getElementById('ok');
+        ok.style.display = 'block';
+        ok.innerHTML =
+          '已建立訂單編號 <strong>' + o.order_number + '</strong><br>' +
+          (res.data.line_notify || '應推播需付款通知') + '<br>' +
+          '<a href="customer-pay.html?order=' + encodeURIComponent(o.order_number) + '">前往付款</a><br>' +
+          '<span style="color:#9a3412">' + (ex.message || '') + '</span>';
+      });
+    };
+  </script>
+</body>
+</html>
