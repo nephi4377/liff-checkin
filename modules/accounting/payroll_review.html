@@ -14,6 +14,7 @@
   <script src="../../shared/js/accounting_ui.js?v=25"></script>
   <script src="../../shared/js/accounting_nav.js?v=2"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
+  <script src="../../shared/js/tax_withhold.js?v=1"></script>
   <style>
     h2 { margin: 0 0 8px; }
     .sub { color: #555; font-size: 14px; line-height: 1.45; }
@@ -132,6 +133,32 @@
           '<p class="sub" style="margin:4px 0 0;color:#666">減項有異議可直接改金額；實發會自動重算。請在審核備註寫原因。</p>';
       }
 
+      function parseTaxWithholdFromRow(row) {
+        var snap = row && (row.tax_withhold || row.taxWithhold);
+        if (snap) return snap;
+        try {
+          var raw = row && row.stats_snapshot;
+          if (typeof raw === 'string') raw = JSON.parse(raw || '{}');
+          return (raw && raw.taxWithhold) || {};
+        } catch (e) {
+          return {};
+        }
+      }
+
+      function bonusTaxExtras(prId, bonus) {
+        var root = document.getElementById('pr-' + prId);
+        if (!root || typeof TaxWithhold === 'undefined') return { bonusTax: 0, nhi: 0 };
+        var insured = parseInt(root.getAttribute('data-insured'), 10) || 0;
+        var ytd = parseInt(root.getAttribute('data-ytd-bonus'), 10) || 0;
+        var bonusTax = TaxWithhold.calcBonusTax(bonus).tax || 0;
+        var nhi = TaxWithhold.calcNhiSupplementary({
+          bonusAmount: bonus,
+          insuredSalaryLevel: insured,
+          ytdBonusPaid: ytd
+        }).premium || 0;
+        return { bonusTax: bonusTax, nhi: nhi };
+      }
+
       function recalcFinalAmount(prId) {
         var root = document.getElementById('pr-' + prId);
         if (!root) return;
@@ -139,6 +166,7 @@
         var bonusEl = document.getElementById('bonus-' + prId);
         var dedEl = document.getElementById('ded-' + prId);
         var finalEl = document.getElementById('est-display-' + prId);
+        var taxHint = document.getElementById('tax-hint-' + prId);
         if (!finalEl) return;
         var bonus = Number(bonusEl && bonusEl.value) || 0;
         var otherDed = Number(dedEl && dedEl.value) || 0;
@@ -148,7 +176,18 @@
           var now = Math.max(0, parseInt(inp.value, 10) || 0);
           delta += (orig - now);
         });
-        finalEl.textContent = Math.max(0, est + delta + bonus - otherDed).toLocaleString('zh-TW');
+        var extra = bonusTaxExtras(prId, bonus);
+        if (taxHint) {
+          if (extra.bonusTax > 0 || extra.nhi > 0) {
+            taxHint.textContent = '獎金另扣：所得稅 ' + extra.bonusTax.toLocaleString('zh-TW') +
+              ' ＋補充保費 ' + extra.nhi.toLocaleString('zh-TW');
+            taxHint.classList.remove('hidden');
+          } else {
+            taxHint.textContent = '';
+            taxHint.classList.add('hidden');
+          }
+        }
+        finalEl.textContent = Math.max(0, est + delta + bonus - otherDed - extra.bonusTax - extra.nhi).toLocaleString('zh-TW');
       }
 
       function collectDeductionOverrides(prId) {
@@ -193,6 +232,9 @@
         div.id = 'pr-' + row.payroll_request_id;
         var est = parseInt(row.estimated_net, 10) || 0;
         div.setAttribute('data-est', String(est));
+        var tw = parseTaxWithholdFromRow(row);
+        div.setAttribute('data-insured', String(parseInt(tw.insuredSalaryLevel, 10) || 0));
+        div.setAttribute('data-ytd-bonus', String(parseInt(tw.ytdBonusPaid, 10) || 0));
         var ot = Number(row.overtime_hours) || 0;
         var remote = parseInt(row.remote_allowance, 10) || 0;
         var pb = row.payroll_breakdown || {};
@@ -237,9 +279,10 @@
           '<div><label>一般獎金（元）</label><input type="number" id="bonus-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="0" /></div>' +
           '<div><label>其他扣款（元）</label><input type="number" id="ded-' + row.payroll_request_id + '" class="recalc-final" min="0" step="1" value="' + (parseInt(row.deduction,10)||0) + '" /></div>' +
           '</div>' +
+          '<p id="tax-hint-' + row.payroll_request_id + '" class="sub hidden" style="color:#8a5a00;margin:6px 0 0"></p>' +
           '<label>獎金／備註說明</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="例：介紹獎金、年終（勿填專案報酬）" value="" />' +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
-          '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。</p>' +
+          '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。非固定獎金另計所得稅 5%（未達起扣免扣）；超過投保 4 倍部分另扣二代健保補充保費 2.11%。</p>' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
           '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
           '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +
