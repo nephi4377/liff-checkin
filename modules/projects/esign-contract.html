@@ -3,10 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-  <title>線上合約審閱</title>
+  <title>線上合約</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
-    /* 與客戶財務 portal 同一客戶 LIFF */
     var ESIGN_CONTRACT_LIFF_ID = '2007974938-d2y1uA1G';
   </script>
   <style>
@@ -24,9 +23,7 @@
     }
     * { box-sizing: border-box; }
     html, body {
-      margin: 0;
-      padding: 0;
-      min-height: 100%;
+      margin: 0; padding: 0; min-height: 100%;
       font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans GB", sans-serif;
       color: var(--ink);
       background:
@@ -36,8 +33,7 @@
     }
     .wrap { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 5rem; }
     .hero {
-      padding: 1rem 1.1rem 1.05rem;
-      border-radius: 0.85rem;
+      padding: 1rem 1.1rem 1.05rem; border-radius: 0.85rem;
       background: linear-gradient(145deg, rgba(255,255,255,0.98), rgba(246,249,251,0.94));
       border: 1px solid rgba(255,255,255,0.9);
       box-shadow: 0 10px 36px -18px rgba(28,36,48,0.28);
@@ -45,58 +41,59 @@
     }
     .hero h1 { margin: 0; font-size: 1.25rem; letter-spacing: 0.02em; }
     .hero .sub { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
-    #statusLine {
-      margin-top: 0.65rem;
-      font-size: 0.9rem;
-      color: var(--muted);
-      min-height: 1.25em;
-    }
+    #statusLine { margin-top: 0.65rem; font-size: 0.9rem; color: var(--muted); min-height: 1.25em; }
     #statusLine[data-tone="busy"] { color: var(--accent-dark); }
     #statusLine[data-tone="err"] { color: var(--danger); }
     #statusLine[data-tone="warn"] { color: var(--warn); }
     #statusLine[data-tone="ok"] { color: var(--ok); }
     .panel {
-      background: var(--card);
-      border: 1px solid var(--line);
-      border-radius: 0.85rem;
-      padding: 1rem 1.05rem;
-      margin-bottom: 1rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: 0.85rem;
+      padding: 1rem 1.05rem; margin-bottom: 1rem;
       box-shadow: 0 8px 28px -20px rgba(28,36,48,0.35);
     }
-    #reviewBox {
-      white-space: pre-line;
-      font-size: 0.92rem;
-      line-height: 1.55;
-      color: var(--ink);
-    }
+    #reviewBox { white-space: pre-line; font-size: 0.92rem; line-height: 1.55; }
     #hashMeta { margin-top: 0.5rem; font-size: 0.78rem; color: var(--muted); }
     .article { margin: 1rem 0; padding-top: 0.5rem; border-top: 1px solid var(--line); }
     .article h3 { margin: 0 0 0.4rem; font-size: 1rem; }
-    .article .body { font-size: 0.92rem; line-height: 1.55; color: var(--ink); }
+    .article .body { font-size: 0.92rem; line-height: 1.55; }
     .preamble { white-space: pre-wrap; font-family: inherit; font-size: 0.9rem; line-height: 1.5; }
     .muted { color: var(--muted); font-size: 0.85rem; }
     .actions { display: grid; gap: 0.75rem; }
-    label.early {
+    label.early, label.check {
       display: flex; gap: 0.55rem; align-items: flex-start;
       font-size: 0.95rem; line-height: 1.4;
     }
-    label.early input { margin-top: 0.2rem; width: 1.15rem; height: 1.15rem; }
+    label.early input, label.check input { margin-top: 0.2rem; width: 1.15rem; height: 1.15rem; }
     button {
       appearance: none; border: 0; border-radius: 0.65rem;
       background: var(--accent); color: #fff;
-      font-size: 1rem; font-weight: 600;
-      padding: 0.85rem 1rem; cursor: pointer;
+      font-size: 1rem; font-weight: 600; padding: 0.85rem 1rem; cursor: pointer;
     }
     button:disabled { opacity: 0.55; cursor: not-allowed; }
     button.secondary { background: #4a5a68; }
+    button.ghost { background: transparent; color: var(--accent-dark); border: 1px solid var(--line); }
     .note { font-size: 0.82rem; color: var(--muted); line-height: 1.45; }
+    .sign-wrap {
+      border: 1px dashed var(--line); border-radius: 0.65rem; background: #fafbfc;
+      touch-action: none; overflow: hidden;
+    }
+    canvas.sign { display: block; width: 100%; height: 180px; }
+    .sign-tools { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.65rem; }
+    .hidden { display: none !important; }
+    #printArea { display: none; }
+    @media print {
+      body * { visibility: hidden; }
+      #printArea, #printArea * { visibility: visible; }
+      #printArea { display: block !important; position: absolute; left: 0; top: 0; width: 100%; padding: 1rem; }
+      .wrap { display: none !important; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="hero">
-      <h1>線上合約審閱</h1>
-      <p class="sub">請慢慢看完契約。系統會記下寄出與第一次打開的時間。未滿 7 天要簽約，請勾自願提前。</p>
+      <h1>線上合約</h1>
+      <p class="sub">審閱 → 雙方手寫簽名。不同意線上簽可改用紙本。</p>
       <div id="statusLine">載入中…</div>
       <div id="hashMeta"></div>
     </header>
@@ -109,16 +106,45 @@
       <div id="contractBody"><p class="muted">契約內容更新中…</p></div>
     </section>
 
-    <section class="panel actions" aria-label="自願提前與完成審閱">
+    <section id="reviewActions" class="panel actions" aria-label="審閱操作">
       <label class="early">
         <input id="earlyCheck" type="checkbox" />
-        <span>已充分審閱，自願提前簽約（簽了立即生效；本段先鎖定審閱步驟）</span>
+        <span>已充分審閱，自願提前簽約</span>
       </label>
       <button type="button" id="btnEarly" class="secondary">確認自願提前</button>
-      <button type="button" id="btnReady">完成審閱、可簽約</button>
-      <p class="note">不同意線上簽可改用紙本，請跟同事說。系統不會主動推播；連結由同事用官 LINE 回覆傳送。</p>
+      <button type="button" id="btnReady">完成審閱、進入簽名</button>
+      <button type="button" id="btnPaper" class="ghost">改用紙本簽約</button>
+      <p class="note">系統不做主動推播；連結由同事用官 LINE 回覆傳送。</p>
+    </section>
+
+    <section id="signPartyA" class="panel actions hidden" aria-label="甲方簽名">
+      <h2 style="margin:0 0 0.5rem;font-size:1.05rem;">甲方（客戶）簽名</h2>
+      <p class="note">請用手寫簽名；可清除重簽。送出後綁定您的 LINE 身分。</p>
+      <div class="sign-wrap"><canvas id="canvasA" class="sign"></canvas></div>
+      <div class="sign-tools">
+        <button type="button" id="btnClearA" class="secondary">清除</button>
+        <button type="button" id="btnSignA">送出甲方簽名</button>
+      </div>
+    </section>
+
+    <section id="signPartyB" class="panel actions hidden" aria-label="乙方簽名">
+      <h2 style="margin:0 0 0.5rem;font-size:1.05rem;">乙方（公司）簽名</h2>
+      <p class="note">內部員工簽名；送出後合約鎖定。</p>
+      <div class="sign-wrap"><canvas id="canvasB" class="sign"></canvas></div>
+      <div class="sign-tools">
+        <button type="button" id="btnClearB" class="secondary">清除</button>
+        <button type="button" id="btnSignB">送出乙方簽名</button>
+      </div>
+    </section>
+
+    <section id="afterSign" class="panel actions hidden" aria-label="回看與列印">
+      <p id="doneMsg" class="note"></p>
+      <button type="button" id="btnPrint">列印／存成可印檔</button>
+      <button type="button" id="btnPaper2" class="ghost">改用紙本（若尚未雙方簽完）</button>
     </section>
   </div>
+
+  <div id="printArea"></div>
   <script type="module" src="./js/esign-contract-main.js"></script>
 </body>
 </html>

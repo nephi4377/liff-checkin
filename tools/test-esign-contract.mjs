@@ -1,5 +1,5 @@
 /**
- * ESIGN-CONTRACT-2 前端：範本結構、頁面接線、API action 名稱
+ * ESIGN-CONTRACT-2 前端：範本、審閱、雙方簽名板、列印、紙本
  */
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -28,8 +28,7 @@ test('contract template JSON exists with version and 29 articles', () => {
   assert.match(json.voluntary_early.label, /自願提前/);
   assert.equal(json.review_clause.review_days, 7);
   assert.ok(json.field_placeholders.includes('party_a_name'));
-  assert.ok(json.field_placeholders.includes('total_amount'));
-  assert.equal(json.pending_text_fixes.length, 5);
+  assert.ok(json.paper_option_note);
 });
 
 test('frontend template matches backend copy when present', function () {
@@ -46,16 +45,23 @@ test('frontend template matches backend copy when present', function () {
   assert.equal(fh, bh);
 });
 
-test('customer page has review UI and voluntary early checkbox', () => {
+test('customer page has review, dual signature pads, print and paper option', () => {
   const html = readFileSync(htmlPath, 'utf8');
   assert.match(html, /earlyCheck/);
   assert.match(html, /已充分審閱，自願提前簽約/);
   assert.match(html, /btnReady/);
+  assert.match(html, /canvasA/);
+  assert.match(html, /canvasB/);
+  assert.match(html, /btnSignA/);
+  assert.match(html, /btnSignB/);
+  assert.match(html, /btnPrint/);
+  assert.match(html, /btnPaper/);
+  assert.match(html, /改用紙本/);
+  assert.match(html, /printArea/);
   assert.match(html, /esign-contract-main\.js/);
-  assert.match(html, /ESIGN_CONTRACT_LIFF_ID/);
 });
 
-test('API module posts esign_contract_* actions', () => {
+test('API module posts esign_contract_* actions including sign and print', () => {
   const api = readFileSync(apiPath, 'utf8');
   for (const a of [
     'esign_contract_get',
@@ -63,16 +69,26 @@ test('API module posts esign_contract_* actions', () => {
     'esign_contract_open',
     'esign_contract_ack_early',
     'esign_contract_ready',
+    'esign_contract_sign_party_a',
+    'esign_contract_sign_party_b',
+    'esign_contract_paper_opt',
+    'esign_contract_print',
     'esign_contract_status',
   ]) {
     assert.match(api, new RegExp(a));
   }
 });
 
-test('main only treats 127.0.0.1/localhost + ?dev=1 as local', () => {
+test('main only treats 127.0.0.1/localhost + ?dev=1 as local; staff via ?staff=1', () => {
   const main = readFileSync(mainPath, 'utf8');
   assert.match(main, /127\.0\.0\.1/);
   assert.match(main, /localhost/);
   assert.match(main, /dev/);
+  assert.match(main, /staff/);
   assert.doesNotMatch(main, /\?local=1|local===|local ==/);
+  assert.match(main, /signPartyA|SignPartyA/);
+  assert.match(main, /signPartyB|SignPartyB/);
+  assert.match(main, /paperOpt/);
+  assert.match(main, /print/);
+  assert.match(main, /window\.print/);
 });

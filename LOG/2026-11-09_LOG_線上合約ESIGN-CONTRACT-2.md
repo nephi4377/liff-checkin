@@ -4,3 +4,6 @@
 - 範本 `data/esign-contract-2025-0922.json`（現行版；5 處修正不套）
 - 測例 `tools/test-esign-contract.mjs`
 - draft PR、未部署
+
+## 切片2
+雙方簽名板＋列印＋紙本；內部 ?staff=1

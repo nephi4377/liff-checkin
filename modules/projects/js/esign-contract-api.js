@@ -1,5 +1,5 @@
 /**
- * 線上合約 API（走 project-console GAS）— ESIGN-CONTRACT-2 第一段
+ * 線上合約 API（走 project-console GAS）— ESIGN-CONTRACT-2
  */
 import { CONFIG } from '/shared/js/config.js';
 
@@ -42,6 +42,18 @@ export const EsignContractApi = {
   },
   ready(authBody) {
     return postAction('esign_contract_ready', authBody);
+  },
+  signPartyA(authBody) {
+    return postAction('esign_contract_sign_party_a', authBody);
+  },
+  signPartyB(authBody) {
+    return postAction('esign_contract_sign_party_b', authBody);
+  },
+  paperOpt(authBody) {
+    return postAction('esign_contract_paper_opt', authBody);
+  },
+  print(authBody) {
+    return postAction('esign_contract_print', authBody);
   },
   status(authBody) {
     return postAction('esign_contract_status', authBody);
