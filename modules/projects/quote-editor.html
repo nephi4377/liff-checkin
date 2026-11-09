@@ -29,7 +29,7 @@
         linear-gradient(165deg, #eef2f6 0%, #e7edf3 55%, #e2e9f0 100%);
       min-height: 100vh;
     }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 1rem 1rem 3rem; }
     h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
     .sub { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
     .card {
@@ -41,13 +41,14 @@
     }
     .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.4rem 0; }
     label { font-size: 0.9rem; color: var(--muted); }
-    input, select {
+    input, select, textarea {
       font: inherit;
       padding: 0.45rem 0.55rem;
       border: 1px solid var(--line);
       border-radius: 0.45rem;
-      min-width: 8rem;
+      min-width: 7rem;
     }
+    textarea { width: 100%; min-height: 2.4rem; }
     button, .btn {
       font: inherit;
       border: 0;
@@ -58,13 +59,15 @@
       cursor: pointer;
     }
     button.secondary { background: #5b6675; }
+    button.ghost { background: #e8eef1; color: var(--ink); }
     button:disabled { opacity: 0.55; cursor: wait; }
     .status { min-height: 1.4rem; font-size: 0.9rem; color: var(--muted); }
     .status.err { color: var(--danger); }
     .status.ok { color: var(--ok); }
     .zone-title { font-weight: 600; margin: 0 0 0.5rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
     th, td { text-align: left; padding: 0.35rem 0.3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr.addon td:first-child { padding-left: 1.2rem; }
     .totals { font-size: 0.95rem; line-height: 1.55; }
     .hint { font-size: 0.82rem; color: var(--muted); }
     .catalog-list { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 0.45rem; }
@@ -73,6 +76,10 @@
       border-bottom: 1px solid var(--line); border-radius: 0; padding: 0.55rem 0.65rem;
     }
     .catalog-list button:hover { background: #f3f7f8; }
+    .edit-grid { display: grid; grid-template-columns: 1.2fr 1fr 5rem 5rem 6rem; gap: 0.35rem; }
+    @media (max-width: 720px) {
+      .edit-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -87,15 +94,18 @@
         <input id="zoneName" placeholder="例如：客廳" />
         <button type="button" id="btnAddZone">加入空間</button>
       </div>
-      <p class="hint">工項從標準計價表挑選；單位／單價自動帶入。改價要寫原因。成本與廠商價不會出現在客人頁或列印。</p>
+      <p class="hint">先選工種再挑價目；名稱／說明／數量／單位可改；改價要寫原因。櫃子可掛附加項，並一定有「自填特殊五金」。成本與廠商價不會出現在客人頁或列印；客人頁也不顯示單價。</p>
     </div>
 
     <div class="card">
       <div class="row">
-        <label>加入工項到</label>
+        <label>加入到空間</label>
         <select id="zoneSelect"></select>
-        <input id="catalogQ" placeholder="搜尋品項" />
-        <button type="button" class="secondary" id="btnSearch">搜尋價目表</button>
+        <label>工種</label>
+        <select id="tradeSelect"><option value="">先選工種…</option></select>
+        <input id="catalogQ" placeholder="在此工種搜尋" />
+        <button type="button" class="secondary" id="btnSearch">搜尋價目</button>
+        <button type="button" class="ghost" id="btnAddCustom">新增自訂項</button>
       </div>
       <div class="row">
         <label>數量</label>
@@ -103,6 +113,20 @@
         <label>改價（選填）</label>
         <input id="overridePrice" type="number" placeholder="沿用表價" style="width:7rem" />
         <input id="overrideReason" placeholder="改價原因（有改價必填）" style="flex:1;min-width:12rem" />
+      </div>
+      <div id="customBox" class="card" hidden style="background:#f7fafb;margin:0.5rem 0 0">
+        <div class="zone-title">自訂項／特殊五金自填</div>
+        <div class="row">
+          <input id="customItem" placeholder="名稱" style="flex:1" />
+          <input id="customUnit" placeholder="單位" style="width:5rem" />
+          <input id="customQty" type="number" min="0" max="9999" step="0.1" value="1" style="width:5rem" />
+          <input id="customPrice" type="number" min="0" placeholder="單價" style="width:7rem" />
+        </div>
+        <div class="row">
+          <input id="customNote" placeholder="說明（規格／材質／色號）" style="flex:1" />
+          <select id="customParent"><option value="">掛在空間（主項）</option></select>
+          <button type="button" id="btnSaveCustom">儲存自填</button>
+        </div>
       </div>
       <div id="catalogBox" class="catalog-list" hidden></div>
     </div>
@@ -124,7 +148,6 @@
         <input id="quoteDate" type="date" style="width:10rem" />
         <button type="button" class="secondary" id="btnSaveFees">儲存扣費</button>
       </div>
-      <p class="hint">含稅總計會扣掉這三項；客人頁看得到扣費與應付，看不到成本／廠商價。</p>
     </div>
 
     <div class="card totals" id="totalsBox">合計載入中…</div>
@@ -141,7 +164,7 @@
 
     <div class="card row">
       <button type="button" class="secondary" id="btnPreflight">送出前檢查</button>
-      <button type="button" class="secondary" id="btnPrint">列印預覽（無成本）</button>
+      <button type="button" class="secondary" id="btnPrint">列印預覽（無單價／無成本）</button>
       <button type="button" class="secondary" id="btnRefresh">重新載入</button>
     </div>
     <pre id="preflightBox" class="card hint" hidden></pre>

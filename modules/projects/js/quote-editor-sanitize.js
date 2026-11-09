@@ -1,6 +1,6 @@
 /**
  * QUOTE-EDITOR-3：客戶／列印 payload 淨化（前端再擋一層）
- * 成本／廠商價等禁止鍵不得出現在對客資料。
+ * 成本／廠商價／單價不得出現在對客資料。
  */
 (function (root) {
   var FORBIDDEN = [
@@ -30,6 +30,7 @@
       var out = {};
       Object.keys(value).forEach(function (k) {
         if (isForbiddenKey(k)) return;
+        if (k === 'unit_price') return;
         out[k] = stripForbiddenDeep(value[k]);
       });
       return out;
@@ -42,7 +43,8 @@
     try { text = JSON.stringify(payload); } catch (e) { text = String(payload); }
     var needles = [
       '"cost"', '"cost_unit"', '"cost_price"', '"vendor_price"', '"designer_price"',
-      '"margin"', '"profit"', '"成本"', '"廠商價"', '"internal_cost"', '"supplier_price"'
+      '"margin"', '"profit"', '"成本"', '"廠商價"', '"internal_cost"', '"supplier_price"',
+      '"unit_price"'
     ];
     for (var i = 0; i < needles.length; i++) {
       if (text.indexOf(needles[i]) !== -1) return needles[i];
@@ -50,35 +52,52 @@
     return '';
   }
 
-  /** 客人看的報價列：只留售價側欄位 */
   function toCustomerLine(line) {
     line = line || {};
+    var addons = (line.addons || []).map(toCustomerLine);
+    var amount = Math.round(Number(line.amount) || 0);
+    var lineSubtotal = line.line_subtotal != null
+      ? Math.round(Number(line.line_subtotal) || 0)
+      : amount + addons.reduce(function (s, a) { return s + (Number(a.amount) || 0); }, 0);
     return stripForbiddenDeep({
       line_id: line.line_id,
+      custom: !!line.custom,
+      tab: line.tab || '',
       item: line.item,
       unit: line.unit,
       qty: line.qty,
-      unit_price: line.unit_price,
-      amount: line.amount,
+      amount: amount,
       note: line.note || '',
-      price_override_reason: line.price_override_reason || ''
+      parent_line_id: line.parent_line_id || '',
+      is_cabinet: !!line.is_cabinet,
+      line_subtotal: lineSubtotal,
+      addons: addons
     });
   }
 
   function toCustomerQuote(quote) {
     quote = quote || {};
+    function roundMoney(n) { return Math.round(Number(n) || 0); }
     var zones = (quote.zones || []).map(function (z) {
       var lines = (z.lines || []).map(toCustomerLine);
       var sub = 0;
-      lines.forEach(function (ln) { sub += Number(ln.amount) || 0; });
+      function walk(list) {
+        (list || []).forEach(function (ln) {
+          sub += Number(ln.amount) || 0;
+          walk(ln.addons);
+        });
+      }
+      walk(lines);
       return {
         zone_id: z.zone_id,
         name: z.name,
         lines: lines,
-        zone_subtotal: z.zone_subtotal != null ? Math.round(Number(z.zone_subtotal) || 0) : Math.round(sub)
+        zone_subtotal: z.zone_subtotal != null ? roundMoney(z.zone_subtotal) : Math.round(sub),
+        trade_groups: (z.trade_groups || []).map(function (g) {
+          return { tab: g.tab, subtotal: roundMoney(g.subtotal), line_count: g.line_count };
+        })
       };
     });
-    function roundMoney(n) { return Math.round(Number(n) || 0); }
     var fees = quote.fees_received || {};
     var totals = quote.totals || {};
     return stripForbiddenDeep({

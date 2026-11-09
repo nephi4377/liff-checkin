@@ -2016,7 +2016,30 @@ var AccountingApi = (function () {
         action: 'quote_editor_add_line',
         project_no: payload.project_no,
         zone_id: payload.zone_id,
-        catalog_key: payload.catalog_key,
+        catalog_key: payload.catalog_key || '',
+        custom: !!payload.custom,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        amount: payload.amount,
+        parent_line_id: payload.parent_line_id || '',
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorUpdateLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_update_line',
+        project_no: payload.project_no,
+        line_id: payload.line_id,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
         qty: payload.qty,
         unit_price: payload.unit_price,
         price_override_reason: payload.price_override_reason || '',

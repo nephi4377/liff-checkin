@@ -34,7 +34,9 @@
       padding: 0.85rem 1rem; margin: 0 0 0.75rem;
     }
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); }
+    th, td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr.addon td:first-child { padding-left: 1.1rem; }
+    .hint { font-size: 0.82rem; color: var(--muted); }
     button {
       font: inherit; border: 0; border-radius: 0.45rem; padding: 0.5rem 0.85rem;
       background: var(--accent); color: #fff; cursor: pointer;
@@ -77,17 +79,27 @@
       document.getElementById('headerSub').textContent =
         '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1) +
         '｜' + (stMap[quote.status] || quote.status || '');
+      function lineRows(list, indent) {
+        return (list || []).map(function (ln) {
+          var note = ln.note ? '<div class="hint">' + esc(ln.note) + '</div>' : '';
+          var bundle = (ln.addons && ln.addons.length)
+            ? '<div class="hint">含附加小計 ' + money(ln.line_subtotal) + '</div>' : '';
+          var row = '<tr' + (indent ? ' class="addon"' : '') + '><td>' + esc(ln.item) + note + bundle +
+            '</td><td>' + esc(ln.unit) + '</td><td>' + esc(String(ln.qty)) +
+            '</td><td>' + money(ln.amount) + '</td></tr>';
+          return row + lineRows(ln.addons || [], true);
+        }).join('');
+      }
       var zones = (quote.zones || []).map(function (z) {
-        var sub = 0;
-        var rows = (z.lines || []).map(function (ln) {
-          sub += Number(ln.amount) || 0;
-          return '<tr><td>' + esc(ln.item) + '</td><td>' + esc(ln.unit) + '</td><td>' +
-            esc(String(ln.qty)) + '</td><td>' + money(ln.unit_price) + '</td><td>' + money(ln.amount) + '</td></tr>';
-        }).join('') || '<tr><td colspan="5">（無項目）</td></tr>';
-        var subLabel = z.zone_subtotal != null ? z.zone_subtotal : Math.round(sub);
+        var rows = lineRows(z.lines || []) || '<tr><td colspan="4">（無項目）</td></tr>';
+        var trade = (z.trade_groups || []).map(function (g) {
+          return esc(g.tab) + ' ' + money(g.subtotal);
+        }).join('／');
+        var subLabel = z.zone_subtotal != null ? z.zone_subtotal : 0;
         return '<div class="card"><strong>' + esc(z.name) + '</strong>' +
-          ' <span class="sub">小計 ' + money(subLabel) + '</span><table><thead><tr>' +
-          '<th>項目</th><th>單位</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>' +
+          ' <span class="sub">小計 ' + money(subLabel) +
+          (trade ? '｜' + trade : '') + '</span><table><thead><tr>' +
+          '<th>項目</th><th>單位</th><th>數量</th><th>金額</th></tr></thead><tbody>' +
           rows + '</tbody></table></div>';
       }).join('');
       var t = quote.totals || {};

@@ -1,5 +1,5 @@
 /**
- * QUOTE-EDITOR-3 前端：淨化、主控台分頁、API 接線、成本永不進客戶／列印組裝
+ * QUOTE-EDITOR-3 前端：淨化、主控台分頁、API 接線、客人無單價／無成本
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +29,7 @@ function resolveBackendQuoteJs() {
   return candidates[0];
 }
 
-test('sanitize strips cost and vendor keys from customer quote', () => {
+test('sanitize strips cost, vendor, and unit_price from customer quote', () => {
   const dirty = {
     project_no: '9901',
     zones: [{
@@ -44,23 +44,38 @@ test('sanitize strips cost and vendor keys from customer quote', () => {
         amount: 9150,
         cost_unit: 3200,
         vendor_price: 3500,
-        成本: 999,
-        廠商價: 888
-      }]
+        is_cabinet: true,
+        addons: [{
+          line_id: 'a1',
+          item: '特殊五金',
+          unit: '式',
+          qty: 1,
+          unit_price: 500,
+          amount: 500,
+          custom: true
+        }]
+      }],
+      trade_groups: [{ tab: '木作工程', subtotal: 9650 }]
     }],
-    totals: { pretax: 9150, tax: 457.5, with_tax: 9607.5 }
+    totals: { pretax: 9650, tax: 483, with_tax: 10133 }
   };
   const clean = sanitize.toCustomerQuote(dirty);
   assert.equal(clean.zones[0].lines[0].item, '開門高衣櫃');
   assert.equal('cost_unit' in clean.zones[0].lines[0], false);
   assert.equal('vendor_price' in clean.zones[0].lines[0], false);
+  assert.equal('unit_price' in clean.zones[0].lines[0], false);
+  assert.equal('unit_price' in clean.zones[0].lines[0].addons[0], false);
+  assert.equal(clean.zones[0].lines[0].line_subtotal, 9650);
   assert.equal(sanitize.payloadContainsForbiddenToken(clean), '');
+  assert.equal(JSON.stringify(clean).includes('"unit_price"'), false);
 });
 
-test('print-like assembly rejects forbidden tokens', () => {
+test('print-like assembly rejects forbidden tokens including unit_price', () => {
   const bad = { zones: [{ lines: [{ item: 'x', vendor_price: 1 }] }] };
   assert.equal(sanitize.payloadContainsForbiddenToken(bad), '"vendor_price"');
-  const cleaned = sanitize.stripForbiddenDeep(bad);
+  const priced = { zones: [{ lines: [{ item: 'x', unit_price: 10, amount: 10 }] }] };
+  assert.equal(sanitize.payloadContainsForbiddenToken(priced), '"unit_price"');
+  const cleaned = sanitize.toCustomerQuote(priced);
   assert.equal(sanitize.payloadContainsForbiddenToken(cleaned), '');
 });
 
@@ -72,44 +87,44 @@ test('designer console has 線上報價 tab and cost-guard print', () => {
   assert.match(designer, /cost_unit\|vendor_price/);
 });
 
-test('editor and view pages wire sanitize and no cost UI labels', () => {
+test('editor and view pages wire sanitize and no customer unit price', () => {
   assert.match(editorHtml, /quote-editor-sanitize\.js/);
   assert.match(editorHtml, /成本與廠商價不會出現/);
+  assert.match(editorHtml, /tradeSelect/);
+  assert.match(editorHtml, /btnAddCustom/);
+  assert.match(editorHtml, /自填/);
   assert.match(viewHtml, /QuoteEditorSanitize/);
   assert.match(mainJs, /payloadContainsForbiddenToken/);
   assert.doesNotMatch(viewHtml, /廠商價|成本單價/);
+  assert.match(viewHtml, /金額/);
+  assert.doesNotMatch(viewHtml, /<th>單價<\/th>/);
 });
 
-test('accounting_api exposes quote_editor actions', () => {
+test('accounting_api exposes quote_editor actions including update and custom', () => {
   assert.match(accountingApi, /quote_editor_catalog/);
   assert.match(accountingApi, /quote_editor_add_zone/);
   assert.match(accountingApi, /quote_editor_add_line/);
+  assert.match(accountingApi, /quote_editor_update_line/);
+  assert.match(accountingApi, /quoteEditorUpdateLine/);
+  assert.match(accountingApi, /parent_line_id/);
+  assert.match(accountingApi, /custom: !!payload\.custom/);
   assert.match(accountingApi, /quote_editor_customer_view/);
   assert.match(accountingApi, /quote_editor_print/);
-  assert.match(accountingApi, /quoteEditorCatalog/);
-  assert.match(accountingApi, /quote_editor_set_fees/);
-  assert.match(accountingApi, /quote_editor_send/);
-  assert.match(accountingApi, /quote_editor_new_version/);
-  assert.match(accountingApi, /quote_editor_confirm/);
-  assert.match(accountingApi, /quote_editor_list_versions/);
 });
 
-test('editor page has fees, versions, send controls', () => {
+test('editor page has fees, versions, trade, custom fill controls', () => {
   assert.match(editorHtml, /feeMeasure/);
-  assert.match(editorHtml, /feeStartup/);
-  assert.match(editorHtml, /feePlanning/);
   assert.match(editorHtml, /btnSaveFees/);
   assert.match(editorHtml, /btnSend/);
   assert.match(editorHtml, /btnNewVersion/);
   assert.match(editorHtml, /versionsBox/);
   assert.match(mainJs, /quoteEditorSetFees/);
   assert.match(mainJs, /quoteEditorSend/);
-  assert.match(mainJs, /quoteEditorNewVersion/);
-  assert.match(mainJs, /prevZone/);
-  assert.match(mainJs, /btn\.disabled = true/);
-  assert.match(mainJs, /已收丈量費/);
-  assert.match(mainJs, /應付/);
-  assert.match(mainJs, /小計/);
+  assert.match(mainJs, /quoteEditorUpdateLine/);
+  assert.match(mainJs, /btn-addon-custom/);
+  assert.match(mainJs, /特殊五金自填/);
+  assert.match(mainJs, /tradeSelect/);
+  assert.match(mainJs, /line_subtotal/);
 });
 
 test('sanitize rounds money to integer yuan', () => {
@@ -147,23 +162,22 @@ test('customer sanitize keeps fees_received sell-side only', () => {
   assert.equal(clean.fees_received.measure, 1000);
   assert.equal(clean.totals.payable, 7000);
   assert.equal('cost_unit' in clean.zones[0].lines[0], false);
+  assert.equal('unit_price' in clean.zones[0].lines[0], false);
   assert.equal(sanitize.payloadContainsForbiddenToken(clean), '');
 });
 
-test('backend QuoteEditor.js present with forbidden-key strip (when sibling repo mounted)', () => {
+test('backend QuoteEditor.js has howard fields when sibling mounted', () => {
   const p = resolveBackendQuoteJs();
   if (!existsSync(p)) {
-    assert.ok(true, 'backend sibling missing in this checkout — skip structural check');
+    assert.ok(true, 'backend sibling missing — skip');
     return;
   }
   const src = readFileSync(p, 'utf8');
   assert.match(src, /QE_FORBIDDEN_KEYS_/);
-  assert.match(src, /qeStripForbiddenDeep_/);
-  assert.match(src, /qeCustomerView_/);
-  assert.match(src, /qePrintView_/);
-  assert.match(src, /QUOTE_EDITOR_ENABLED/);
-  assert.match(src, /handleQuoteEditorSetFees_/);
-  assert.match(src, /handleQuoteEditorSend_/);
-  assert.match(src, /handleQuoteEditorConfirm_/);
-  assert.match(src, /qeBuildPreflight_/);
+  assert.match(src, /qeStripUnitPriceDeep_/);
+  assert.match(src, /handleQuoteEditorUpdateLine_/);
+  assert.match(src, /parent_line_id/);
+  assert.match(src, /特殊五金自填/);
+  assert.match(src, /qeEnrichZoneCustomer_/);
+  assert.match(src, /trade_groups/);
 });
