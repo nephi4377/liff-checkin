@@ -350,18 +350,19 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 note: faNote
             });
         }
-        if (absent > 0 || absentBaseDeduction > 0) {
-            deductions.push({
-                label: '缺勤扣款',
-                amount: absentBaseDeduction,
-                note: `缺勤 ${fmtPayrollDay(absent)} 日（底薪÷30）`
-            });
-        }
+        // 有事假優先列事假；真正缺勤才列缺勤（勿用笼统「缺勤」蓋過假別）
         if (personalLeave > 0 || personalLeaveDeduction > 0) {
             deductions.push({
                 label: '事假扣款',
                 amount: personalLeaveDeduction,
                 note: `事假 ${fmtPayrollDay(personalLeave)} 日（底薪÷30）`
+            });
+        }
+        if ((absent > 0 || absentBaseDeduction > 0) && !(personalLeave > 0 && absent <= 0)) {
+            deductions.push({
+                label: '缺勤扣款',
+                amount: absentBaseDeduction,
+                note: `缺勤 ${fmtPayrollDay(absent)} 日（底薪÷30）`
             });
         }
         if (specialUnpaid > 0 || specialLeaveDeduction > 0) {
