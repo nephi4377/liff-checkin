@@ -115,12 +115,14 @@
         <span class="tab" data-tab="mat">選材</span>
         <span class="tab" data-tab="audit">稽核</span>
         <span class="tab" data-tab="bind">客戶綁定</span>
+        <span class="tab" data-tab="esign">簽約注意</span>
       </div>
       <div id="panelAdj" class="card"></div>
       <div id="panelRec" class="card hidden"></div>
       <div id="panelMat" class="card hidden"></div>
       <div id="panelAudit" class="card hidden"></div>
       <div id="panelBind" class="card hidden"></div>
+      <div id="panelEsign" class="card hidden"></div>
     </div>
   </div>
   <script>
@@ -372,6 +374,7 @@
       renderMatPanel();
       renderAuditPanel();
       renderBindPanel();
+      renderEsignPanel();
       document.querySelectorAll('.tab').forEach(function (t) {
         t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
       });
@@ -380,6 +383,111 @@
       $('panelMat').classList.toggle('hidden', activeTab !== 'mat');
       $('panelAudit').classList.toggle('hidden', activeTab !== 'audit');
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
+      $('panelEsign').classList.toggle('hidden', activeTab !== 'esign');
+    }
+
+    function renderEsignPanel() {
+      var pno = currentProject || '';
+      var panel = $('panelEsign');
+      if (!panel) return;
+      var clientLink = location.origin + '/modules/projects/esign-notice.html?project_no=' + encodeURIComponent(pno);
+      panel.innerHTML =
+        '<h4>簽約注意事項</h4>' +
+        '<p class="form-hint">客戶逐條確認＋手寫簽名。系統不做主動推播；請同事用官方 LINE「回覆」把連結傳給客戶。</p>' +
+        '<p id="esignStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="esignLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<p style="margin:12px 0">' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignRefresh">重新整理狀態</button> ' +
+        '<a class="btn btn-primary" id="btnEsignPreview" href="../projects/esign-notice.html?project_no=' + encodeURIComponent(pno) + '&staff_preview=1" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽客戶畫面</a> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignPrint">列印已簽版本</button>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關閉；測試案號需後端白名單。已簽內容會鎖定，不隨之後改版變動。</p>';
+
+      function setStatusText(t) {
+        var line = $('esignStatusLine');
+        if (line) line.textContent = t;
+      }
+      async function refreshStatus() {
+        setStatusText('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setStatusText('本機模擬：未連後端（狀態未知）');
+            return;
+          }
+          var res = await AccountingApi.esignNoticeStatus(session, pno);
+          if (!res || !res.success) {
+            setStatusText((res && res.message) || '狀態讀取失敗');
+            return;
+          }
+          var flag = res.feature_enabled ? '正式開放中' : (res.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          setStatusText('狀態：' + (res.status_label || res.status || '—') + '｜' + flag);
+          if (res.client_link) {
+            var linkEl = $('esignLinkText');
+            if (linkEl) linkEl.textContent = res.client_link;
+          }
+        } catch (e) {
+          setStatusText((e && e.message) || '狀態讀取失敗');
+        }
+      }
+      var copyBtn = $('btnEsignCopy');
+      if (copyBtn) copyBtn.onclick = function () {
+        var text = ($('esignLinkText') && $('esignLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showOk('已複製客戶連結');
+          }).catch(function () {
+            window.prompt('請手動複製：', text);
+          });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      };
+      var refreshBtn = $('btnEsignRefresh');
+      if (refreshBtn) refreshBtn.onclick = refreshStatus;
+      var printBtn = $('btnEsignPrint');
+      if (printBtn) printBtn.onclick = async function () {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法列印'); return; }
+          var res = await AccountingApi.esignNoticePrint(session, pno);
+          if (!res || !res.success) { showMsg((res && res.message) || '列印資料讀取失敗'); return; }
+          var w = window.open('', '_blank');
+          if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
+          var p = res.print || {};
+          var base = location.origin + '/modules/projects/';
+          var items = (p.items || []).map(function (it) {
+            var ack = (p.ack_times && p.ack_times[String(it.id)]) || '—';
+            var imgs = (it.images || []).filter(function (img) { return img && img.src; }).map(function (img) {
+              var src = String(img.src);
+              if (!/^https?:\/\//i.test(src) && src.charAt(0) !== '/') src = base + src.replace(/^\.\//, '');
+              var alt = img.alt || img.caption || '';
+              return '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt) + '" style="max-width:220px;margin:4px 6px 4px 0;vertical-align:top"/>' +
+                '<div style="font-size:12px;color:#555">' + escapeHtml(alt) + '</div>';
+            }).join('');
+            return '<div style="margin:0 0 10px"><strong>第 ' + it.id + ' 條' +
+              (it.title ? '｜' + escapeHtml(it.title) : '') + '</strong><div>' +
+              escapeHtml(it.body || '').replace(/\n/g, '<br/>') +
+              '</div>' + (imgs ? '<div>' + imgs + '</div>' : '') +
+              '<div>我了解時間：' + escapeHtml(ack) + '</div></div>';
+          }).join('');
+          w.document.write('<html><head><title>簽約注意事項列印</title></head><body style="font-family:sans-serif;padding:16px">' +
+            '<h2>' + escapeHtml(p.title || '簽約注意事項') + '</h2>' +
+            '<div>案號 ' + escapeHtml(pno) + '｜版本 ' + escapeHtml(p.notice_version || '') + '</div>' +
+            '<div>內容雜湊：' + escapeHtml(p.notice_content_hash || '') + '</div>' +
+            items +
+            '<p><strong>' + escapeHtml(p.closing || '對於以上說明已經清楚了解。') + '</strong></p>' +
+            '<p>立同意書人：' + escapeHtml(p.display_name || '') + '</p>' +
+            '<p>簽名時間（台北）：' + escapeHtml(p.signed_at || '') + '</p>' +
+            (p.signature_data_url ? '<img src="' + p.signature_data_url + '" style="max-width:280px;border:1px solid #999"/>' : '') +
+            '</body></html>');
+          w.document.close();
+          w.focus();
+          w.print();
+        } catch (ePrint) {
+          showMsg((ePrint && ePrint.message) || '列印失敗');
+        }
+      };
+      refreshStatus();
     }
 
     function renderMatPanel() {
