@@ -84,12 +84,13 @@ test('API module posts esign_contract_* actions including sign and print', () =>
   }
 });
 
-test('main only treats 127.0.0.1/localhost + ?dev=1 as local; staff via ?staff=1', () => {
+test('main only treats 127.0.0.1/localhost + ?dev=1 as local; preview vs staff sign split', () => {
   const main = readFileSync(mainPath, 'utf8');
   assert.match(main, /127\.0\.0\.1/);
   assert.match(main, /localhost/);
   assert.match(main, /dev/);
-  assert.match(main, /staff/);
+  assert.match(main, /staff_preview/);
+  assert.match(main, /staff_preview/);
   assert.doesNotMatch(main, /\?local=1|local===|local ==/);
   assert.match(main, /signPartyA|SignPartyA/);
   assert.match(main, /signPartyB|SignPartyB/);
@@ -97,9 +98,12 @@ test('main only treats 127.0.0.1/localhost + ?dev=1 as local; staff via ?staff=1
   assert.match(main, /print/);
   assert.match(main, /window\.print/);
   assert.match(main, /renderCaseSummary|payment_schedule/);
+  assert.match(main, /staff_preview/);
+  assert.match(main, /mode: 'staff_preview'|staff_preview: true/);
+  assert.match(main, /mode: 'staff'/);
 });
 
-test('console has 線上合約 tab with payment editor and copy link', () => {
+test('console has 線上合約 tab with payment editor and split preview / sign-B links', () => {
   const designer = readFileSync(designerPath, 'utf8');
   assert.match(designer, /data-tab="esignc"/);
   assert.match(designer, /線上合約/);
@@ -108,6 +112,11 @@ test('console has 線上合約 tab with payment editor and copy link', () => {
   assert.match(designer, /btnEsigncSend/);
   assert.match(designer, /esigncPayRows/);
   assert.match(designer, /還原預設 30\/30\/30\/10/);
+  assert.match(designer, /btnEsigncPreview/);
+  assert.match(designer, /btnEsigncSignB/);
+  assert.match(designer, /staff_preview=1/);
+  assert.match(designer, /staff=1"/);
+  assert.doesNotMatch(designer, /staff=1&staff_preview=1|staff_preview=1&staff=1/);
   const api = readFileSync(accountingApiPath, 'utf8');
   assert.match(api, /esignContractStatus/);
   assert.match(api, /esignContractStaffSave/);

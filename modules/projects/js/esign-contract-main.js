@@ -176,15 +176,37 @@ function makePad(canvas) {
   };
 }
 
+function isStaffPreviewParam() {
+  const v = qs('staff_preview');
+  return v === '1' || v === 'true' || qs('preview') === '1';
+}
+
+/**
+ * 兩個內部入口（勿混）：
+ * - 只預覽：?staff_preview=1（唯讀，傳 staff_preview，不可簽）
+ * - 簽乙方：?staff=1 且無 staff_preview（員工身分，可簽）
+ */
 async function ensureAuth() {
   const projectNo = qs('project_no');
   if (!projectNo) throw new Error('連結缺少案號');
-  const staffMode = qs('staff') === '1';
+  const previewOnly = isStaffPreviewParam();
+  const staffSign = qs('staff') === '1' && !previewOnly;
 
   if (isLocalHost() && qs('dev') === '1') {
-    if (staffMode) {
+    if (previewOnly) {
+      return {
+        mode: 'staff_preview',
+        staff_preview: true,
+        project_no: projectNo,
+        userId: qs('uid') || 'Ustaffstaffstaffstaffstaffstaffst',
+        display_name: '本機員工預覽',
+        device_ua: navigator.userAgent || '',
+      };
+    }
+    if (staffSign) {
       return {
         mode: 'staff',
+        staff: '1',
         project_no: projectNo,
         userId: qs('uid') || 'Ustaffstaffstaffstaffstaffstaffst',
         display_name: '本機測試員工',
@@ -208,9 +230,21 @@ async function ensureAuth() {
   }
   const profile = await liff.getProfile();
   const idToken = liff.getIDToken && liff.getIDToken();
-  if (staffMode) {
+  if (previewOnly) {
+    return {
+      mode: 'staff_preview',
+      staff_preview: true,
+      project_no: projectNo,
+      userId: profile.userId,
+      display_name: profile.displayName || '',
+      liff_id_token: idToken || '',
+      device_ua: navigator.userAgent || '',
+    };
+  }
+  if (staffSign) {
     return {
       mode: 'staff',
+      staff: '1',
       project_no: projectNo,
       userId: profile.userId,
       display_name: profile.displayName || '',
@@ -260,9 +294,11 @@ function buildPrintHtml(print) {
 function syncUi(record, auth) {
   const locked = !!(record && record.locked);
   const paper = !!(record && record.paper_opted);
-  const canA = !!(record && record.can_sign_party_a) && auth.mode === 'customer';
-  const canB = !!(record && record.can_sign_party_b) && auth.mode === 'staff';
-  const showReview = !locked && !paper && !(record && record.party_a_signed) && auth.mode === 'customer';
+  const previewOnly = auth.mode === 'staff_preview' || !!auth.staff_preview;
+  const canA = !previewOnly && !!(record && record.can_sign_party_a) && auth.mode === 'customer';
+  // 僅「簽乙方」入口（mode=staff、無 staff_preview）可簽
+  const canB = !previewOnly && !!(record && record.can_sign_party_b) && auth.mode === 'staff';
+  const showReview = !previewOnly && !locked && !paper && !(record && record.party_a_signed) && auth.mode === 'customer';
   show('reviewActions', showReview);
   show('signPartyA', canA);
   show('signPartyB', canB);
@@ -329,9 +365,11 @@ async function boot() {
   setStatus(
     data.record && data.record.locked
       ? '已鎖定（可回看／列印）'
-      : auth.mode === 'staff'
-        ? '內部模式'
-        : '可審閱／簽名',
+      : auth.mode === 'staff_preview'
+        ? '內部預覽（唯讀）'
+        : auth.mode === 'staff'
+          ? '內部簽乙方'
+          : '可審閱／簽名',
     data.record && data.record.locked ? 'ok' : ''
   );
 
