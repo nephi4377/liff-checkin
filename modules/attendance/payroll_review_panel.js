@@ -567,7 +567,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         deductions.push({
             label: '所得稅扣繳（固定薪）',
             amount: taxBundle.fixedSalaryTax,
-            note: taxBundle.mode === 'table' ? `依扣繳稅額表（扶養 ${taxBundle.dependents}）` : '固定 5%'
+            note: taxBundle.mode === 'table' ? `依扣繳稅額表（配偶及受扶養 ${taxBundle.dependents}）` : '固定 5%'
         });
     }
     if (taxBundle.bonusTax > 0) {
