@@ -105,6 +105,23 @@ test('editor page has fees, versions, send controls', () => {
   assert.match(mainJs, /quoteEditorSetFees/);
   assert.match(mainJs, /quoteEditorSend/);
   assert.match(mainJs, /quoteEditorNewVersion/);
+  assert.match(mainJs, /prevZone/);
+  assert.match(mainJs, /btn\.disabled = true/);
+  assert.match(mainJs, /已收丈量費/);
+  assert.match(mainJs, /應付/);
+  assert.match(mainJs, /小計/);
+});
+
+test('sanitize rounds money to integer yuan', () => {
+  const clean = sanitize.toCustomerQuote({
+    zones: [{ name: 'a', lines: [{ item: 'x', amount: 10.4 }], zone_subtotal: 10.4 }],
+    fees_received: { measure: 1.6, startup: 0, planning: 0 },
+    totals: { pretax: 10.4, tax: 0.52, with_tax: 10.92, deducted: 1.6, payable: 9.32 }
+  });
+  assert.equal(clean.totals.tax, 1);
+  assert.equal(clean.totals.with_tax, 11);
+  assert.equal(clean.fees_received.measure, 2);
+  assert.equal(clean.zones[0].zone_subtotal, 10);
 });
 
 test('customer view has confirm and fees display without cost labels', () => {

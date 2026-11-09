@@ -68,12 +68,19 @@
   function toCustomerQuote(quote) {
     quote = quote || {};
     var zones = (quote.zones || []).map(function (z) {
+      var lines = (z.lines || []).map(toCustomerLine);
+      var sub = 0;
+      lines.forEach(function (ln) { sub += Number(ln.amount) || 0; });
       return {
         zone_id: z.zone_id,
         name: z.name,
-        lines: (z.lines || []).map(toCustomerLine)
+        lines: lines,
+        zone_subtotal: z.zone_subtotal != null ? Math.round(Number(z.zone_subtotal) || 0) : Math.round(sub)
       };
     });
+    function roundMoney(n) { return Math.round(Number(n) || 0); }
+    var fees = quote.fees_received || {};
+    var totals = quote.totals || {};
     return stripForbiddenDeep({
       project_no: quote.project_no,
       quote_id: quote.quote_id,
@@ -81,8 +88,19 @@
       status: quote.status,
       quote_date: quote.quote_date || '',
       zones: zones,
-      fees_received: quote.fees_received || {},
-      totals: quote.totals || {},
+      fees_received: {
+        measure: roundMoney(fees.measure),
+        startup: roundMoney(fees.startup),
+        planning: roundMoney(fees.planning)
+      },
+      totals: {
+        pretax: roundMoney(totals.pretax),
+        tax: roundMoney(totals.tax),
+        tax_rate: totals.tax_rate,
+        with_tax: roundMoney(totals.with_tax),
+        deducted: roundMoney(totals.deducted),
+        payable: roundMoney(totals.payable)
+      },
       notes: quote.notes || '',
       can_confirm: !!quote.can_confirm,
       confirmed_at: quote.confirmed_at || '',

@@ -78,11 +78,15 @@
         '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1) +
         '｜' + (stMap[quote.status] || quote.status || '');
       var zones = (quote.zones || []).map(function (z) {
+        var sub = 0;
         var rows = (z.lines || []).map(function (ln) {
+          sub += Number(ln.amount) || 0;
           return '<tr><td>' + esc(ln.item) + '</td><td>' + esc(ln.unit) + '</td><td>' +
             esc(String(ln.qty)) + '</td><td>' + money(ln.unit_price) + '</td><td>' + money(ln.amount) + '</td></tr>';
         }).join('') || '<tr><td colspan="5">（無項目）</td></tr>';
-        return '<div class="card"><strong>' + esc(z.name) + '</strong><table><thead><tr>' +
+        var subLabel = z.zone_subtotal != null ? z.zone_subtotal : Math.round(sub);
+        return '<div class="card"><strong>' + esc(z.name) + '</strong>' +
+          ' <span class="sub">小計 ' + money(subLabel) + '</span><table><thead><tr>' +
           '<th>項目</th><th>單位</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>' +
           rows + '</tbody></table></div>';
       }).join('');
