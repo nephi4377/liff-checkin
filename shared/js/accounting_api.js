@@ -1936,6 +1936,22 @@ var AccountingApi = (function () {
         project_no: (filter && filter.project_no) || ''
       }));
     },
+    /** 簽約注意事項 — 主控台狀態／複製連結／列印（project-console） */
+    esignNoticeStatus: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_notice_status',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    esignNoticePrint: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_notice_print',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        staff_preview: true
+      }));
+    },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
