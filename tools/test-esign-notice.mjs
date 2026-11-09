@@ -1,11 +1,15 @@
 /**
  * ESIGN-NOTICE-1 前端：內容版本／雜湊、列印組裝、頁面／主控台入口、API 接線
+ *
+ * 後端對照路徑（雜湊／結構對齊）可用環境變數覆寫，避免 sibling repo 名稱不同而 skip：
+ *   ESIGN_BACKEND_NOTICE_JS=/abs/path/to/EsignNotice.js
+ * 預設依序嘗試：../backend_gas、../Backend_GAS
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -15,7 +19,21 @@ const mainPath = join(root, 'modules/projects/js/esign-notice-main.js');
 const apiPath = join(root, 'modules/projects/js/esign-notice-api.js');
 const designerPath = join(root, 'modules/accounting/designer-customer-finance.html');
 const accountingApiPath = join(root, 'shared/js/accounting_api.js');
-const backendPath = join(root, '../backend_gas/project-console/EsignNotice.js');
+
+function resolveBackendNoticePath() {
+  const fromEnv = String(process.env.ESIGN_BACKEND_NOTICE_JS || '').trim();
+  if (fromEnv) return resolve(fromEnv);
+  const candidates = [
+    join(root, '../backend_gas/project-console/EsignNotice.js'),
+    join(root, '../Backend_GAS/project-console/EsignNotice.js'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return candidates[0];
+}
+
+const backendPath = resolveBackendNoticePath();
 
 const content = JSON.parse(readFileSync(contentPath, 'utf8'));
 const html = readFileSync(htmlPath, 'utf8');
@@ -55,15 +73,19 @@ test('content hash is deterministic SHA-256', () => {
   assert.equal(a.length, 64);
 });
 
-test('backend content hash matches frontend when backend repo present', function () {
-  if (!existsSync(backendPath)) {
-    this.skip();
-    return;
-  }
+test('backend content aligns when backend path resolvable', () => {
+  assert.ok(
+    existsSync(backendPath),
+    '找不到後端 EsignNotice.js。請設 ESIGN_BACKEND_NOTICE_JS=/path/to/EsignNotice.js（目前：' +
+      backendPath +
+      '）'
+  );
   const backendSrc = readFileSync(backendPath, 'utf8');
   assert.match(backendSrc, /version:\s*'2025-0922'/);
   assert.match(backendSrc, /enNoticeContentHash_/);
   assert.match(backendSrc, /fee_stages/);
+  assert.match(backendSrc, /EN_SIGNATURE_MAX_BYTES_/);
+  assert.match(backendSrc, /ESIGN_NOTICE_DRIVE_FOLDER_ID/);
 });
 
 test('client page has signature canvas, ack, print, lock UX hooks', () => {
@@ -78,6 +100,20 @@ test('client page has signature canvas, ack, print, lock UX hooks', () => {
   assert.match(main, /window\.print/);
   assert.match(api, /esign_notice_get/);
   assert.match(api, /esign_notice_print/);
+});
+
+test('isLocal only trusts loopback hostnames (no ?local=1)', () => {
+  assert.match(main, /127\.0\.0\.1/);
+  assert.match(main, /localhost/);
+  assert.doesNotMatch(
+    main,
+    /param\(['"]local['"]\)\s*===\s*['"]1['"]/
+  );
+});
+
+test('loadAll applies open() returned record', () => {
+  assert.match(main, /opened\.success/);
+  assert.match(main, /applyRecord\(opened\.record\)/);
 });
 
 test('console panel can copy link and show status', () => {

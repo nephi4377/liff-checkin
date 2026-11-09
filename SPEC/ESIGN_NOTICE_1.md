@@ -19,3 +19,7 @@
 ## 驗收（測試）
 
 `node --test tools/test-esign-notice.mjs`
+
+後端對照路徑可用 `ESIGN_BACKEND_NOTICE_JS=/path/to/EsignNotice.js`（未設則試 `../backend_gas`／`../Backend_GAS`）。
+
+本機假身分：僅 loopback（`127.0.0.1`／`localhost`）＋`?dev=1`；不認 `?local=1`。

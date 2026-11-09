@@ -19,8 +19,7 @@ const staffPreview =
   param('preview') === '1';
 const isLocal =
   location.hostname === '127.0.0.1' ||
-  location.hostname === 'localhost' ||
-  param('local') === '1';
+  location.hostname === 'localhost';
 
 const state = {
   session: null,
@@ -133,7 +132,7 @@ async function initLiffSession() {
     };
   }
 
-  if (isLocal && (param('local') === '1' || param('dev') === '1')) {
+  if (isLocal && param('dev') === '1') {
     return {
       uid: param('uid') || 'Ulocaltestlocaltestlocaltestloca',
       displayName: '本機測試客戶',
@@ -391,10 +390,13 @@ async function loadAll() {
   applyRecord(res.record);
   if (!(res.record && res.record.locked) && !staffPreview) {
     try {
-      await EsignNoticeApi.open(authBody());
+      const opened = await EsignNoticeApi.open(authBody());
+      if (opened && opened.success && opened.record) {
+        applyRecord(opened.record);
+      }
     } catch (_) {}
   }
-  if (!(res.record && res.record.locked)) {
+  if (!(state.record && state.record.locked)) {
     showMode('items');
   }
 }
