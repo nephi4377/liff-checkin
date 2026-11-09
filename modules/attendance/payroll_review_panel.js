@@ -1130,8 +1130,18 @@ export function initPayrollReviewApproval(ctx) {
             </div>
             <div class="mt-3 grid grid-cols-2 gap-2">
                 <label class="text-xs">出勤獎金<input type="number" id="pr-full-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.fullAttendanceBonus}"></label>
-                <label class="text-xs">獎金<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
-                <label class="text-xs col-span-2">獎金事由<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="主管填入"></label>
+                <label class="text-xs">獎金（元）<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
+                <label class="text-xs col-span-2">獎金類別<select id="pr-bonus-cat-${row.reviewId}" class="w-full rounded border-gray-300 text-sm">
+                    <option value="">選擇類別</option>
+                    <option value="position">職務加給</option>
+                    <option value="license">證照加給</option>
+                    <option value="performance">業績</option>
+                    <option value="close">結案</option>
+                    <option value="quarterly">季獎</option>
+                    <option value="video">影片獎金</option>
+                    <option value="other">其他獎金</option>
+                </select></label>
+                <label class="text-xs col-span-2">獎金備註<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="選填（勿填專案報酬）"></label>
                 <label class="text-xs">扣款（其他）<input type="number" id="pr-ded-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.deduction || 0}" placeholder="考勤罰款等"></label>
                 <label class="text-xs col-span-2">審核備註<input type="text" id="pr-note-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="駁回時必填"></label>
             </div>
@@ -1150,12 +1160,19 @@ export function initPayrollReviewApproval(ctx) {
             alert('駁回時請填寫審核備註');
             return;
         }
+        const bonusAmount = Number(document.getElementById(`pr-bonus-${reviewId}`)?.value) || 0;
+        const bonusCategory = document.getElementById(`pr-bonus-cat-${reviewId}`)?.value.trim() || '';
+        if (decision === 'approve' && bonusAmount > 0 && !bonusCategory) {
+            alert('有填獎金金額時請選擇獎金類別');
+            return;
+        }
         const payload = {
             action: 'payroll_review', op: 'resolve',
             operatorId: userProfile.userId, userName: userProfile.displayName,
             reviewId, decision,
             reviewNote: note,
-            bonusAmount: Number(document.getElementById(`pr-bonus-${reviewId}`)?.value) || 0,
+            bonusAmount,
+            bonusCategory,
             bonusReason: document.getElementById(`pr-bonus-reason-${reviewId}`)?.value.trim() || '',
             fullAttendanceBonus: Number(document.getElementById(`pr-full-${reviewId}`)?.value) || 0,
             deduction: Number(document.getElementById(`pr-ded-${reviewId}`)?.value) || 0
