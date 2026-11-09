@@ -1556,6 +1556,7 @@
         const rawStatus = day.status;
         const s = String(dispStr ?? '');
         if (s === '未到職' || s === '已離職' || rawStatus === '未到職' || rawStatus === '已離職') return 'text-gray-400';
+        if (s === '未排班' || rawStatus === '未排班') return 'text-gray-400';
         if (s === '缺勤' || s.startsWith('缺勤') || String(rawStatus).startsWith('異常')) return 'text-red-600 font-bold';
         if (rawStatus === '僅單次打卡') return 'text-purple-600 font-bold';
         if (s.includes('加班')) return 'text-orange-600 font-bold';
@@ -1645,7 +1646,7 @@
 
         const anomalyTotal = lastGlobalSummary.totalAnomalyDays ?? userIds.reduce((n, id) => n + countAnomalyDays(recordsByUser[id]), 0);
         const offSiteMissing = lastGlobalSummary.offSiteMissingExplanationCount || 0;
-        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>標準工作日(天)</strong>＝查詢區間應班母數（標準制：平日−國定假；排班制：區間−國定假，個人排休不扣母數）。<strong>排班制</strong>逐日狀態依個人班表（週末可正常出勤）；僅<strong>標準制</strong>週末／國定假無打卡顯示<strong>應休</strong>。排班制若當月 <strong>休假</strong> 超過可排休（＝國定假天數），超出且未到者算<strong>缺勤(超休)</strong>。國定假或班表排休日打卡不計遲早退。假別／缺勤可為小數，<strong>不可</strong>加總對母數。預設隱藏全期缺勤。</p>';
+        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>標準工作日(天)</strong>＝查詢區間應班母數（標準制：平日−國定假；排班制：區間−國定假，個人排休不扣母數）。<strong>排班制</strong>逐日狀態依個人班表（週末可正常出勤）；僅<strong>標準制</strong>週末／國定假無打卡顯示<strong>應休</strong>。排班制<strong>未排班</strong>（班表空白且未打卡）與<strong>未來日</strong>不算缺勤；當月 <strong>休假</strong> 超過可排休（＝國定假天數）且未到者仍算<strong>缺勤(超休)</strong>。國定假或班表排休日打卡不計遲早退。假別／缺勤可為小數，<strong>不可</strong>加總對母數。預設隱藏全期缺勤。</p>';
         if (hiddenAbsentCount > 0 && !document.getElementById('show-all-absent-checkbox')?.checked) {
             footnote += `<p class="text-xs text-gray-500 mt-1">已隱藏 <strong>${hiddenAbsentCount}</strong> 位全期缺勤（可勾選「顯示全期缺勤」）。</p>`;
         }
