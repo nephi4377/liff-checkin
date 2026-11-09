@@ -116,6 +116,7 @@
         <span class="tab" data-tab="audit">稽核</span>
         <span class="tab" data-tab="bind">客戶綁定</span>
         <span class="tab" data-tab="esign">簽約注意</span>
+        <span class="tab" data-tab="esignc">線上合約</span>
       </div>
       <div id="panelAdj" class="card"></div>
       <div id="panelRec" class="card hidden"></div>
@@ -123,6 +124,7 @@
       <div id="panelAudit" class="card hidden"></div>
       <div id="panelBind" class="card hidden"></div>
       <div id="panelEsign" class="card hidden"></div>
+      <div id="panelEsignc" class="card hidden"></div>
     </div>
   </div>
   <script>
@@ -375,6 +377,7 @@
       renderAuditPanel();
       renderBindPanel();
       renderEsignPanel();
+      renderEsignContractPanel();
       document.querySelectorAll('.tab').forEach(function (t) {
         t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
       });
@@ -384,6 +387,7 @@
       $('panelAudit').classList.toggle('hidden', activeTab !== 'audit');
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
       $('panelEsign').classList.toggle('hidden', activeTab !== 'esign');
+      $('panelEsignc').classList.toggle('hidden', activeTab !== 'esignc');
     }
 
     function renderEsignPanel() {
@@ -487,6 +491,175 @@
           showMsg((ePrint && ePrint.message) || '列印失敗');
         }
       };
+      refreshStatus();
+    }
+
+    function renderEsignContractPanel() {
+      var pno = currentProject || '';
+      var panel = $('panelEsignc');
+      if (!panel) return;
+      var clientLink = location.origin + '/modules/projects/esign-contract.html?project_no=' + encodeURIComponent(pno);
+      var defaultPay = [
+        { stage: 1, name: '簽約金', ratio: 30, node: '簽約' },
+        { stage: 2, name: '木作退場', ratio: 30, node: '木作裝修退場或超過施作工項的二分之一' },
+        { stage: 3, name: '系統櫃完工', ratio: 30, node: '系統櫃完工（或本案另定同等節點）' },
+        { stage: 4, name: '驗收尾款', ratio: 10, node: '工程完工驗收' }
+      ];
+      panel.innerHTML =
+        '<h4>線上合約</h4>' +
+        '<p class="form-hint">案號／總價／工期／付款／客戶欄從案件帶入（勿寫死）。未自訂付款表＝預設 30/30/30/10。系統不做推播；請用官 LINE 回覆傳連結。</p>' +
+        '<p id="esigncStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="esigncLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<div id="esigncFields" class="form-hint" style="margin:8px 0;white-space:pre-line"></div>' +
+        '<h5 style="margin:14px 0 6px">付款節點（每案可改）</h5>' +
+        '<div id="esigncPayRows"></div>' +
+        '<p style="margin:8px 0">' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncAddPay">加一期</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncResetPay">還原預設 30/30/30/10</button>' +
+        '</p>' +
+        '<label class="form-hint">總價覆寫（選填；空白＝用毛利合約額自動帶入）' +
+        '<input type="text" id="esigncTotalOverride" placeholder="例如 100000" style="display:block;width:100%;max-width:240px;margin-top:4px;padding:6px"/></label>' +
+        '<p style="margin:12px 0">' +
+        '<button type="button" class="btn btn-primary" id="btnEsigncSave">儲存付款表／欄位</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncSend">標記已寄出</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncRefresh">重新整理</button> ' +
+        '<a class="btn btn-secondary" id="btnEsigncPreview" href="../projects/esign-contract.html?project_no=' + encodeURIComponent(pno) + '&staff=1&staff_preview=1" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽／簽乙方</a>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關；測試案需白名單。甲方簽名後不可再改付款表。金額／個資合併前須豪哥點頭。</p>';
+
+      var payState = defaultPay.map(function (r) { return Object.assign({}, r); });
+
+      function setStatusText(t) {
+        var line = $('esigncStatusLine');
+        if (line) line.textContent = t;
+      }
+      function renderPayRows() {
+        var box = $('esigncPayRows');
+        if (!box) return;
+        box.innerHTML = payState.map(function (row, idx) {
+          return '<div data-pay-idx="' + idx + '" style="display:grid;grid-template-columns:1.2fr 0.5fr 1.4fr auto;gap:6px;margin:4px 0;align-items:center">' +
+            '<input type="text" data-f="name" value="' + escapeHtml(row.name || '') + '" placeholder="期名"/>' +
+            '<input type="number" data-f="ratio" value="' + escapeHtml(String(row.ratio != null ? row.ratio : '')) + '" placeholder="%" min="0" max="100" step="0.01"/>' +
+            '<input type="text" data-f="node" value="' + escapeHtml(row.node || '') + '" placeholder="節點說明"/>' +
+            '<button type="button" class="btn btn-secondary btnEsigncDelPay" data-idx="' + idx + '">刪</button>' +
+            '</div>';
+        }).join('');
+        box.querySelectorAll('input').forEach(function (inp) {
+          inp.oninput = function () {
+            var wrap = inp.closest('[data-pay-idx]');
+            if (!wrap) return;
+            var i = parseInt(wrap.getAttribute('data-pay-idx'), 10);
+            var f = inp.getAttribute('data-f');
+            if (!payState[i]) return;
+            payState[i][f] = f === 'ratio' ? parseFloat(inp.value) : inp.value;
+          };
+        });
+        box.querySelectorAll('.btnEsigncDelPay').forEach(function (btn) {
+          btn.onclick = function () {
+            var i = parseInt(btn.getAttribute('data-idx'), 10);
+            if (payState.length <= 1) { showMsg('至少保留一期'); return; }
+            payState.splice(i, 1);
+            renderPayRows();
+          };
+        });
+      }
+      function readPayFromDom() {
+        return payState.map(function (r, idx) {
+          return {
+            stage: idx + 1,
+            name: String(r.name || '').trim(),
+            ratio: Number(r.ratio),
+            node: String(r.node || r.name || '').trim()
+          };
+        });
+      }
+      async function refreshStatus() {
+        setStatusText('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setStatusText('本機模擬：未連後端（狀態未知）');
+            renderPayRows();
+            return;
+          }
+          var res = await AccountingApi.esignContractStatus(session, pno);
+          if (!res || !res.success) {
+            setStatusText((res && res.message) || '狀態讀取失敗');
+            renderPayRows();
+            return;
+          }
+          var flag = res.feature_enabled ? '正式開放中' : (res.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          var rec = res.record || {};
+          setStatusText('狀態：' + (res.status_label || res.status || '—') + '｜' + flag +
+            (rec.payment_schedule_custom ? '｜付款表已自訂' : '｜付款表預設'));
+          if (res.client_link) {
+            var linkEl = $('esigncLinkText');
+            if (linkEl) linkEl.textContent = res.client_link;
+          }
+          var cf = rec.case_fields || {};
+          var fieldsEl = $('esigncFields');
+          if (fieldsEl) {
+            fieldsEl.textContent = [
+              '案號：' + (cf.project_no || pno || '—'),
+              '案名：' + (cf.project_name || '—'),
+              '地址：' + (cf.project_address || '—'),
+              '甲方：' + (cf.party_a_name || '—') + '／' + (cf.party_a_phone || '—'),
+              '開工：' + (cf.start_date || '—') + '　工期天數：' + (cf.work_days || '—'),
+              '總價：' + (cf.total_amount || '—')
+            ].join('\n');
+          }
+          if (Array.isArray(rec.payment_schedule) && rec.payment_schedule.length) {
+            payState = rec.payment_schedule.map(function (r) {
+              return { stage: r.stage, name: r.name, ratio: r.ratio, node: r.node };
+            });
+          }
+          var tot = $('esigncTotalOverride');
+          if (tot && cf.total_amount) tot.placeholder = '目前 ' + cf.total_amount;
+          renderPayRows();
+        } catch (e) {
+          setStatusText((e && e.message) || '狀態讀取失敗');
+          renderPayRows();
+        }
+      }
+      function copyLink() {
+        var text = ($('esigncLinkText') && $('esigncLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { showOk('已複製客戶連結'); })
+            .catch(function () { window.prompt('請手動複製：', text); });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      }
+      async function save(markSent) {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法儲存'); return; }
+          var payload = {
+            payment_schedule: readPayFromDom(),
+            case_fields: {}
+          };
+          var tot = $('esigncTotalOverride') && $('esigncTotalOverride').value;
+          if (tot && String(tot).trim()) payload.case_fields.total_amount = String(tot).trim();
+          if (markSent) payload.mark_sent = '1';
+          var res = await AccountingApi.esignContractStaffSave(session, pno, payload);
+          if (!res || !res.success) { showMsg((res && res.message) || '儲存失敗'); return; }
+          showOk(res.message || '已儲存');
+          await refreshStatus();
+        } catch (eSave) {
+          showMsg((eSave && eSave.message) || '儲存失敗');
+        }
+      }
+      if ($('btnEsigncAddPay')) $('btnEsigncAddPay').onclick = function () {
+        payState.push({ stage: payState.length + 1, name: '', ratio: 0, node: '' });
+        renderPayRows();
+      };
+      if ($('btnEsigncResetPay')) $('btnEsigncResetPay').onclick = function () {
+        payState = defaultPay.map(function (r) { return Object.assign({}, r); });
+        renderPayRows();
+      };
+      if ($('btnEsigncSave')) $('btnEsigncSave').onclick = function () { save(false); };
+      if ($('btnEsigncSend')) $('btnEsigncSend').onclick = function () { save(true); };
+      if ($('btnEsigncCopy')) $('btnEsigncCopy').onclick = copyLink;
+      if ($('btnEsigncRefresh')) $('btnEsigncRefresh').onclick = refreshStatus;
       refreshStatus();
     }
 

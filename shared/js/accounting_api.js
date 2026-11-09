@@ -1952,6 +1952,38 @@ var AccountingApi = (function () {
         staff_preview: true
       }));
     },
+    /** 線上合約 — 主控台狀態／儲存付款表／寄出（project-console） */
+    esignContractStatus: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_status',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    esignContractStaffSave: function (sessionOrToken, projectNo, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_staff_save',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        payment_schedule: payload.payment_schedule,
+        case_fields: payload.case_fields || {},
+        mark_sent: payload.mark_sent || '',
+        reset_payment_default: payload.reset_payment_default || '',
+        customer_line_user_id: payload.customer_line_user_id || ''
+      }));
+    },
+    esignContractStaffSend: function (sessionOrToken, projectNo, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_staff_send',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        payment_schedule: payload.payment_schedule,
+        case_fields: payload.case_fields || {},
+        customer_line_user_id: payload.customer_line_user_id || ''
+      }));
+    },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};

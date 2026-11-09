@@ -34,6 +34,9 @@ export const EsignContractApi = {
   staffSend(authBody) {
     return postAction('esign_contract_staff_send', authBody);
   },
+  staffSave(authBody) {
+    return postAction('esign_contract_staff_save', authBody);
+  },
   open(authBody) {
     return postAction('esign_contract_open', authBody);
   },

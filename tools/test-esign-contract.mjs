@@ -13,6 +13,8 @@ const dataPath = join(root, 'modules/projects/data/esign-contract-2025-0922.json
 const htmlPath = join(root, 'modules/projects/esign-contract.html');
 const apiPath = join(root, 'modules/projects/js/esign-contract-api.js');
 const mainPath = join(root, 'modules/projects/js/esign-contract-main.js');
+const designerPath = join(root, 'modules/accounting/designer-customer-finance.html');
+const accountingApiPath = join(root, 'shared/js/accounting_api.js');
 
 const backendCandidates = [
   process.env.ESIGN_BACKEND_CONTRACT_JSON,
@@ -58,6 +60,8 @@ test('customer page has review, dual signature pads, print and paper option', ()
   assert.match(html, /btnPaper/);
   assert.match(html, /改用紙本/);
   assert.match(html, /printArea/);
+  assert.match(html, /caseSummary/);
+  assert.match(html, /paySchedule/);
   assert.match(html, /esign-contract-main\.js/);
 });
 
@@ -66,6 +70,7 @@ test('API module posts esign_contract_* actions including sign and print', () =>
   for (const a of [
     'esign_contract_get',
     'esign_contract_staff_send',
+    'esign_contract_staff_save',
     'esign_contract_open',
     'esign_contract_ack_early',
     'esign_contract_ready',
@@ -91,4 +96,20 @@ test('main only treats 127.0.0.1/localhost + ?dev=1 as local; staff via ?staff=1
   assert.match(main, /paperOpt/);
   assert.match(main, /print/);
   assert.match(main, /window\.print/);
+  assert.match(main, /renderCaseSummary|payment_schedule/);
+});
+
+test('console has 線上合約 tab with payment editor and copy link', () => {
+  const designer = readFileSync(designerPath, 'utf8');
+  assert.match(designer, /data-tab="esignc"/);
+  assert.match(designer, /線上合約/);
+  assert.match(designer, /btnEsigncCopy/);
+  assert.match(designer, /btnEsigncSave/);
+  assert.match(designer, /btnEsigncSend/);
+  assert.match(designer, /esigncPayRows/);
+  assert.match(designer, /還原預設 30\/30\/30\/10/);
+  const api = readFileSync(accountingApiPath, 'utf8');
+  assert.match(api, /esignContractStatus/);
+  assert.match(api, /esignContractStaffSave/);
+  assert.match(api, /esign_contract_staff_save/);
 });

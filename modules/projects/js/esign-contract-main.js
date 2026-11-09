@@ -71,6 +71,41 @@ function renderReview(record) {
   box.textContent = lines.join('\n');
 }
 
+function renderCaseSummary(record) {
+  const box = el('caseSummary');
+  const payBox = el('paySchedule');
+  if (!record) return;
+  const cf = record.case_fields || {};
+  if (box) {
+    box.textContent = [
+      `案號：${cf.project_no || record.project_no || '—'}`,
+      `案名：${cf.project_name || '—'}`,
+      `地址：${cf.project_address || '—'}`,
+      `甲方：${cf.party_a_name || '—'}　電話：${cf.party_a_phone || '—'}`,
+      `開工：${cf.start_date || '—'}　工期：${cf.work_days || '—'} 天`,
+      `總價：${cf.total_amount || '—'}`,
+    ].join('\n');
+  }
+  if (payBox) {
+    const rows = record.payment_schedule || [];
+    if (!rows.length) {
+      payBox.innerHTML = '<p class="muted">付款節點：預設載入中</p>';
+      return;
+    }
+    const note = record.payment_schedule_custom ? '（本案自訂）' : '（預設 30/30/30/10）';
+    payBox.innerHTML =
+      `<p class="muted">付款節點${note}</p>` +
+      '<table style="width:100%;border-collapse:collapse;font-size:0.9rem">' +
+      rows
+        .map((r, i) => {
+          const amt = cf['payment_' + (i + 1) + '_amount'] || '—';
+          return `<tr><td style="padding:4px 0;border-bottom:1px solid #d7dde6">第${r.stage}期 ${r.name}</td><td style="text-align:right;border-bottom:1px solid #d7dde6">${r.ratio}%　$${amt}</td></tr>`;
+        })
+        .join('') +
+      '</table>';
+  }
+}
+
 function makePad(canvas) {
   if (!canvas) return null;
   const ctx = canvas.getContext('2d');
@@ -276,6 +311,7 @@ async function boot() {
 
   renderContract(data.contract, data.record && data.record.case_fields);
   renderReview(data.record);
+  renderCaseSummary(data.record);
   el('hashMeta').textContent = `內容雜湊：${(data.contract_content_hash || '').slice(0, 12)}…`;
 
   if (auth.mode === 'customer' && !(data.record && data.record.locked)) {
@@ -284,6 +320,7 @@ async function boot() {
       if (opened.success) {
         data.record = opened.record;
         renderReview(opened.record);
+        renderCaseSummary(opened.record);
       }
     } catch (_) {}
   }
