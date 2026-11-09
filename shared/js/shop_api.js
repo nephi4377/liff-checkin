@@ -46,10 +46,11 @@
   }
 
   function useMock() {
+    if (!webAppUrl()) return true;
     var q = (typeof location !== 'undefined' && location.search) || '';
-    if (/(?:\?|&)shop_mock=0(?:&|$)/.test(q) && webAppUrl()) return false;
-    // Slice 1：未接 GAS URL 或未強制關 mock → 一律 mock（含標記已付款示意）
-    return true;
+    // 已接 GAS：預設真 API；?shop_mock=1 才強制示意資料
+    if (/(?:\?|&)shop_mock=1(?:&|$)/.test(q)) return true;
+    return false;
   }
 
   function expireInfo(order) {

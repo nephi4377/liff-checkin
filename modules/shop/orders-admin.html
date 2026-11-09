@@ -47,13 +47,18 @@
     function render() {
       var status = document.getElementById('status');
       var list = document.getElementById('list');
-      status.textContent = '示意資料（shop_mock；接上 SHOP_GAS 後改打真 API）';
+      status.textContent = '載入訂單中…';
       ShopApi.listOrdersStaff({}).then(function (res) {
         if (!res.success) {
-          status.textContent = res.message || '讀取失敗';
+          status.textContent = res.message || res.code || '讀取失敗';
           return;
         }
         var orders = (res.data && res.data.orders) || [];
+        status.textContent =
+          (res.mock ? '示意資料（shop_mock）· ' : '已連線官網商店 GAS · ') +
+          '共 ' +
+          orders.length +
+          ' 筆';
         list.innerHTML = '';
         orders.forEach(function (o) {
           var ex = ShopApi.expireInfo(o);

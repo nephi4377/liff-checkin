@@ -18,9 +18,10 @@ export const CONFIG = {
     ACCOUNTING_GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbyibVTQk2eYEYXX5vb-TUFYsLIKWEg1bADR-7w1QFSg6kly3gyDAG3GkKuvQ0PBur05DA/exec',
     ACCOUNTING_FORM_PATH: '/modules/accounting/accounting_ingest.html',
 
-    // 官網商店訂單（Slice 1：LIFF／GAS URL 待建；空字串時前端走 shop_api mock）
+    // 官網商店訂單（GAS Web App；空字串時前端走 shop_api mock）
     SHOP_CUSTOMER_LIFF_ID: '',
-    SHOP_GAS_WEB_APP_URL: '',
+    SHOP_GAS_WEB_APP_URL:
+      'https://script.google.com/macros/s/AKfycbz-YvpOfhIVZpZzdlQ2sfkAa2SS1uPOB-HRoDPQu-J1G0l1T-btW7qVRSKy_ly-Us-B/exec',
 
     // Google Apps Script Web App URL 設定
     GAS_WEB_APP_URL: 'https://script.google.com/macros/s/AKfycbwbEVAfoO9eRzcUSfESIwih1Poub657h_9jz5UcqTXbxsDQOZ3mjLm1nHZfn_WM2K8/exec', // 主 API

@@ -32,4 +32,4 @@
 ## 部署注意
 
 - 前端：合併 main → GitHub Pages（`info.tanxin.space`）  
-- 後端：`shop-orders` **尚無** `.clasp.json`／Web App；程式進 Git 後仍須另建 GAS 專案並設 `WOO_*`（勿自行捏造金鑰）
+- 後端：`shop-orders` **已部署 Web App；`WOO_*` Script Properties 已設定（值不進 Git）；前端已接 `SHOP_GAS_WEB_APP_URL`
