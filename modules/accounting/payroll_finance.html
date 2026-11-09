@@ -23,13 +23,35 @@
     .btn-primary { background: #1a73e8; color: #fff; width: 100%; padding: 12px; margin-top: 10px; }
     .btn-ok { background: #34a853; color: #fff; }
     .btn-link { background: #e8f0fe; color: #1a73e8; width: 100%; margin-top: 6px; }
-    .item { border-bottom: 1px solid #eee; padding: 14px 0; }
-    .item:last-child { border-bottom: none; }
-    .chk { width: auto; margin-right: 8px; }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
-    .bank { font-size: 13px; color: #444; margin-top: 4px; }
+    #list { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
+    .pay-card.item {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 0;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      border: 1px solid #e8eaed;
+    }
+    .chk { width: auto; margin-right: 8px; min-width: 20px; min-height: 20px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+    .bank { font-size: 14px; color: #333; margin-top: 8px; line-height: 1.5; word-break: break-all; }
+    .bank strong { font-weight: 700; letter-spacing: 0.02em; }
     .tag { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 6px; background: #e8f0fe; margin-right: 6px; }
     .tag.warn { background: #fce8e6; color: #c5221f; }
+    .breakdown {
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #f8f9fa;
+      border-radius: 10px;
+      border: 1px solid #eceff1;
+    }
+    .breakdown h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+    .breakdown h4.add { color: #137333; }
+    .breakdown h4.ded { color: #c5221f; }
+    .breakdown ul { margin: 0; padding-left: 18px; font-size: 13px; }
+    .breakdown li { margin: 3px 0; }
+    .breakdown .note-line { margin: 8px 0 0; font-size: 13px; color: #555; }
+    .amount-hero { font-size: 18px; font-weight: 700; margin-top: 6px; color: #202124; }
     #msg { color: #c5221f; font-size: 14px; white-space: pre-wrap; }
     #ok { color: #137333; font-size: 14px; white-space: pre-wrap; }
     #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
@@ -39,9 +61,14 @@
     label { display: block; margin-top: 8px; font-weight: 600; font-size: 14px; }
     input, select { width: 100%; padding: 10px; margin-top: 4px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 8px; font-size: 16px; }
     .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .pay-panel { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ddd; }
+    .pay-panel { margin-top: 12px; padding-top: 12px; border-top: 1px solid #e8eaed; }
     .total-line { font-weight: 700; color: #1a73e8; margin-top: 6px; }
     #emailDrafts .draft { background: #f8f9fa; border-radius: 8px; padding: 10px; margin-top: 8px; font-size: 13px; }
+    #resendList .item { border-bottom: 1px solid #eee; padding: 14px 0; }
+    #resendList .item:last-child { border-bottom: none; }
+    @media (max-width: 560px) {
+      .row2 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -67,11 +94,12 @@
       </p>
     </div>
 
-    <div class="card">
-      <h3 style="margin:0 0 8px">待匯款清單<span id="listLive" class="sub"></span></h3>
-      <div id="list"></div>
-      <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
+    <div class="card" style="margin-bottom:0">
+      <h3 style="margin:0">待匯款清單<span id="listLive" class="sub"></span></h3>
+      <p class="sub" style="margin:6px 0 0">每張卡片含審核細項與完整銀行帳號，方便對審核單後再匯款。</p>
     </div>
+    <div id="list"></div>
+    <p id="emptyMsg" class="sub hidden">目前沒有待匯款薪資。</p>
 
     <div class="card" id="resendCard">
       <h3 style="margin:0 0 8px">已發薪 · 補寄 EMAIL<span id="resendLive" class="sub"></span></h3>
@@ -278,18 +306,91 @@
         document.getElementById('emptyMsg').classList.toggle('hidden', document.querySelectorAll('#list .item').length > 0);
       }
 
+      function lineItemsHtml(rows, sign) {
+        if (!rows || !rows.length) return '<p class="sub" style="margin:0">—</p>';
+        return '<ul>' + rows.map(function (line) {
+          var amt = parseInt(line.amount, 10) || 0;
+          var note = line.note ? ' <span style="color:#777">（' + esc(line.note) + '）</span>' : '';
+          var amtText = amt > 0 ? (sign + amt.toLocaleString('zh-TW')) : '—';
+          return '<li><span>' + esc(line.label || '') + note + '</span> <strong>' + amtText + '</strong></li>';
+        }).join('') + '</ul>';
+      }
+
+      function reviewNotesHtml(row) {
+        var parts = [];
+        var bonus = parseInt(row.bonus_amount, 10) || 0;
+        var ded = parseInt(row.deduction, 10) || 0;
+        if (bonus > 0) {
+          parts.push('一般獎金 +' + bonus.toLocaleString('zh-TW') +
+            (row.bonus_note ? '（' + esc(row.bonus_note) + '）' : ''));
+        } else if (row.bonus_note) {
+          parts.push('獎金備註：' + esc(row.bonus_note));
+        }
+        if (ded > 0) {
+          parts.push('其他扣款 −' + ded.toLocaleString('zh-TW'));
+        }
+        if (row.supplement_note) {
+          parts.push('補充／減項備註：' + esc(row.supplement_note));
+        }
+        if (row.note) {
+          parts.push('審核備註：' + esc(row.note));
+        }
+        if (!parts.length) return '';
+        return parts.map(function (t) {
+          return '<p class="note-line">' + t + '</p>';
+        }).join('');
+      }
+
+      function breakdownHtml(row) {
+        var pb = row.payroll_breakdown || {};
+        var additions = pb.additions || [];
+        var deductions = pb.deductions || [];
+        var notes = reviewNotesHtml(row);
+        if (!additions.length && !deductions.length && !notes) {
+          return '<div class="breakdown"><p class="sub" style="margin:0">此筆沒有審核細項紀錄（仍可依核准實發匯款）。</p></div>';
+        }
+        var cols = '';
+        if (additions.length || deductions.length) {
+          cols =
+            '<div class="row2">' +
+            '<div><h4 class="add">加項</h4>' + lineItemsHtml(additions, '+') + '</div>' +
+            '<div><h4 class="ded">減項</h4>' + lineItemsHtml(deductions, '−') + '</div>' +
+            '</div>';
+        }
+        return '<div class="breakdown"><h4 style="margin:0 0 8px;color:#333">審核細項</h4>' + cols + notes + '</div>';
+      }
+
+      function bankLineHtml(row) {
+        if (row.bank_incomplete) {
+          return '<div class="tag warn">銀行帳戶不完整，無法匯出薪轉</div>';
+        }
+        var ac = String(row.account_no || '').trim();
+        var name = String(row.account_name || '').trim();
+        var branch = String(row.branch_name || '').trim();
+        var code = String(row.bank_code || '').trim();
+        var bits = [];
+        bits.push('銀行 ' + esc(code || '—'));
+        if (branch) bits.push('分行 ' + esc(branch));
+        bits.push('帳號 <strong>' + esc(ac || '—') + '</strong>');
+        if (name) bits.push('戶名 ' + esc(name));
+        return '<div class="bank">' + bits.join(' · ') + '</div>';
+      }
+
       function renderItem(row) {
         var id = row.payroll_request_id;
         var div = document.createElement('div');
-        div.className = 'item';
+        div.className = 'pay-card item';
         div.id = 'pf-' + id;
         var xfer = transferDefault(row);
         var extra = extraDefault(row);
         var approved = parseInt(row.final_amount, 10) || xfer || 0;
         var est = parseInt(row.estimated_net, 10) || 0;
-        var amountSummary = '<div class="sub">核准實發 $' + approved.toLocaleString('zh-TW') + '</div>';
+        var amountSummary =
+          '<div class="amount-hero">核准實發 $' + approved.toLocaleString('zh-TW') + '</div>';
         if (est > 0 && est !== approved) {
-          amountSummary += '<div class="sub" style="color:#888;font-size:12px">送審試算 $' + est.toLocaleString('zh-TW') + '（審核後已調整）</div>';
+          amountSummary +=
+            '<div class="sub" style="color:#888;font-size:12px">送審試算 $' +
+            est.toLocaleString('zh-TW') + '（審核後已調整）</div>';
         }
         var incomplete = row.bank_incomplete;
         var head = document.createElement('div');
@@ -300,16 +401,16 @@
         chk.value = id;
         chk.checked = !incomplete;
         chk.disabled = !!incomplete;
+        chk.setAttribute('aria-label', '選取 ' + (row.employee_name || id));
         head.appendChild(chk);
-        var ac = String(row.account_no || '');
-        var tail = ac.length > 4 ? ac.slice(-4) : ac;
         var info = document.createElement('div');
         info.style.flex = '1';
         info.innerHTML =
-          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span></div>' +
+          '<div><strong style="font-size:16px">' + esc(row.employee_name) + '</strong> ' +
+          '<span class="tag">' + esc(row.period_label) + '</span></div>' +
           amountSummary +
-          (incomplete ? '<div class="tag warn">銀行帳戶不完整，無法匯出薪轉</div>' :
-            '<div class="bank">銀行 ' + esc(row.bank_code) + ' · 末四碼 ' + esc(tail) + '</div>');
+          breakdownHtml(row) +
+          bankLineHtml(row);
         head.appendChild(info);
         div.appendChild(head);
         var panel = document.createElement('div');

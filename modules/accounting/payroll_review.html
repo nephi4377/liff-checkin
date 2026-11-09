@@ -89,8 +89,11 @@
 
       function bankLine(row) {
         if (row.bank_incomplete) return '<span class="tag warn">銀行帳戶不完整，請至員工資料維護</span>';
-        var ac = String(row.account_no || '');
-        var tail = ac.length > 4 ? ac.slice(-4) : ac;
+        var tail = String(row.account_no_last4 || '').trim();
+        if (!tail) {
+          var ac = String(row.account_no || '');
+          tail = ac.length > 4 ? ac.slice(-4) : ac;
+        }
         return '銀行 ' + esc(row.bank_code) + ' · 帳號末四碼 ' + esc(tail) + ' · ' + esc(row.account_name);
       }
 
