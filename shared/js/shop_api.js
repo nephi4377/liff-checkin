@@ -12,8 +12,14 @@
     {
       order_number: 'TXS-10001',
       woo_id: 10001,
-      status: 'pending_payment',
-      status_label: '待付款',
+      status: 'awaiting_quote',
+      status_label: '待報價（未成立）',
+      stage: 'awaiting_quote',
+      established: false,
+      quoted: false,
+      product_total: 3500,
+      shipping_fee: null,
+      payable_total: null,
       total: 3500,
       currency: 'TWD',
       created_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
@@ -23,10 +29,35 @@
       marked_paid_by: null
     },
     {
+      order_number: 'TXS-10003',
+      woo_id: 10003,
+      status: 'awaiting_transfer',
+      status_label: '待匯款（未成立）',
+      stage: 'awaiting_transfer',
+      established: false,
+      quoted: true,
+      product_total: 5200,
+      shipping_fee: 300,
+      payable_total: 5500,
+      total: 5500,
+      currency: 'TWD',
+      created_at: new Date(Date.now() - 20 * 3600 * 1000).toISOString(),
+      line_user_id: 'U_MOCK_CUSTOMER',
+      items_summary: '展示櫃層板組 ×1',
+      paid_at: null,
+      marked_paid_by: null
+    },
+    {
       order_number: 'TXS-10002',
       woo_id: 10002,
       status: 'paid',
-      status_label: '已付款',
+      status_label: '已成立（已付款）',
+      stage: 'established',
+      established: true,
+      quoted: true,
+      product_total: 12000,
+      shipping_fee: 800,
+      payable_total: 12800,
       total: 12800,
       currency: 'TWD',
       created_at: new Date(Date.now() - 2 * 86400 * 1000).toISOString(),
@@ -46,10 +77,10 @@
   }
 
   function useMock() {
-    if (!webAppUrl()) return true;
     var q = (typeof location !== 'undefined' && location.search) || '';
-    // 已接 GAS：預設真 API；?shop_mock=1 才強制示意資料
+    // 預覽兩段狀態：?shop_mock=1 強制示意
     if (/(?:\?|&)shop_mock=1(?:&|$)/.test(q)) return true;
+    if (!webAppUrl()) return true;
     return false;
   }
 
@@ -72,15 +103,19 @@
   }
 
   function canMarkPaid(order) {
-    return !!(order && order.status === 'pending_payment');
+    if (!order || order.established || order.status === 'paid') return false;
+    return order.stage === 'awaiting_transfer' || order.status === 'awaiting_transfer' || order.quoted;
   }
 
-  /** 履約類狀態：MVP 首版僅「標記已付款」；付完亦不自動變更 */
+  /** 標記已付款＝確認收款後訂單成立 */
   function staffPrimaryAction(order) {
     if (canMarkPaid(order)) {
-      return { action: 'mark_paid', label: '標記已付款', enabled: true };
+      return { action: 'mark_paid', label: '確認收款／訂單成立', enabled: true };
     }
-    return { action: null, label: '已付款', enabled: false };
+    if (order && (order.established || order.status === 'paid')) {
+      return { action: null, label: '已成立', enabled: false };
+    }
+    return { action: 'quote', label: '待報價', enabled: false };
   }
 
   function mockOk(data) {
@@ -176,21 +211,59 @@
       });
     },
 
-    /** 員工唯一付款狀態入口：標記已付款（非金流自動） */
+    /** 員工報價並寄匯款說明（報價前不寄帳戶） */
+    quoteAndNotifyTransfer: function (auth, orderNumber, quote) {
+      quote = quote || {};
+      if (useMock()) {
+        var hit = MOCK_ORDERS.filter(function (o) {
+          return o.order_number === orderNumber;
+        })[0];
+        if (!hit) return Promise.resolve({ success: false, message: '找不到訂單' });
+        var ship = Number(quote.shipping_fee);
+        if (isNaN(ship) || ship < 0) {
+          return Promise.resolve({ success: false, message: '運費無效' });
+        }
+        var product = hit.product_total != null ? hit.product_total : hit.total;
+        hit.shipping_fee = ship;
+        hit.payable_total = product + ship;
+        hit.total = hit.payable_total;
+        hit.quoted = true;
+        hit.stage = 'awaiting_transfer';
+        hit.status = 'awaiting_transfer';
+        hit.status_label = '待匯款（未成立）';
+        hit.established = false;
+        return mockOk({
+          order: hit,
+          message: '已報價並寄匯款說明（示意；訂單尚未成立）',
+          line_notify: 'Notify #2 匯款說明（示意）'
+        });
+      }
+      return postAction({
+        action: 'shop_orders_quote_and_notify_transfer',
+        order_number: orderNumber,
+        shipping_fee: quote.shipping_fee,
+        payable_total: quote.payable_total,
+        liff_id_token: (auth && auth.liff_id_token) || ''
+      });
+    },
+
+    /** 確認收款 → 訂單成立（標記已付款） */
     markPaid: function (auth, orderNumber) {
       if (useMock()) {
         var hit = MOCK_ORDERS.filter(function (o) {
           return o.order_number === orderNumber;
         })[0];
         if (!hit) return Promise.resolve({ success: false, message: '找不到訂單' });
-        if (hit.status !== 'pending_payment') {
-          return Promise.resolve({ success: false, message: '此單不是待付款，無法標記已付款' });
+        if (hit.stage !== 'awaiting_transfer' && hit.status !== 'awaiting_transfer' && !hit.quoted) {
+          return Promise.resolve({ success: false, message: '請先報價並寄匯款說明' });
         }
         hit.status = 'paid';
-        hit.status_label = '已付款';
+        hit.status_label = '已成立（已付款）';
+        hit.stage = 'established';
+        hit.established = true;
         hit.paid_at = new Date().toISOString();
         hit.marked_paid_by = (auth && auth.staff_name) || 'staff';
-        return mockOk({ order: hit });
+        return mockOk({ order: hit, message: '訂單已成立' });
       }
       return postAction({
         action: 'shop_orders_mark_paid',
