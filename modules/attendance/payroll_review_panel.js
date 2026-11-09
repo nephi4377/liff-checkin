@@ -266,7 +266,7 @@ function buildEmployerCostLines(employerCost) {
         { label: '勞保雇主（70%）', amount: ec.laborEmployer || 0, note: '普通事故 11.5%×70%' },
         { label: '就保雇主（70%）', amount: ec.employmentInsurance || 0, note: '就業保險 1%×70%' },
         { label: '職災保險', amount: ec.occupationalInjury || 0, note: `行業費率 ${injuryPct}%（設定值）` },
-        { label: '工資墊償基金', amount: ec.wageGuarantee || 0, note: '0.025%' },
+        { label: '工資墊償基金', amount: ec.wageGuarantee || 0, note: '勞保投保薪資×0.025%' },
         { label: '健保雇主', amount: ec.healthEmployer || 0, note: avgDepNote },
         { label: '勞退提繳 6%', amount: ec.laborPensionEmployer || 0, note: '依勞退月提繳工資分級表' }
     ].filter((r) => (r.amount || 0) > 0);
