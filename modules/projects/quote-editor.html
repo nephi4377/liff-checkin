@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>線上報價編輯</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="../../shared/js/config.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
+  <script src="./js/quote-editor-sanitize.js"></script>
+  <style>
+    :root {
+      --ink: #1c2430;
+      --muted: #5b6675;
+      --line: #d7dde6;
+      --bg: #eef2f6;
+      --card: #ffffff;
+      --accent: #2f6f7e;
+      --danger: #a33b32;
+      --ok: #2f6b46;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans GB", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 110% 70% at 100% -10%, rgba(47, 111, 126, 0.12), transparent 55%),
+        linear-gradient(165deg, #eef2f6 0%, #e7edf3 55%, #e2e9f0 100%);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    h1 { font-size: 1.35rem; margin: 0 0 0.35rem; }
+    .sub { color: var(--muted); font-size: 0.92rem; margin: 0 0 1rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      padding: 0.9rem 1rem;
+      margin: 0 0 0.85rem;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.4rem 0; }
+    label { font-size: 0.9rem; color: var(--muted); }
+    input, select {
+      font: inherit;
+      padding: 0.45rem 0.55rem;
+      border: 1px solid var(--line);
+      border-radius: 0.45rem;
+      min-width: 8rem;
+    }
+    button, .btn {
+      font: inherit;
+      border: 0;
+      border-radius: 0.45rem;
+      padding: 0.5rem 0.85rem;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary { background: #5b6675; }
+    button:disabled { opacity: 0.55; cursor: wait; }
+    .status { min-height: 1.4rem; font-size: 0.9rem; color: var(--muted); }
+    .status.err { color: var(--danger); }
+    .status.ok { color: var(--ok); }
+    .zone-title { font-weight: 600; margin: 0 0 0.5rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.35rem 0.3rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    .totals { font-size: 0.95rem; line-height: 1.55; }
+    .hint { font-size: 0.82rem; color: var(--muted); }
+    .catalog-list { max-height: 220px; overflow: auto; border: 1px solid var(--line); border-radius: 0.45rem; }
+    .catalog-list button {
+      display: block; width: 100%; text-align: left; background: #fff; color: var(--ink);
+      border-bottom: 1px solid var(--line); border-radius: 0; padding: 0.55rem 0.65rem;
+    }
+    .catalog-list button:hover { background: #f3f7f8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>線上報價</h1>
+    <p class="sub" id="headerSub">案號載入中…</p>
+    <p class="status" id="statusLine" aria-live="polite"></p>
+
+    <div class="card">
+      <div class="row">
+        <label>新增空間</label>
+        <input id="zoneName" placeholder="例如：客廳" />
+        <button type="button" id="btnAddZone">加入空間</button>
+      </div>
+      <p class="hint">工項從標準計價表挑選；單位／單價自動帶入。改價要寫原因。成本與廠商價不會出現在客人頁或列印。</p>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label>加入工項到</label>
+        <select id="zoneSelect"></select>
+        <input id="catalogQ" placeholder="搜尋品項" />
+        <button type="button" class="secondary" id="btnSearch">搜尋價目表</button>
+      </div>
+      <div class="row">
+        <label>數量</label>
+        <input id="qty" type="number" min="0" step="0.1" value="1.5" style="width:6rem" />
+        <label>改價（選填）</label>
+        <input id="overridePrice" type="number" placeholder="沿用表價" style="width:7rem" />
+        <input id="overrideReason" placeholder="改價原因（有改價必填）" style="flex:1;min-width:12rem" />
+      </div>
+      <div id="catalogBox" class="catalog-list" hidden></div>
+    </div>
+
+    <div id="zonesBox"></div>
+
+    <div class="card totals" id="totalsBox">合計載入中…</div>
+
+    <div class="card row">
+      <button type="button" class="secondary" id="btnPreflight">送出前檢查</button>
+      <button type="button" class="secondary" id="btnPrint">列印預覽（無成本）</button>
+      <button type="button" class="secondary" id="btnRefresh">重新載入</button>
+    </div>
+    <pre id="preflightBox" class="card hint" hidden></pre>
+  </div>
+  <script src="./js/quote-editor-main.js"></script>
+</body>
+</html>

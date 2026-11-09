@@ -1,0 +1,104 @@
+/**
+ * QUOTE-EDITOR-3 前端：淨化、主控台分頁、API 接線、成本永不進客戶／列印組裝
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const sanitize = require(join(root, 'modules/projects/js/quote-editor-sanitize.js'));
+
+const designer = readFileSync(join(root, 'modules/accounting/designer-customer-finance.html'), 'utf8');
+const editorHtml = readFileSync(join(root, 'modules/projects/quote-editor.html'), 'utf8');
+const viewHtml = readFileSync(join(root, 'modules/projects/quote-view.html'), 'utf8');
+const mainJs = readFileSync(join(root, 'modules/projects/js/quote-editor-main.js'), 'utf8');
+const accountingApi = readFileSync(join(root, 'shared/js/accounting_api.js'), 'utf8');
+
+function resolveBackendQuoteJs() {
+  const candidates = [
+    join(root, '../backend_gas/project-console/QuoteEditor.js'),
+    join(root, '../Backend_GAS/project-console/QuoteEditor.js'),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return candidates[0];
+}
+
+test('sanitize strips cost and vendor keys from customer quote', () => {
+  const dirty = {
+    project_no: '9901',
+    zones: [{
+      zone_id: 'z1',
+      name: '客廳',
+      lines: [{
+        line_id: 'l1',
+        item: '開門高衣櫃',
+        unit: '尺',
+        qty: 1.5,
+        unit_price: 6100,
+        amount: 9150,
+        cost_unit: 3200,
+        vendor_price: 3500,
+        成本: 999,
+        廠商價: 888
+      }]
+    }],
+    totals: { pretax: 9150, tax: 457.5, with_tax: 9607.5 }
+  };
+  const clean = sanitize.toCustomerQuote(dirty);
+  assert.equal(clean.zones[0].lines[0].item, '開門高衣櫃');
+  assert.equal('cost_unit' in clean.zones[0].lines[0], false);
+  assert.equal('vendor_price' in clean.zones[0].lines[0], false);
+  assert.equal(sanitize.payloadContainsForbiddenToken(clean), '');
+});
+
+test('print-like assembly rejects forbidden tokens', () => {
+  const bad = { zones: [{ lines: [{ item: 'x', vendor_price: 1 }] }] };
+  assert.equal(sanitize.payloadContainsForbiddenToken(bad), '"vendor_price"');
+  const cleaned = sanitize.stripForbiddenDeep(bad);
+  assert.equal(sanitize.payloadContainsForbiddenToken(cleaned), '');
+});
+
+test('designer console has 線上報價 tab and cost-guard print', () => {
+  assert.match(designer, /data-tab="quote"/);
+  assert.match(designer, /panelQuote/);
+  assert.match(designer, /quote-editor\.html/);
+  assert.match(designer, /quoteEditorPrint/);
+  assert.match(designer, /cost_unit\|vendor_price/);
+});
+
+test('editor and view pages wire sanitize and no cost UI labels', () => {
+  assert.match(editorHtml, /quote-editor-sanitize\.js/);
+  assert.match(editorHtml, /成本與廠商價不會出現/);
+  assert.match(viewHtml, /QuoteEditorSanitize/);
+  assert.match(mainJs, /payloadContainsForbiddenToken/);
+  assert.doesNotMatch(viewHtml, /廠商價|成本單價/);
+});
+
+test('accounting_api exposes quote_editor actions', () => {
+  assert.match(accountingApi, /quote_editor_catalog/);
+  assert.match(accountingApi, /quote_editor_add_zone/);
+  assert.match(accountingApi, /quote_editor_add_line/);
+  assert.match(accountingApi, /quote_editor_customer_view/);
+  assert.match(accountingApi, /quote_editor_print/);
+  assert.match(accountingApi, /quoteEditorCatalog/);
+});
+
+test('backend QuoteEditor.js present with forbidden-key strip (when sibling repo mounted)', () => {
+  const p = resolveBackendQuoteJs();
+  if (!existsSync(p)) {
+    assert.ok(true, 'backend sibling missing in this checkout — skip structural check');
+    return;
+  }
+  const src = readFileSync(p, 'utf8');
+  assert.match(src, /QE_FORBIDDEN_KEYS_/);
+  assert.match(src, /qeStripForbiddenDeep_/);
+  assert.match(src, /qeCustomerView_/);
+  assert.match(src, /qePrintView_/);
+  assert.match(src, /QUOTE_EDITOR_ENABLED/);
+});

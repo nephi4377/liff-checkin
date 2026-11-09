@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>工程報價單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    var QUOTE_VIEW_LIFF_ID = '2007974938-d2y1uA1G';
+  </script>
+  <script src="../../shared/js/config.js"></script>
+  <script src="../../shared/js/accounting_api.js"></script>
+  <script src="./js/quote-editor-sanitize.js"></script>
+  <style>
+    :root {
+      --ink: #1c2430;
+      --muted: #5b6675;
+      --line: #d7dde6;
+      --accent: #2f6f7e;
+    }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans GB", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(165deg, #eef2f6 0%, #e7edf3 100%);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+    .sub, .status { color: var(--muted); font-size: 0.92rem; }
+    .status.err { color: #a33b32; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 0.75rem;
+      padding: 0.85rem 1rem; margin: 0 0 0.75rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); }
+    button {
+      font: inherit; border: 0; border-radius: 0.45rem; padding: 0.5rem 0.85rem;
+      background: var(--accent); color: #fff; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>工程報價單</h1>
+    <p class="sub" id="headerSub">載入中…</p>
+    <p class="status" id="statusLine" aria-live="polite"></p>
+    <div id="content"></div>
+    <p><button type="button" id="btnPrint">列印／存檔</button></p>
+  </div>
+  <script>
+  (function () {
+    function qs(n) {
+      try { return new URLSearchParams(location.search).get(n) || ''; } catch (e) { return ''; }
+    }
+    function money(n) { return (Number(n) || 0).toLocaleString('zh-TW'); }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    var projectNo = qs('project_no') || qs('projectNo');
+    var quote = null;
+    var statusEl = document.getElementById('statusLine');
+    function setStatus(t, err) {
+      statusEl.textContent = t || '';
+      statusEl.className = 'status' + (err ? ' err' : '');
+    }
+    function render() {
+      var box = document.getElementById('content');
+      if (!quote) { box.innerHTML = ''; return; }
+      document.getElementById('headerSub').textContent =
+        '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1);
+      var zones = (quote.zones || []).map(function (z) {
+        var rows = (z.lines || []).map(function (ln) {
+          return '<tr><td>' + esc(ln.item) + '</td><td>' + esc(ln.unit) + '</td><td>' +
+            esc(String(ln.qty)) + '</td><td>' + money(ln.unit_price) + '</td><td>' + money(ln.amount) + '</td></tr>';
+        }).join('') || '<tr><td colspan="5">（無項目）</td></tr>';
+        return '<div class="card"><strong>' + esc(z.name) + '</strong><table><thead><tr>' +
+          '<th>項目</th><th>單位</th><th>數量</th><th>單價</th><th>金額</th></tr></thead><tbody>' +
+          rows + '</tbody></table></div>';
+      }).join('');
+      var t = quote.totals || {};
+      box.innerHTML = zones + '<div class="card">未稅 ' + money(t.pretax) +
+        '｜稅 ' + money(t.tax) + '｜含稅 ' + money(t.with_tax) +
+        '<br/>已扣 ' + money(t.deducted) + '｜應付 ' + money(t.payable) + '</div>';
+    }
+    async function load() {
+      if (!projectNo) {
+        setStatus('缺少案號', true);
+        return;
+      }
+      setStatus('更新中…');
+      try {
+        var session = await AccountingApi.initCustomerPortalSession({
+          liffId: QUOTE_VIEW_LIFF_ID,
+          projectNo: projectNo
+        });
+        if (!session) throw new Error('登入失敗');
+        var res = await AccountingApi.quoteEditorCustomerView(session, projectNo, {
+          staffPreview: qs('staff_preview') === '1'
+        });
+        if (!res || !res.success) throw new Error((res && res.message) || '讀取失敗');
+        quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+        if (leaked) throw new Error('資料含不該出現的欄位，已擋下');
+        render();
+        setStatus('');
+      } catch (e) {
+        setStatus((e && e.message) || '載入失敗', true);
+      }
+    }
+    document.getElementById('btnPrint').onclick = function () {
+      if (!quote) return;
+      var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+      if (leaked) { setStatus('列印資料異常，已擋下', true); return; }
+      window.print();
+    };
+    load();
+  })();
+  </script>
+</body>
+</html>

@@ -117,6 +117,7 @@
         <span class="tab" data-tab="bind">客戶綁定</span>
         <span class="tab" data-tab="esign">簽約注意</span>
         <span class="tab" data-tab="esignc">線上合約</span>
+        <span class="tab" data-tab="quote">線上報價</span>
       </div>
       <div id="panelAdj" class="card"></div>
       <div id="panelRec" class="card hidden"></div>
@@ -125,6 +126,7 @@
       <div id="panelBind" class="card hidden"></div>
       <div id="panelEsign" class="card hidden"></div>
       <div id="panelEsignc" class="card hidden"></div>
+      <div id="panelQuote" class="card hidden"></div>
     </div>
   </div>
   <script>
@@ -378,6 +380,7 @@
       renderBindPanel();
       renderEsignPanel();
       renderEsignContractPanel();
+      renderQuotePanel();
       document.querySelectorAll('.tab').forEach(function (t) {
         t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
       });
@@ -388,6 +391,104 @@
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
       $('panelEsign').classList.toggle('hidden', activeTab !== 'esign');
       $('panelEsignc').classList.toggle('hidden', activeTab !== 'esignc');
+      $('panelQuote').classList.toggle('hidden', activeTab !== 'quote');
+    }
+
+    function renderQuotePanel() {
+      var pno = currentProject || '';
+      var panel = $('panelQuote');
+      if (!panel) return;
+      var editorHref = '../projects/quote-editor.html?project_no=' + encodeURIComponent(pno);
+      var clientLink = location.origin + '/modules/projects/quote-view.html?project_no=' + encodeURIComponent(pno);
+      panel.innerHTML =
+        '<h4>線上報價</h4>' +
+        '<p class="form-hint">依空間分區從標準計價表加工項。成本／廠商價只留後台，不會出現在客人頁或列印。系統不做主動推播；連結請用官 LINE 回覆傳。</p>' +
+        '<p id="quoteStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="quoteLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<p style="margin:12px 0">' +
+        '<a class="btn btn-primary" href="' + editorHref + '" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">開啟報價編輯</a> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuoteCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuoteRefresh">重新整理狀態</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuotePrint">列印預覽（無成本）</button>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關閉；測試案號需後端白名單。平面配置帶入櫃子留第 4 階。</p>';
+
+      function setQuoteStatus(t) {
+        var line = $('quoteStatusLine');
+        if (line) line.textContent = t;
+      }
+      async function refreshQuoteStatus() {
+        setQuoteStatus('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setQuoteStatus('本機模擬：未連後端（可先開編輯頁看 UI）');
+            return;
+          }
+          var res = await AccountingApi.quoteEditorGet(session, pno);
+          if (!res || !res.success) {
+            setQuoteStatus((res && res.message) || '狀態讀取失敗');
+            return;
+          }
+          var staff = res.staff || {};
+          var q = staff.quote || {};
+          var t = staff.totals || {};
+          var flag = staff.feature_enabled ? '正式開放中' : (staff.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          setQuoteStatus('版本 v' + (q.version || 1) + '｜狀態 ' + (q.status || 'draft') + '｜含稅 ' + (t.with_tax != null ? t.with_tax : '—') + '｜' + flag);
+        } catch (e) {
+          setQuoteStatus((e && e.message) || '狀態讀取失敗');
+        }
+      }
+      var copyBtn = $('btnQuoteCopy');
+      if (copyBtn) copyBtn.onclick = function () {
+        var text = ($('quoteLinkText') && $('quoteLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showOk('已複製客戶連結');
+          }).catch(function () {
+            window.prompt('請手動複製：', text);
+          });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      };
+      var refreshBtn = $('btnQuoteRefresh');
+      if (refreshBtn) refreshBtn.onclick = refreshQuoteStatus;
+      var printBtn = $('btnQuotePrint');
+      if (printBtn) printBtn.onclick = async function () {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法列印'); return; }
+          var res = await AccountingApi.quoteEditorPrint(session, pno);
+          if (!res || !res.success) { showMsg((res && res.message) || '列印資料讀取失敗'); return; }
+          var p = res.print || {};
+          var raw = JSON.stringify(p);
+          if (/cost_unit|vendor_price|"成本"|"廠商價"/.test(raw)) {
+            showMsg('列印資料含成本／廠商價，已擋下');
+            return;
+          }
+          var w = window.open('', '_blank');
+          if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
+          var zones = (p.zones || []).map(function (z) {
+            var lines = (z.lines || []).map(function (ln) {
+              return '<tr><td>' + escapeHtml(ln.item) + '</td><td>' + escapeHtml(ln.unit) + '</td><td>' +
+                escapeHtml(String(ln.qty)) + '</td><td>' + escapeHtml(String(ln.unit_price)) + '</td><td>' +
+                escapeHtml(String(ln.amount)) + '</td></tr>';
+            }).join('');
+            return '<h3>' + escapeHtml(z.name) + '</h3><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%">' +
+              '<tr><th>項目</th><th>單位</th><th>數量</th><th>單價</th><th>金額</th></tr>' + lines + '</table>';
+          }).join('');
+          var tot = p.totals || {};
+          w.document.write('<html><head><title>報價列印</title></head><body style="font-family:sans-serif;padding:16px">' +
+            '<h2>工程報價單</h2><div>案號 ' + escapeHtml(pno) + '</div>' + zones +
+            '<p>未稅 ' + escapeHtml(String(tot.pretax || '')) + '｜稅 ' + escapeHtml(String(tot.tax || '')) +
+            '｜含稅 ' + escapeHtml(String(tot.with_tax || '')) + '</p></body></html>');
+          w.document.close();
+          w.focus();
+          w.print();
+        } catch (ePrint) {
+          showMsg((ePrint && ePrint.message) || '列印失敗');
+        }
+      };
+      refreshQuoteStatus();
     }
 
     function renderEsignPanel() {

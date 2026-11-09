@@ -1984,6 +1984,71 @@ var AccountingApi = (function () {
         customer_line_user_id: payload.customer_line_user_id || ''
       }));
     },
+    /** 線上報價 QUOTE-EDITOR-3 — project-console */
+    quoteEditorCatalog: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_catalog',
+        project_no: projectNo,
+        q: opts.q || '',
+        tab: opts.tab || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorGet: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_get',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddZone: function (sessionOrToken, projectNo, zoneName) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_zone',
+        project_no: projectNo,
+        zone_name: zoneName,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_line',
+        project_no: payload.project_no,
+        zone_id: payload.zone_id,
+        catalog_key: payload.catalog_key,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorPreflight: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_preflight',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorPrint: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_print',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorCustomerView: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_customer_view',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
+    },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
