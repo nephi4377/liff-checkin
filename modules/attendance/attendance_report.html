@@ -134,10 +134,11 @@
             </div>
         </div>
 
-        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6" style="display: none;">
-            <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。</p>
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6" style="display: none;">
+            <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。加班以已核准時段計（不是用下班打卡時間自動算）。</p>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">標準工作日(天)</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實際出勤(天)</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">加班(天)</div><div id="total-overtime" class="mt-1 text-3xl font-semibold text-orange-600" title="">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總缺勤(天)</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
@@ -1521,6 +1522,11 @@
         hint.style.display = 'block';
         document.getElementById('total-workdays').textContent = st.workDays;
         document.getElementById('total-attended').textContent = st.checkInDays ?? st.attended;
+        const otEl = document.getElementById('total-overtime');
+        if (otEl) {
+            otEl.textContent = formatDayAccounting(st.overtimeDays);
+            otEl.title = dayAccountingTitle(st.overtimeDays) || '尚無已核准加班時段';
+        }
         document.getElementById('total-late').textContent = st.lateMinutes;
         document.getElementById('total-early').textContent = st.earlyMinutes;
         document.getElementById('total-absent').textContent = formatDayAccounting(st.absent);
