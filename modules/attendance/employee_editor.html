@@ -1051,7 +1051,27 @@
             try {
                 const response = await fetchApi(payload);
                 if (response.success) {
-                    updateStatus(response.message, 'success');
+                    let msg = response.message || '操作成功';
+                    // 離職連動摘要（不顯示薪資金額，避免畫面外洩）
+                    if (response.resignLink && response.resignLink.triggered) {
+                        const rl = response.resignLink;
+                        const parts = [];
+                        parts.push('離職日後將無法打卡');
+                        if (rl.schedule && rl.schedule.daysRemoved > 0) {
+                            parts.push(`已清離職後班表 ${rl.schedule.daysRemoved} 日`);
+                        }
+                        if (rl.payroll && rl.payroll.closedCount > 0) {
+                            parts.push(`已關閉進行中薪資 ${rl.payroll.closedCount} 筆`);
+                        }
+                        if (rl.leaveSettlement && rl.leaveSettlement.ok) {
+                            parts.push('已產生特休結算草稿（待會計確認）');
+                        }
+                        if (rl.errors && rl.errors.length) {
+                            parts.push('部分連動失敗，請洽工程');
+                        }
+                        if (parts.length) msg = (msg || '操作成功') + '｜' + parts.join('、');
+                    }
+                    updateStatus(msg, 'success');
                     await fetchEmployeesAndPopulateDropdown();
                     employeeSelect.value = payload.userId; // 重新選中剛編輯的員工
                     handleEmployeeSelection();
