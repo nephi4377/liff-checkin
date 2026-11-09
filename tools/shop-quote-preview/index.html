@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>官網商店 · 報價／匯款預覽</title>
+  <style>
+    body { font-family: "Noto Sans TC", "PingFang TC", sans-serif; margin: 0; background: #f8fafc; color: #0f172a; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 1.2rem; margin: 0 0 8px; }
+    p { color: #64748b; font-size: 14px; line-height: 1.5; }
+    a.card { display: block; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 10px 0; text-decoration: none; color: inherit; }
+    a.card strong { display: block; margin-bottom: 4px; }
+    .tag { font-size: 12px; color: #0f766e; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>官網商店 · Slice 3 預覽</h1>
+    <p>示意資料（mock）。員工報價 → 寄匯款說明 → 確認收款後訂單才成立。</p>
+    <a class="card" href="modules/shop/orders-admin.html?shop_mock=1">
+      <strong>員工 Hub · 兩段報價／匯款</strong>
+      <span class="tag">待報價 → 待匯款 → 已成立</span>
+    </a>
+    <a class="card" href="modules/shop/customer-orders.html?shop_mock=1">
+      <strong>客人 · 我的訂單</strong>
+      <span class="tag">三態示意</span>
+    </a>
+    <a class="card" href="modules/shop/customer-pay.html?shop_mock=1">
+      <strong>客人 · 需付款</strong>
+      <span class="tag">匯款後仍需店員標記</span>
+    </a>
+  </div>
+</body>
+</html>
