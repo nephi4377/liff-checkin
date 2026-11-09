@@ -198,16 +198,29 @@
         var pb = row.payroll_breakdown || {};
         var additions = pb.additions || [];
         var deductions = pb.deductions || [];
+        var companyCosts = pb.companyCosts || [];
+        var companyCostTotal = parseInt(pb.companyCostTotal, 10) || companyCosts.reduce(function (s, x) {
+          return s + (parseInt(x.amount, 10) || 0);
+        }, 0);
         var selfTag = row.employee_self_reviewed === false
           ? '<span class="tag warn">主管代開</span>'
           : '<span class="tag">員工自審</span>';
         var breakdownBlock = '';
-        if (additions.length || deductions.length) {
+        if (additions.length || deductions.length || companyCosts.length) {
+          var companyBlock = '';
+          if (companyCosts.length) {
+            companyBlock =
+              '<div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0">' +
+              '<p class="sub" style="font-weight:600;color:#334155;margin:0 0 4px">公司成本（雇主負擔・不影響實發）</p>' +
+              lineItemsHtml(companyCosts, '') +
+              '<p class="sub" style="text-align:right;margin:4px 0 0;font-weight:600">小計 ' +
+              companyCostTotal.toLocaleString('zh-TW') + ' 元</p></div>';
+          }
           breakdownBlock =
             '<div class="row2" style="margin-top:8px">' +
             '<div><p class="sub" style="font-weight:600;color:#137333;margin:0">加項</p>' + lineItemsHtml(additions, '+') + '</div>' +
             '<div><p class="sub" style="font-weight:600;color:#c5221f;margin:0">減項（可改）</p>' + editableDeductionsHtml(deductions, row.payroll_request_id) + '</div>' +
-            '</div>';
+            '</div>' + companyBlock;
         }
         div.innerHTML =
           '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span> ' + selfTag + '</div>' +
