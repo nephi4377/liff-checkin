@@ -1,7 +1,7 @@
 {
   "component": "pages",
-  "source_sha": "018558134bdc12e431e028f8779d2f366708e362",
-  "conclusion": "success",
-  "run_url": "https://github.com/nephi4377/liff-checkin/actions/runs/42616080163",
-  "recorded_at": "2026-11-09T12:20:34.173Z"
+  "source_sha": "cb0d5a422e926358bf49505f3550bb0902e08b6f",
+  "conclusion": "failure",
+  "run_url": "https://github.com/nephi4377/liff-checkin/actions/runs/42621845123",
+  "recorded_at": "2026-11-09T13:12:36.804Z"
 }
