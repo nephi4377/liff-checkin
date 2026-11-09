@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>官網商店訂單（員工）</title>
+  <style>
+    :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --teal:#0f766e; --amber:#b45309; --bg:#f8fafc; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.45; }
+    .banner { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; line-height: 1.45; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .ono { font-weight: 700; letter-spacing: 0.02em; }
+    .st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--teal); }
+    .st.pending { background: #fff7ed; color: var(--amber); }
+    .meta { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .expire { font-size: 12px; color: #9a3412; margin-top: 8px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    #status { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>官網商店訂單</h1>
+    <p class="sub">Hub 員工後台 · 資料源為官網 Woo（骨架示意）。客人 LINE 付完後<strong>不會</strong>自動改狀態，請人工「標記已付款」。</p>
+    <div class="banner">待付款且未標記已付款：超過 <strong>7 天</strong>訂單將到期並刪除。付款成功 ≠ 自動已付款。</div>
+    <div id="status">載入中…</div>
+    <div id="list"></div>
+  </div>
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.CONFIG = CONFIG;
+  </script>
+  <script src="../../shared/js/shop_api.js"></script>
+  <script>
+    function money(n) {
+      return 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
+    }
+    function render() {
+      var status = document.getElementById('status');
+      var list = document.getElementById('list');
+      status.textContent = '示意資料（shop_mock；接上 SHOP_GAS 後改打真 API）';
+      ShopApi.listOrdersStaff({}).then(function (res) {
+        if (!res.success) {
+          status.textContent = res.message || '讀取失敗';
+          return;
+        }
+        var orders = (res.data && res.data.orders) || [];
+        list.innerHTML = '';
+        orders.forEach(function (o) {
+          var ex = ShopApi.expireInfo(o);
+          var act = ShopApi.staffPrimaryAction(o);
+          var el = document.createElement('div');
+          el.className = 'card';
+          el.innerHTML =
+            '<div class="row"><span class="ono">訂單編號 ' + o.order_number + '</span>' +
+            '<span class="st ' + (o.status === 'pending_payment' ? 'pending' : '') + '">' + o.status_label + '</span></div>' +
+            '<div class="meta">' + (o.items_summary || '') + '<br>金額 ' + money(o.total) +
+            (o.marked_paid_by ? '<br>標記已付款：' + o.marked_paid_by : '') + '</div>' +
+            (ex.expires ? '<div class="expire">' + ex.message + '</div>' : '') +
+            '<div class="actions"></div>' +
+            '<p class="hint">履約狀態不因 LINE 付款自動變更；後台變更＝標記已付款。</p>';
+          var actions = el.querySelector('.actions');
+          var btnPay = document.createElement('button');
+          btnPay.className = 'primary';
+          btnPay.textContent = act.label;
+          btnPay.disabled = !act.enabled;
+          btnPay.onclick = function () {
+            if (!confirm('確認已在 LINE 收到付款，將訂單 ' + o.order_number + ' 標記為已付款？')) return;
+            ShopApi.markPaid({ staff_name: 'hub_staff' }, o.order_number).then(function (r) {
+              alert(r.success ? '已標記已付款' : (r.message || '失敗'));
+              render();
+            });
+          };
+          actions.appendChild(btnPay);
+          var btnNotify = document.createElement('button');
+          btnNotify.textContent = '重送需付款通知';
+          btnNotify.disabled = o.status !== 'pending_payment';
+          btnNotify.onclick = function () {
+            ShopApi.resendPayNotify({}, o.order_number).then(function (r) {
+              alert((r.data && r.data.line_notify) || r.message || '已送出');
+            });
+          };
+          actions.appendChild(btnNotify);
+          list.appendChild(el);
+        });
+      });
+    }
+    render();
+  </script>
+</body>
+</html>
