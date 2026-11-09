@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "source_pdf": "/workspace/quote-plan/contract.pdf",
+  "source_text": "/workspace/quote-plan/contract.txt#L1-L205",
+  "items": {
+    "1": [
+      {
+        "file": "item1-1.jpg",
+        "alt": "F3木心板與E1系統板斷面堆疊對照圖"
+      }
+    ],
+    "2": [
+      {
+        "file": "item2-1.jpg",
+        "alt": "大面積板材垂直拼接縫示意（左）"
+      },
+      {
+        "file": "item2-2.jpg",
+        "alt": "木紋板材拼接縫示意（右）"
+      }
+    ],
+    "3": [
+      {
+        "file": "item3-1.jpg",
+        "alt": "PVC耐磨面材近拍"
+      },
+      {
+        "file": "item3-2.jpg",
+        "alt": "木質檯面加裝強化玻璃示意"
+      }
+    ],
+    "6": [
+      {
+        "file": "item6-1.jpg",
+        "alt": "木作表面釘孔示意"
+      },
+      {
+        "file": "item6-2.jpg",
+        "alt": "櫃內側面外露螺絲示意"
+      }
+    ],
+    "7": [
+      {
+        "file": "item7-1.jpg",
+        "alt": "PVC面材破口以補土筆修補示意"
+      },
+      {
+        "file": "item7-2.jpg",
+        "alt": "櫃角破損標記需補土"
+      },
+      {
+        "file": "item7-3.jpg",
+        "alt": "櫃角需補土處特寫"
+      }
+    ],
+    "8": [
+      {
+        "file": "item8-1.jpg",
+        "alt": "掀板開孔示意"
+      },
+      {
+        "file": "item8-2.jpg",
+        "alt": "掀板背面卡榫與釘孔示意"
+      }
+    ],
+    "10": [
+      {
+        "file": "item10-1.jpg",
+        "alt": "櫃體可見處封邊示意"
+      },
+      {
+        "file": "item10-2.jpg",
+        "alt": "櫃底等不可見處未封邊示意"
+      }
+    ],
+    "12": [],
+    "13": [
+      {
+        "file": "item13-1.jpg",
+        "alt": "廁所地板髒汙示意（細清範圍，非本公司粗清）"
+      },
+      {
+        "file": "item13-2.jpg",
+        "alt": "馬桶髒汙示意（細清範圍，非本公司粗清）"
+      },
+      {
+        "file": "item13-3.jpg",
+        "alt": "馬桶粉塵示意（細清範圍，非本公司粗清）"
+      },
+      {
+        "file": "item13-4.jpg",
+        "alt": "門片髒汙示意（細清範圍，非本公司粗清）"
+      },
+      {
+        "file": "item13-5.jpg",
+        "alt": "櫃體殘膠示意（細清範圍，非本公司粗清）"
+      }
+    ],
+    "14": [
+      {
+        "file": "item14-1.jpg",
+        "alt": "異材質交接：木板與水泥接縫示意"
+      },
+      {
+        "file": "item14-2.jpg",
+        "alt": "水泥牆自然裂縫示意"
+      }
+    ],
+    "15": [
+      {
+        "file": "item15-1.jpg",
+        "alt": "牆面髒污刮痕示意（油漆收尾相關）"
+      }
+    ],
+    "16": [
+      {
+        "file": "item16-1.jpg",
+        "alt": "牆面紋路不平整需整平示意"
+      },
+      {
+        "file": "item16-2.jpg",
+        "alt": "漆面局部凸起需修補示意"
+      }
+    ]
+  },
+  "notes": [
+    "第12條（建材玻璃品質聲明）在本簽約單PDF沒有附圖；玻璃相關示意在第3條強化玻璃檯面。",
+    "第1、2、3、6、7、8、10、15條亦有附圖，一併抽出。",
+    "所有輸出圖已目視檢查：無客戶姓名、地址、電話、簽名等個資。",
+    "CMYK來源以pdfimages/pdftoppm轉RGB，顏色為正片、非負片。",
+    "手機規格：長邊≤1200px、JPG、每張≤250KB。",
+    "item13-2、item13-3 馬桶蓋內側原廠標籤上的序號／條碼已模糊處理（非客戶個資，但為避免追蹤特定設備而抿掉）。"
+  ],
+  "pii_review": {
+    "customer_name_address_phone_signature": "none_found",
+    "actions": [
+      "Blurred product serial/barcode on toilet lid stickers in item13-2 and item13-3",
+      "No other redaction needed"
+    ]
+  }
+}

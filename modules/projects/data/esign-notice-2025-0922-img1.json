@@ -1,5 +1,5 @@
 {
-  "version": "2025-0922",
+  "version": "2025-0922-img1",
   "title": "裝潢標準規範 - 合約書附件",
   "company": "添心室內裝修設計有限公司",
   "closing": "對於以上說明已經清楚了解。",
@@ -7,19 +7,62 @@
     {
       "id": 1,
       "body": "板材皆採用 F3 等級低甲醛環保木芯板與 E1 等級系統板材（升級 F1／E0 等級需另外加價）。",
-      "images": [],
+      "images": [
+        {
+          "id": "1-1",
+          "src": "assets/esign-notice/2025-0922-img1/item1-1.jpg",
+          "alt": "F3木心板與E1系統板斷面堆疊對照圖",
+          "caption": "F3木心板與E1系統板斷面堆疊對照圖",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
       "id": 2,
       "body": "板材最大面積是 4 × 8 台尺，超過會採用拼接工法，若有指定對花，我們將會更改施作方法為油漆工法。",
-      "images": [],
+      "images": [
+        {
+          "id": "2-1",
+          "src": "assets/esign-notice/2025-0922-img1/item2-1.jpg",
+          "alt": "大面積板材垂直拼接縫示意（左）",
+          "caption": "大面積板材垂直拼接縫示意（左）",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "2-2",
+          "src": "assets/esign-notice/2025-0922-img1/item2-2.jpg",
+          "alt": "木紋板材拼接縫示意（右）",
+          "caption": "木紋板材拼接縫示意（右）",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
       "id": 3,
       "body": "面材是 PVC 耐磨材料，如需耐熱加強可加價採用美耐皿等材質或枱面外加強化玻璃。",
-      "images": [],
+      "images": [
+        {
+          "id": "3-1",
+          "src": "assets/esign-notice/2025-0922-img1/item3-1.jpg",
+          "alt": "PVC耐磨面材近拍",
+          "caption": "PVC耐磨面材近拍",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "3-2",
+          "src": "assets/esign-notice/2025-0922-img1/item3-2.jpg",
+          "alt": "木質檯面加裝強化玻璃示意",
+          "caption": "木質檯面加裝強化玻璃示意",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
@@ -37,19 +80,78 @@
     {
       "id": 6,
       "body": "木作裝潢局部會有釘孔或鎖螺絲產生，此為工法正常現象，會出現於內部和側面和高於 200 公分的上緣，無釘孔和鎖螺絲工法需額外加價討論。",
-      "images": [],
+      "images": [
+        {
+          "id": "6-1",
+          "src": "assets/esign-notice/2025-0922-img1/item6-1.jpg",
+          "alt": "木作表面釘孔示意",
+          "caption": "木作表面釘孔示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "6-2",
+          "src": "assets/esign-notice/2025-0922-img1/item6-2.jpg",
+          "alt": "櫃內側面外露螺絲示意",
+          "caption": "櫃內側面外露螺絲示意",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
       "id": 7,
       "body": "PVC 面材，收邊偶有破口，將採用補土處理，若無法接受建議改實木貼皮五／七度上漆工法。",
-      "images": [],
+      "images": [
+        {
+          "id": "7-1",
+          "src": "assets/esign-notice/2025-0922-img1/item7-1.jpg",
+          "alt": "PVC面材破口以補土筆修補示意",
+          "caption": "PVC面材破口以補土筆修補示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "7-2",
+          "src": "assets/esign-notice/2025-0922-img1/item7-2.jpg",
+          "alt": "櫃角破損標記需補土",
+          "caption": "櫃角破損標記需補土",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "7-3",
+          "src": "assets/esign-notice/2025-0922-img1/item7-3.jpg",
+          "alt": "櫃角需補土處特寫",
+          "caption": "櫃角需補土處特寫",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
       "id": 8,
       "body": "若購買空間利用大師掀板處會開孔設計，方便掀蓋和透氣，惟在背面可能會有「撕裂的問題」。掀板的背面，使用最耐用的卡榫設計，但其背後釘孔不會另行批土補釘孔，請見諒。",
-      "images": [],
+      "images": [
+        {
+          "id": "8-1",
+          "src": "assets/esign-notice/2025-0922-img1/item8-1.jpg",
+          "alt": "掀板開孔示意",
+          "caption": "掀板開孔示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "8-2",
+          "src": "assets/esign-notice/2025-0922-img1/item8-2.jpg",
+          "alt": "掀板背面卡榫與釘孔示意",
+          "caption": "掀板背面卡榫與釘孔示意",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
@@ -61,7 +163,24 @@
     {
       "id": 10,
       "body": "正常的木作封邊及封底僅製作「一般可見」之使用範圍處（例如：隔板正面處、櫃體正側面處等），其餘如有封邊封底需求，可先詢問討論。（不進行封邊處，例如：櫃底、櫃頂、間接照明等）",
-      "images": [],
+      "images": [
+        {
+          "id": "10-1",
+          "src": "assets/esign-notice/2025-0922-img1/item10-1.jpg",
+          "alt": "櫃體可見處封邊示意",
+          "caption": "櫃體可見處封邊示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "10-2",
+          "src": "assets/esign-notice/2025-0922-img1/item10-2.jpg",
+          "alt": "櫃底等不可見處未封邊示意",
+          "caption": "櫃底等不可見處未封邊示意",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
@@ -74,15 +193,7 @@
       "id": 12,
       "title": "建材玻璃品質聲明",
       "body": "本公司所使用的玻璃為裝潢用建材玻璃，非水晶琉璃。由於製程特性，玻璃表面可能會有輕微的刮痕、小點或氣泡，此屬正常現象，不影響使用功能，恕不作為退貨或更換依據。",
-      "images": [
-        {
-          "id": "12-1",
-          "placeholder": true,
-          "caption": "建材玻璃示意（佔位，之後補圖）",
-          "src": "",
-          "link": ""
-        }
-      ],
+      "images": [],
       "links": []
     },
     {
@@ -90,11 +201,46 @@
       "title": "粗清服務說明",
       "body": "我們公司提供粗清服務，涵蓋了大型廢棄物垃圾處理、保護材料回收以及剩餘材料的搬運等。這些服務旨在處理裝潢工程完工後，確保您的空間快速恢復整潔，為您節省寶貴的時間。\n\n請注意，我們的粗清服務範圍「不包括」：如門片的污漬、粉塵、殘膠、廁所的細部清潔等細清工程。細清工程的範疇，需要由專門的細清公司進行評估和處理。若需要細清服務，我們將另請細清公司為您家進行現場評估並提供報價。\n\n※以下附圖為細清公司之範疇，非本公司粗清範圍服務。",
       "images": [
-        { "id": "13-1", "placeholder": true, "caption": "廁所地板髒汙", "src": "", "link": "" },
-        { "id": "13-2", "placeholder": true, "caption": "馬桶髒汙", "src": "", "link": "" },
-        { "id": "13-3", "placeholder": true, "caption": "馬桶粉塵", "src": "", "link": "" },
-        { "id": "13-4", "placeholder": true, "caption": "門片髒汙", "src": "", "link": "" },
-        { "id": "13-5", "placeholder": true, "caption": "櫃體殘膠", "src": "", "link": "" }
+        {
+          "id": "13-1",
+          "src": "assets/esign-notice/2025-0922-img1/item13-1.jpg",
+          "alt": "廁所地板髒汙示意（細清範圍，非本公司粗清）",
+          "caption": "廁所地板髒汙示意（細清範圍，非本公司粗清）",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "13-2",
+          "src": "assets/esign-notice/2025-0922-img1/item13-2.jpg",
+          "alt": "馬桶髒汙示意（細清範圍，非本公司粗清）",
+          "caption": "馬桶髒汙示意（細清範圍，非本公司粗清）",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "13-3",
+          "src": "assets/esign-notice/2025-0922-img1/item13-3.jpg",
+          "alt": "馬桶粉塵示意（細清範圍，非本公司粗清）",
+          "caption": "馬桶粉塵示意（細清範圍，非本公司粗清）",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "13-4",
+          "src": "assets/esign-notice/2025-0922-img1/item13-4.jpg",
+          "alt": "門片髒汙示意（細清範圍，非本公司粗清）",
+          "caption": "門片髒汙示意（細清範圍，非本公司粗清）",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "13-5",
+          "src": "assets/esign-notice/2025-0922-img1/item13-5.jpg",
+          "alt": "櫃體殘膠示意（細清範圍，非本公司粗清）",
+          "caption": "櫃體殘膠示意（細清範圍，非本公司粗清）",
+          "link": "",
+          "placeholder": false
+        }
       ],
       "links": []
     },
@@ -103,8 +249,22 @@
       "title": "油漆施工保固說明",
       "body": "油漆驗收完成後，牆面於一段時間內可能因環境的熱脹冷縮及地震位移，造成裂痕，為自然現象。由於油漆僅屬表層裝飾，當 RC 水泥牆體結構出現細縫時，裂痕會延伸至表面，因此不屬於油漆施作保固。上述情形，屬後續維護保養範疇。若客戶有維護需求，公司將協助處理並酌收費用。如需降低裂痕發生，可加購木板打底或貼上壁紙修飾的工法。水泥牆面目前沒法克服自然裂痕的問題。\n\n異材質和材料交接處和水泥牆面裂痕，油漆恕無法提供保固。",
       "images": [
-        { "id": "14-1", "placeholder": true, "caption": "水泥牆裂痕示意", "src": "", "link": "" },
-        { "id": "14-2", "placeholder": true, "caption": "木板／水泥異材質交接", "src": "", "link": "" }
+        {
+          "id": "14-1",
+          "src": "assets/esign-notice/2025-0922-img1/item14-1.jpg",
+          "alt": "異材質交接：木板與水泥接縫示意",
+          "caption": "異材質交接：木板與水泥接縫示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "14-2",
+          "src": "assets/esign-notice/2025-0922-img1/item14-2.jpg",
+          "alt": "水泥牆自然裂縫示意",
+          "caption": "水泥牆自然裂縫示意",
+          "link": "",
+          "placeholder": false
+        }
       ],
       "links": []
     },
@@ -112,7 +272,16 @@
       "id": 15,
       "title": "油漆工程收尾說明",
       "body": "• 為避免重複施工，牆面補漆建議安排在細清完成及大型家具搬入後進行。\n• 收尾當日請您務必到場驗收，確認無誤後，油漆師傅才會退場。\n• 師傅退場後，若再有額外補漆需求，將視情況另行收取工資。",
-      "images": [],
+      "images": [
+        {
+          "id": "15-1",
+          "src": "assets/esign-notice/2025-0922-img1/item15-1.jpg",
+          "alt": "牆面髒污刮痕示意（油漆收尾相關）",
+          "caption": "牆面髒污刮痕示意（油漆收尾相關）",
+          "link": "",
+          "placeholder": false
+        }
+      ],
       "links": []
     },
     {
@@ -120,7 +289,22 @@
       "title": "油漆修補費用說明",
       "body": "針對髒污處復原上漆還原顏色（僅手刷一道油漆），並進行牆面與櫃體縫隙填縫。若水泥牆面需要全面整平，請務必於施工前告知。此為額外收費項目，將依實際施工工法（如批土打磨或木作打底）另行計價。",
       "images": [
-        { "id": "16-1", "placeholder": true, "caption": "油漆修補費用示意（佔位，之後補圖）", "src": "", "link": "" }
+        {
+          "id": "16-1",
+          "src": "assets/esign-notice/2025-0922-img1/item16-1.jpg",
+          "alt": "牆面紋路不平整需整平示意",
+          "caption": "牆面紋路不平整需整平示意",
+          "link": "",
+          "placeholder": false
+        },
+        {
+          "id": "16-2",
+          "src": "assets/esign-notice/2025-0922-img1/item16-2.jpg",
+          "alt": "漆面局部凸起需修補示意",
+          "caption": "漆面局部凸起需修補示意",
+          "link": "",
+          "placeholder": false
+        }
       ],
       "links": []
     },

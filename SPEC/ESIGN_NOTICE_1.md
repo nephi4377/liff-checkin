@@ -7,7 +7,7 @@
 | 位置 | 理由 |
 |------|------|
 | 客戶頁 `modules/projects/esign-notice.html` | 與施工進度同屬「案號對客」；沿用客戶 LIFF ID |
-| 內容 `modules/projects/data/esign-notice-2025-0922.json` | 版本化資料檔；改版不影響已簽快照 |
+| 內容 `modules/projects/data/esign-notice-2025-0922-img1.json` | 版本化資料檔（現行 **2025-0922-img1**）；真圖在 `assets/esign-notice/2025-0922-img1/`；改版不影響已簽快照 |
 | 主控台分頁「簽約注意」於 `designer-customer-finance.html` | 案號明細已有綁定／對客連結；同事可複製連結用官 LINE 回覆傳（不做 PUSH） |
 | 後端 `Backend_GAS/project-console/EsignNotice.js` | 與選材同站；重用 ClientPortalAccess 綁定核權 |
 

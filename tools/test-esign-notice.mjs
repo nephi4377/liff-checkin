@@ -1,19 +1,20 @@
 /**
- * ESIGN-NOTICE-1 前端：內容版本／雜湊、列印組裝、頁面／主控台入口、API 接線
+ * ESIGN-NOTICE-1 前端：內容版本／雜湊、列印組裝、頁面／主控台入口、API 接線、真圖可讀
  *
- * 後端對照路徑（雜湊／結構對齊）可用環境變數覆寫，避免 sibling repo 名稱不同而 skip：
+ * 後端對照路徑（雜湊／結構對齊）可用環境變數覆寫：
  *   ESIGN_BACKEND_NOTICE_JS=/abs/path/to/EsignNotice.js
  * 預設依序嘗試：../backend_gas、../Backend_GAS
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const contentPath = join(root, 'modules/projects/data/esign-notice-2025-0922.json');
+const contentPath = join(root, 'modules/projects/data/esign-notice-2025-0922-img1.json');
+const assetsDir = join(root, 'modules/projects/assets/esign-notice/2025-0922-img1');
 const htmlPath = join(root, 'modules/projects/esign-notice.html');
 const mainPath = join(root, 'modules/projects/js/esign-notice-main.js');
 const apiPath = join(root, 'modules/projects/js/esign-notice-api.js');
@@ -46,8 +47,13 @@ function sha256Hex(text) {
   return createHash('sha256').update(String(text || ''), 'utf8').digest('hex');
 }
 
-test('notice content version 2025-0922 has 18 items and fee table', () => {
-  assert.equal(content.version, '2025-0922');
+function isJpeg(buf) {
+  return Buffer.isBuffer(buf) && buf.length >= 4 && buf[0] === 0xff && buf[1] === 0xd8
+    && buf[buf.length - 2] === 0xff && buf[buf.length - 1] === 0xd9;
+}
+
+test('notice content version 2025-0922-img1 has 18 items and fee table', () => {
+  assert.equal(content.version, '2025-0922-img1');
   assert.equal(content.items.length, 18);
   const fee = content.items.find((it) => it.id === 18);
   assert.ok(fee);
@@ -55,15 +61,38 @@ test('notice content version 2025-0922 has 18 items and fee table', () => {
   assert.ok(fee.extra_sections.length >= 3);
 });
 
-test('items 12/13/14/16 have image placeholders with link slots', () => {
-  for (const id of [12, 13, 14, 16]) {
+test('items with real images have alt and no placeholder; item12 has none', () => {
+  for (const id of [1, 2, 3, 6, 7, 8, 10, 13, 14, 15, 16]) {
     const item = content.items.find((it) => it.id === id);
     assert.ok(item, 'item ' + id);
     assert.ok((item.images || []).length >= 1, 'images for ' + id);
-    assert.equal(typeof item.images[0].src, 'string');
-    assert.equal(typeof item.images[0].link, 'string');
-    assert.equal(item.images[0].placeholder, true);
+    for (const img of item.images) {
+      assert.equal(img.placeholder, false);
+      assert.ok(img.src);
+      assert.ok(String(img.alt || '').trim());
+    }
   }
+  const item12 = content.items.find((it) => it.id === 12);
+  assert.equal((item12.images || []).length, 0);
+});
+
+test('every referenced notice image file is readable non-corrupt JPEG', () => {
+  const files = new Set();
+  for (const it of content.items) {
+    for (const img of it.images || []) {
+      const name = String(img.src || '').split('/').pop();
+      assert.ok(name, 'src basename');
+      files.add(name);
+      const full = join(assetsDir, name);
+      assert.ok(existsSync(full), 'missing ' + full);
+      const buf = readFileSync(full);
+      assert.ok(buf.length > 1000, name + ' too small');
+      assert.ok(isJpeg(buf), name + ' not valid JPEG');
+    }
+  }
+  assert.equal(files.size, 24);
+  const diskJpgs = readdirSync(assetsDir).filter((n) => /\.jpg$/i.test(n));
+  assert.equal(diskJpgs.length, 24);
 });
 
 test('content hash is deterministic SHA-256', () => {
@@ -81,23 +110,26 @@ test('backend content aligns when backend path resolvable', () => {
       '）'
   );
   const backendSrc = readFileSync(backendPath, 'utf8');
-  assert.match(backendSrc, /version:\s*'2025-0922'/);
+  assert.match(backendSrc, /2025-0922-img1/);
   assert.match(backendSrc, /enNoticeContentHash_/);
   assert.match(backendSrc, /fee_stages/);
   assert.match(backendSrc, /EN_SIGNATURE_MAX_BYTES_/);
   assert.match(backendSrc, /ESIGN_NOTICE_DRIVE_FOLDER_ID/);
 });
 
-test('client page has signature canvas, ack, print, lock UX hooks', () => {
+test('client page has signature canvas, ack, print, lock, lightbox hooks', () => {
   assert.match(html, /signCanvas/);
   assert.match(html, /btnAck/);
   assert.match(html, /btnSubmit/);
   assert.match(html, /btnPrint/);
+  assert.match(html, /lightbox/);
   assert.match(html, /我了解/);
   assert.match(main, /esign_notice_submit|EsignNoticeApi\.submit/);
   assert.match(main, /notice_content_hash/);
   assert.match(main, /locked/);
   assert.match(main, /window\.print/);
+  assert.match(main, /openLightbox/);
+  assert.match(main, /print-imgs|print\.items/);
   assert.match(api, /esign_notice_get/);
   assert.match(api, /esign_notice_print/);
 });
@@ -126,10 +158,11 @@ test('console panel can copy link and show status', () => {
   assert.match(accountingApi, /esign_notice_print/);
 });
 
-test('print builder includes items, ack times, signature, date markers', () => {
+test('print builder includes items, images, ack times, signature, date markers', () => {
   assert.match(main, /ack_times/);
   assert.match(main, /signature_data_url/);
   assert.match(main, /signed_at/);
   assert.match(main, /notice_content_hash/);
   assert.match(main, /buildPrintHtml/);
+  assert.match(main, /it\.images/);
 });

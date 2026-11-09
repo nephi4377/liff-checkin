@@ -58,6 +58,8 @@ const el = {
   doneMeta: document.getElementById('doneMeta'),
   printArea: document.getElementById('printArea'),
   canvas: document.getElementById('signCanvas'),
+  lightbox: document.getElementById('lightbox'),
+  lightboxImg: document.getElementById('lightboxImg'),
 };
 
 let drawing = false;
@@ -229,6 +231,32 @@ function currentItem() {
   return items[state.stepIndex] || null;
 }
 
+function resolveImageSrc(src) {
+  const s = String(src || '').trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s) || s.startsWith('data:') || s.startsWith('/') || s.startsWith('./')) {
+    return s;
+  }
+  // 相對路徑：對齊 esign-notice.html 所在目錄（modules/projects/）
+  return './' + s.replace(/^\.\//, '');
+}
+
+function openLightbox(src, alt) {
+  if (!el.lightbox || !el.lightboxImg || !src) return;
+  el.lightboxImg.src = src;
+  el.lightboxImg.alt = alt || '';
+  el.lightbox.hidden = false;
+  el.lightbox.classList.add('is-open');
+}
+
+function closeLightbox() {
+  if (!el.lightbox || !el.lightboxImg) return;
+  el.lightbox.classList.remove('is-open');
+  el.lightbox.hidden = true;
+  el.lightboxImg.removeAttribute('src');
+  el.lightboxImg.alt = '';
+}
+
 function renderImages(item) {
   const images = (item && item.images) || [];
   if (!images.length) {
@@ -238,19 +266,25 @@ function renderImages(item) {
   el.itemImages.innerHTML = images
     .map((img) => {
       if (img.src) {
+        const src = resolveImageSrc(img.src);
+        const alt = img.alt || img.caption || '';
         return (
-          '<div class="img-ph"><img src="' +
-          escapeHtml(img.src) +
+          '<div class="img-ph">' +
+          '<img src="' +
+          escapeHtml(src) +
           '" alt="' +
-          escapeHtml(img.caption || '') +
-          '"/><div>' +
-          escapeHtml(img.caption || '') +
+          escapeHtml(alt) +
+          '" loading="lazy" data-full="' +
+          escapeHtml(src) +
+          '" />' +
+          '<div class="cap">' +
+          escapeHtml(alt) +
           '</div></div>'
         );
       }
       return (
         '<div class="img-ph">圖片佔位<br/>' +
-        escapeHtml(img.caption || '之後補圖') +
+        escapeHtml(img.caption || img.alt || '之後補圖') +
         (img.link
           ? '<br/><a href="' + escapeHtml(img.link) + '" target="_blank" rel="noopener">說明連結</a>'
           : '') +
@@ -258,6 +292,9 @@ function renderImages(item) {
       );
     })
     .join('');
+  el.itemImages.querySelectorAll('img[data-full]').forEach((node) => {
+    node.addEventListener('click', () => openLightbox(node.getAttribute('data-full'), node.alt));
+  });
 }
 
 function renderFees(item) {
@@ -486,6 +523,22 @@ function buildPrintHtml(print) {
   const itemHtml = items
     .map((it) => {
       const t = ack[String(it.id)] || '—';
+      const imgs = (it.images || [])
+        .filter((img) => img && img.src)
+        .map((img) => {
+          const src = resolveImageSrc(img.src);
+          const alt = img.alt || img.caption || '';
+          return (
+            '<img src="' +
+            escapeHtml(src) +
+            '" alt="' +
+            escapeHtml(alt) +
+            '" /><div>' +
+            escapeHtml(alt) +
+            '</div>'
+          );
+        })
+        .join('');
       return (
         '<div class="print-item"><strong>第 ' +
         it.id +
@@ -493,7 +546,9 @@ function buildPrintHtml(print) {
         (it.title ? '｜' + escapeHtml(it.title) : '') +
         '</strong><div>' +
         escapeHtml(it.body || '').replace(/\n/g, '<br/>') +
-        '</div><div>我了解時間：' +
+        '</div>' +
+        (imgs ? '<div class="print-imgs">' + imgs + '</div>' : '') +
+        '<div>我了解時間：' +
         escapeHtml(t) +
         '</div></div>'
       );
@@ -562,6 +617,12 @@ function bindUi() {
   el.btnReview.addEventListener('click', () => {
     state.stepIndex = 0;
     showMode('review');
+  });
+  if (el.lightbox) {
+    el.lightbox.addEventListener('click', closeLightbox);
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
   });
 }
 

@@ -454,12 +454,21 @@
           var w = window.open('', '_blank');
           if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
           var p = res.print || {};
+          var base = location.origin + '/modules/projects/';
           var items = (p.items || []).map(function (it) {
             var ack = (p.ack_times && p.ack_times[String(it.id)]) || '—';
+            var imgs = (it.images || []).filter(function (img) { return img && img.src; }).map(function (img) {
+              var src = String(img.src);
+              if (!/^https?:\/\//i.test(src) && src.charAt(0) !== '/') src = base + src.replace(/^\.\//, '');
+              var alt = img.alt || img.caption || '';
+              return '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt) + '" style="max-width:220px;margin:4px 6px 4px 0;vertical-align:top"/>' +
+                '<div style="font-size:12px;color:#555">' + escapeHtml(alt) + '</div>';
+            }).join('');
             return '<div style="margin:0 0 10px"><strong>第 ' + it.id + ' 條' +
               (it.title ? '｜' + escapeHtml(it.title) : '') + '</strong><div>' +
               escapeHtml(it.body || '').replace(/\n/g, '<br/>') +
-              '</div><div>我了解時間：' + escapeHtml(ack) + '</div></div>';
+              '</div>' + (imgs ? '<div>' + imgs + '</div>' : '') +
+              '<div>我了解時間：' + escapeHtml(ack) + '</div></div>';
           }).join('');
           w.document.write('<html><head><title>簽約注意事項列印</title></head><body style="font-family:sans-serif;padding:16px">' +
             '<h2>' + escapeHtml(p.title || '簽約注意事項') + '</h2>' +

@@ -92,19 +92,52 @@
       .img-grid { grid-template-columns: 1fr; }
     }
     .img-ph {
-      border: 1px dashed #b7c2ce;
+      border: 1px solid #d5dde6;
       border-radius: 0.55rem;
       min-height: 96px;
       display: flex;
-      align-items: center;
-      justify-content: center;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
       text-align: center;
-      padding: 0.6rem;
+      padding: 0.45rem;
       color: var(--muted);
       font-size: 0.82rem;
       background: #f7fafc;
     }
-    .img-ph img { max-width: 100%; border-radius: 0.4rem; }
+    .img-ph img {
+      max-width: 100%;
+      border-radius: 0.4rem;
+      cursor: zoom-in;
+      display: block;
+    }
+    .img-ph .cap { margin-top: 0.35rem; line-height: 1.35; }
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(12, 18, 28, 0.82);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .lightbox.is-open { display: flex; }
+    .lightbox img {
+      max-width: min(96vw, 920px);
+      max-height: 88vh;
+      border-radius: 0.4rem;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.35);
+    }
+    .lightbox-hint {
+      position: absolute;
+      bottom: 1rem;
+      left: 0;
+      right: 0;
+      text-align: center;
+      color: #e8eef4;
+      font-size: 0.85rem;
+    }
     .fee-stack { display: grid; gap: 0.7rem; margin-top: 0.85rem; }
     .fee-card {
       border: 1px solid var(--line);
@@ -172,10 +205,15 @@
     .print-sheet { font-size: 12px; line-height: 1.5; }
     .print-sheet h2 { font-size: 16px; margin: 0 0 8px; }
     .print-item { margin: 0 0 10px; page-break-inside: avoid; }
+    .print-item img { max-width: 220px; margin: 4px 6px 4px 0; vertical-align: top; }
     .print-sig { max-width: 280px; border: 1px solid #999; }
   </style>
 </head>
 <body>
+  <div id="lightbox" class="lightbox no-print" role="dialog" aria-modal="true" aria-label="圖片放大" hidden>
+    <img id="lightboxImg" alt="" />
+    <div class="lightbox-hint">點任意處關閉</div>
+  </div>
   <div class="wrap">
     <div id="boot" class="boot">載入中…</div>
     <div id="app" class="hidden" style="display:none">
