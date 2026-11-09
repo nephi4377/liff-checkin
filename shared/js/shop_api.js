@@ -1,12 +1,12 @@
 /**
  * 官網商店訂單 API 契約（Slice 1 骨架）
  * 規則：訂單編號必有；LINE 下單／需付款／LINE 付款；
- * 付完不自動改狀態；員工 Hub「標記已付款」；未付 3 天刪單。
+ * 付完不自動改狀態；員工 Hub「標記已付款」；未付 7 天刪單。
  */
 (function (global) {
   'use strict';
 
-  var UNPAID_EXPIRE_DAYS = 3;
+  var UNPAID_EXPIRE_DAYS = 7;
 
   var MOCK_ORDERS = [
     {
