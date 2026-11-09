@@ -21,6 +21,63 @@ function formatInsuranceHtml(ins, isDaily) {
     return `<p><strong>勞健保／勞退自付：</strong>−${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${pensionNote}${depNote}）</p>`;
 }
 
+/** 與 shared/js/tax_withhold.js、後端 Logic_TaxWithhold 同步（115） */
+function payrollTaxRoundHalfUpDiv_(num, den) {
+    if (den <= 0) return 0;
+    return Math.floor((num * 2 + den) / (den * 2));
+}
+function payrollTaxFloorToTens_(n) {
+    const v = Math.floor(Number(n) || 0);
+    return v <= 0 ? 0 : Math.floor(v / 10) * 10;
+}
+function payrollNormalizeTaxMode_(raw) {
+    const s = String(raw || '').trim().toLowerCase().replace(/\s/g, '');
+    if (!s) return 'fixed5';
+    if (s === 'table' || s.indexOf('扣繳稅額表') >= 0) return 'table';
+    return 'fixed5';
+}
+function calcPayrollTaxBundleClient_(settings, monthlyGross, bonusAmount) {
+    const mode = payrollNormalizeTaxMode_(settings && (settings.taxWithholdMode || settings.扣繳方式));
+    const dependents = Math.max(0, Math.min(11, parseInt(settings && (settings.taxDependentCount ?? settings.扣繳扶養人數), 10) || 0));
+    const gross = Math.floor(Math.max(0, Number(monthlyGross) || 0));
+    const bonus = Math.floor(Math.max(0, Number(bonusAmount) || 0));
+    const insured = Math.floor(Math.max(0, Number(settings && (settings.insuredSalaryLevel || settings.投保級距)) || 0));
+    const ytd = Math.floor(Math.max(0, Number(settings && (settings.ytdBonusPaid || settings.本年已發獎金累計)) || 0));
+    let fixedRaw = 0;
+    if (mode === 'table') {
+        const taxable = Math.floor(Math.max(0, gross * 12 - (101000 * (1 + dependents) + 272000 + 227000)));
+        if (taxable > 0) {
+            const brackets = [
+                [0, 610000, 5, 0], [610001, 1380000, 12, 42700], [1380001, 2770000, 20, 153100],
+                [2770001, 5190000, 30, 430100], [5190001, null, 40, 949100]
+            ];
+            let rateNum = 5;
+            let prog = 0;
+            for (let i = 0; i < brackets.length; i++) {
+                const b = brackets[i];
+                if (taxable >= b[0] && (b[1] == null || taxable <= b[1])) {
+                    rateNum = b[2];
+                    prog = b[3];
+                    break;
+                }
+            }
+            const annual = Math.max(0, payrollTaxRoundHalfUpDiv_(taxable * rateNum - prog * 100, 100));
+            fixedRaw = payrollTaxFloorToTens_(annual / 12);
+        }
+    } else {
+        fixedRaw = payrollTaxRoundHalfUpDiv_(gross * 5, 100);
+    }
+    const fixedTax = fixedRaw <= 2000 ? 0 : fixedRaw;
+    const bonusTax = bonus >= 90501 ? payrollTaxRoundHalfUpDiv_(bonus * 5, 100) : 0;
+    let nhi = 0;
+    if (insured > 0 && bonus > 0) {
+        const threshold = insured * 4;
+        const chargeable = Math.floor(Math.max(0, ytd + bonus - Math.max(ytd, threshold)));
+        nhi = chargeable > 0 ? payrollTaxRoundHalfUpDiv_(chargeable * 211, 10000) : 0;
+    }
+    return { fixedSalaryTax: fixedTax, bonusTax, nhiSupplementary: nhi, total: fixedTax + bonusTax + nhi, mode, dependents };
+}
+
 const PAYROLL_MONTHLY_DAYS = 30;
 const PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL = '天然災害停班';
 
@@ -458,6 +515,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     } else if (ins.type === 'none') {
         deductions.push({ label: '勞健保／勞退', amount: 0, note: '不加保／個人自行處理' });
     }
+
     const payLe = payrollLateEarlyFromStats(st);
     const hourly = payrollHourlyWage(base, payType);
     const attendanceTimeDeduction = calcLateEarlyDeduction(hourly, payLe.late, payLe.early);
@@ -489,6 +547,36 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             });
         }
     }
+
+    // 稅基＝加項 − 假勤／遲到等薪資減項（不含勞健保／稅本身）
+    const nonTaxDedLabels = {
+        '勞健保／勞退': 1,
+        '勞健保／勞退自付': 1,
+        '所得稅扣繳（固定薪）': 1,
+        '所得稅扣繳（非固定獎金）': 1,
+        '二代健保補充保費': 1,
+        '其他扣款': 1
+    };
+    const salaryDedSum = deductions
+        .filter((d) => !nonTaxDedLabels[d.label])
+        .reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const addSumForTax = additions.reduce((s, x) => s + (x.amount || 0), 0);
+    const taxGross = Math.max(0, addSumForTax - salaryDedSum);
+    const taxBundle = calcPayrollTaxBundleClient_(settings, taxGross, Number(input.bonusAmount) || 0);
+    if (taxBundle.fixedSalaryTax > 0) {
+        deductions.push({
+            label: '所得稅扣繳（固定薪）',
+            amount: taxBundle.fixedSalaryTax,
+            note: taxBundle.mode === 'table' ? `依扣繳稅額表（配偶及受扶養 ${taxBundle.dependents}）` : '固定 5%'
+        });
+    }
+    if (taxBundle.bonusTax > 0) {
+        deductions.push({ label: '所得稅扣繳（非固定獎金）', amount: taxBundle.bonusTax, note: '非固定獎金 5%' });
+    }
+    if (taxBundle.nhiSupplementary > 0) {
+        deductions.push({ label: '二代健保補充保費', amount: taxBundle.nhiSupplementary, note: '獎金超過投保 4 倍部分 × 2.11%' });
+    }
+
     deductions.push({ label: '其他扣款', amount: 0, note: '主管審核時填入（員工送審時為 0）' });
 
     const addTotal = additions.reduce((s, x) => s + (x.amount || 0), 0);
