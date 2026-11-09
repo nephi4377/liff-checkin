@@ -703,6 +703,7 @@ export function initPayrollReviewPanel(ctx) {
         calcBox: document.getElementById('payroll-calc-box'),
         overtimeHours: document.getElementById('payroll-overtime-hours'),
         overtimeNote: document.getElementById('payroll-overtime-note'),
+        otSuggestHint: document.getElementById('payroll-ot-suggest-hint'),
         remoteAmount: document.getElementById('payroll-remote-amount'),
         remoteNote: document.getElementById('payroll-remote-note'),
         supplement: document.getElementById('payroll-supplement'),
@@ -716,6 +717,7 @@ export function initPayrollReviewPanel(ctx) {
     let contextData = null;
     let payrollLoaded = false;
     let submitGateTimer = null;
+    let otSuggestAppliedForPeriod = '';
 
     function clearSubmitGateTimer() {
         if (submitGateTimer) {
@@ -764,6 +766,33 @@ export function initPayrollReviewPanel(ctx) {
 
     function esc(s) {
         return escPayrollHtml(s);
+    }
+
+    /** 依打卡下班超過班表帶入加班小時建議（可改；已有送審或使用者改過則不覆寫） */
+    function applySuggestedOvertimeHours(snapshot, existingReview, period) {
+        const hint = els.otSuggestHint;
+        const suggested = Number(snapshot && snapshot.suggestedOvertimeHours) || 0;
+        const periodKey = period && period.periodLabel ? period.periodLabel : '';
+        if (hint) {
+            if (suggested > 0) {
+                hint.classList.remove('hidden');
+                hint.textContent = `系統依打卡下班超過班表建議 ${suggested} 小時（可自行修改後再送出）`;
+            } else {
+                hint.classList.add('hidden');
+                hint.textContent = '';
+            }
+        }
+        if (!els.overtimeHours) return;
+        if (existingReview) return;
+        if (els.overtimeHours.dataset.userEdited === '1') return;
+        if (otSuggestAppliedForPeriod === periodKey && els.overtimeHours.value !== '') return;
+        if (suggested > 0) {
+            els.overtimeHours.value = String(suggested);
+            otSuggestAppliedForPeriod = periodKey;
+        } else if (otSuggestAppliedForPeriod !== periodKey) {
+            els.overtimeHours.value = '';
+            otSuggestAppliedForPeriod = periodKey;
+        }
     }
 
     async function fetchContext(periodLabel) {
@@ -851,6 +880,8 @@ export function initPayrollReviewPanel(ctx) {
         }
         els.statsBox.innerHTML = statsHtml;
 
+        applySuggestedOvertimeHours(snapshot, existingReview, period);
+
         const preview = buildPayrollBreakdown(settings, period.payType, snapshot, {
             remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
             overtimeHours: Number(els.overtimeHours.value) || 0
@@ -924,11 +955,15 @@ export function initPayrollReviewPanel(ctx) {
 
     els.periodSelect.addEventListener('change', () => {
         if (els.supplement) delete els.supplement.dataset.userEdited;
+        if (els.overtimeHours) delete els.overtimeHours.dataset.userEdited;
+        otSuggestAppliedForPeriod = '';
         fetchContext(els.periodSelect.value);
     });
     els.refreshBtn.addEventListener('click', () => {
         payrollLoaded = false;
         if (els.supplement) delete els.supplement.dataset.userEdited;
+        if (els.overtimeHours) delete els.overtimeHours.dataset.userEdited;
+        otSuggestAppliedForPeriod = '';
         fetchContext(els.periodSelect.value);
     });
     els.submitBtn.addEventListener('click', submitReview);
@@ -938,7 +973,10 @@ export function initPayrollReviewPanel(ctx) {
         });
     }
     ['input', 'change'].forEach((ev) => {
-        els.overtimeHours.addEventListener(ev, () => { if (contextData) renderContext(); });
+        els.overtimeHours.addEventListener(ev, () => {
+            if (els.overtimeHours) els.overtimeHours.dataset.userEdited = '1';
+            if (contextData) renderContext();
+        });
         els.remoteAmount.addEventListener(ev, () => { if (contextData) renderContext(); });
     });
 

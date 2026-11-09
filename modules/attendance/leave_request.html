@@ -145,6 +145,8 @@
                     </div>
                 </div>
 
+                <p id="ot-suggest-hint" class="hidden text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2"></p>
+
                 <div>
                     <label for="reason" class="block text-gray-700 font-semibold mb-2">事由說明</label>
                     <textarea id="reason" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
@@ -382,11 +384,20 @@
                 if (endDateInput.value < startDateInput.value) {
                     endDateInput.value = startDateInput.value;
                 }
+                maybeApplyOvertimeSuggestFromPunch();
             });
             endDateInput.addEventListener('change', () => {
                 if (endDateInput.value < startDateInput.value) {
                     startDateInput.value = endDateInput.value;
                 }
+            });
+            ['startTime', 'endTime'].forEach((id) => {
+                document.getElementById(id).addEventListener('change', () => {
+                    const hint = document.getElementById('ot-suggest-hint');
+                    if (hint && !hint.classList.contains('hidden')) {
+                        hint.dataset.userEdited = '1';
+                    }
+                });
             });
 
             setupTabControls();
@@ -497,6 +508,78 @@
             const nextIndex = startTimeSelect.selectedIndex + 1;
             // 如果不是最後一個選項，就自動選下一個；否則維持在最後一個
             endTimeSelect.selectedIndex = (nextIndex < endTimeSelect.options.length) ? nextIndex : endTimeSelect.options.length - 1;
+        }
+
+        function hideOvertimeSuggestHint() {
+            const hint = document.getElementById('ot-suggest-hint');
+            if (!hint) return;
+            hint.classList.add('hidden');
+            hint.textContent = '';
+            delete hint.dataset.userEdited;
+        }
+
+        function isOvertimeTabActive() {
+            const active = document.querySelector('.tab-button.active');
+            return !!(active && active.dataset.tab === 'overtime');
+        }
+
+        /** 加班送審：依當日打卡下班超過班表帶入建議時段（可改） */
+        async function maybeApplyOvertimeSuggestFromPunch() {
+            const hint = document.getElementById('ot-suggest-hint');
+            if (!isOvertimeTabActive() || !userProfile || !userProfile.userId) {
+                hideOvertimeSuggestHint();
+                return;
+            }
+            if (form.dataset.mode === 'update' || form.dataset.mode === 'cancel') {
+                hideOvertimeSuggestHint();
+                return;
+            }
+            const dateStr = document.getElementById('startDate').value;
+            if (!dateStr) return;
+            if (hint && hint.dataset.userEdited === '1') return;
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const shiftEnd = urlParams.get('shiftEnd') || APP_SETTINGS.DEFAULT_SHIFT_TIMES.END;
+            try {
+                const url = new URL(API_BASE_URL);
+                url.searchParams.append('page', 'attendance_api');
+                url.searchParams.append('action', 'suggest_overtime');
+                url.searchParams.append('operatorId', userProfile.userId);
+                url.searchParams.append('date', dateStr);
+                url.searchParams.append('shiftEnd', shiftEnd);
+                const response = await fetch(url);
+                const result = await response.json();
+                if (!result.success || !result.data || !result.data.hasSuggestion) {
+                    if (hint) {
+                        hint.classList.remove('hidden');
+                        hint.textContent = '當日無「下班超過班表」的打卡可建議；請自行填寫加班時段。';
+                    }
+                    return;
+                }
+                const data = result.data;
+                const startSel = document.getElementById('startTime');
+                const endSel = document.getElementById('endTime');
+                if (data.startTime && [...startSel.options].some((o) => o.value === data.startTime)) {
+                    startSel.value = data.startTime;
+                }
+                if (data.endTime && [...endSel.options].some((o) => o.value === data.endTime)) {
+                    endSel.value = data.endTime;
+                } else if (data.startTime) {
+                    smartSetEndTime(startSel);
+                }
+                document.getElementById('endDate').value = dateStr;
+                if (hint) {
+                    hint.classList.remove('hidden');
+                    hint.textContent = `已依打卡建議加班 ${data.suggestedHours} 小時（${data.startTime || '—'}～${data.endTime || data.checkOut || '—'}，下班 ${data.checkOut || '—'}）。可自行修改後再送出。`;
+                    delete hint.dataset.userEdited;
+                }
+            } catch (err) {
+                console.warn('加班建議載入失敗', err);
+                if (hint) {
+                    hint.classList.remove('hidden');
+                    hint.textContent = '無法載入打卡加班建議，請自行填寫。';
+                }
+            }
         }
 
         /**
@@ -654,9 +737,11 @@ thumbnail.src = '';
                         populateTimeSelects(null, null);
                         document.getElementById('startTime').value = userShiftEnd; // 預設從下班時間開始
                         smartSetEndTime(document.getElementById('startTime'));
+                        maybeApplyOvertimeSuggestFromPunch();
                     } else {
                         // 請假模式：顯示班表內時間
                         populateTimeSelects(userShiftStart, userShiftEnd);
+                        hideOvertimeSuggestHint();
                     }
 
                     // 【您的要求】修正：當切換到請假頁時，才更新事由的 placeholder
