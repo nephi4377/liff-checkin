@@ -109,7 +109,35 @@
 
     <div id="zonesBox"></div>
 
+    <div class="card">
+      <div class="zone-title">已收扣費</div>
+      <div class="row">
+        <label>丈量費</label>
+        <input id="feeMeasure" type="number" min="0" step="1" value="0" style="width:7rem" />
+        <label>啟動金</label>
+        <input id="feeStartup" type="number" min="0" step="1" value="0" style="width:7rem" />
+        <label>規劃費</label>
+        <input id="feePlanning" type="number" min="0" step="1" value="0" style="width:7rem" />
+      </div>
+      <div class="row">
+        <label>報價日期</label>
+        <input id="quoteDate" type="date" style="width:10rem" />
+        <button type="button" class="secondary" id="btnSaveFees">儲存扣費</button>
+      </div>
+      <p class="hint">含稅總計會扣掉這三項；客人頁看得到扣費與應付，看不到成本／廠商價。</p>
+    </div>
+
     <div class="card totals" id="totalsBox">合計載入中…</div>
+
+    <div class="card">
+      <div class="zone-title">版本紀錄</div>
+      <div id="versionsBox" class="hint">尚無版本</div>
+      <div class="row" style="margin-top:0.6rem">
+        <input id="versionNote" placeholder="版本備註（選填）" style="flex:1;min-width:12rem" />
+        <button type="button" id="btnSend">送出給客人</button>
+        <button type="button" class="secondary" id="btnNewVersion">開新版本</button>
+      </div>
+    </div>
 
     <div class="card row">
       <button type="button" class="secondary" id="btnPreflight">送出前檢查</button>

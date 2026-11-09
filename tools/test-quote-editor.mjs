@@ -87,6 +87,50 @@ test('accounting_api exposes quote_editor actions', () => {
   assert.match(accountingApi, /quote_editor_customer_view/);
   assert.match(accountingApi, /quote_editor_print/);
   assert.match(accountingApi, /quoteEditorCatalog/);
+  assert.match(accountingApi, /quote_editor_set_fees/);
+  assert.match(accountingApi, /quote_editor_send/);
+  assert.match(accountingApi, /quote_editor_new_version/);
+  assert.match(accountingApi, /quote_editor_confirm/);
+  assert.match(accountingApi, /quote_editor_list_versions/);
+});
+
+test('editor page has fees, versions, send controls', () => {
+  assert.match(editorHtml, /feeMeasure/);
+  assert.match(editorHtml, /feeStartup/);
+  assert.match(editorHtml, /feePlanning/);
+  assert.match(editorHtml, /btnSaveFees/);
+  assert.match(editorHtml, /btnSend/);
+  assert.match(editorHtml, /btnNewVersion/);
+  assert.match(editorHtml, /versionsBox/);
+  assert.match(mainJs, /quoteEditorSetFees/);
+  assert.match(mainJs, /quoteEditorSend/);
+  assert.match(mainJs, /quoteEditorNewVersion/);
+});
+
+test('customer view has confirm and fees display without cost labels', () => {
+  assert.match(viewHtml, /btnConfirm/);
+  assert.match(viewHtml, /quoteEditorConfirm/);
+  assert.match(viewHtml, /丈量費/);
+  assert.match(viewHtml, /啟動金/);
+  assert.match(viewHtml, /規劃費/);
+  assert.doesNotMatch(viewHtml, /廠商價|成本單價|cost_unit|vendor_price/);
+});
+
+test('customer sanitize keeps fees_received sell-side only', () => {
+  const dirty = {
+    project_no: '9901',
+    fees_received: { measure: 1000, startup: 2000, planning: 500 },
+    totals: { pretax: 10000, tax: 500, with_tax: 10500, deducted: 3500, payable: 7000 },
+    zones: [{
+      name: '客廳',
+      lines: [{ item: 'x', unit: '式', qty: 1, unit_price: 10000, amount: 10000, cost_unit: 1, vendor_price: 2 }]
+    }]
+  };
+  const clean = sanitize.toCustomerQuote(dirty);
+  assert.equal(clean.fees_received.measure, 1000);
+  assert.equal(clean.totals.payable, 7000);
+  assert.equal('cost_unit' in clean.zones[0].lines[0], false);
+  assert.equal(sanitize.payloadContainsForbiddenToken(clean), '');
 });
 
 test('backend QuoteEditor.js present with forbidden-key strip (when sibling repo mounted)', () => {
@@ -101,4 +145,8 @@ test('backend QuoteEditor.js present with forbidden-key strip (when sibling repo
   assert.match(src, /qeCustomerView_/);
   assert.match(src, /qePrintView_/);
   assert.match(src, /QUOTE_EDITOR_ENABLED/);
+  assert.match(src, /handleQuoteEditorSetFees_/);
+  assert.match(src, /handleQuoteEditorSend_/);
+  assert.match(src, /handleQuoteEditorConfirm_/);
+  assert.match(src, /qeBuildPreflight_/);
 });

@@ -79,10 +79,14 @@
       quote_id: quote.quote_id,
       version: quote.version,
       status: quote.status,
+      quote_date: quote.quote_date || '',
       zones: zones,
       fees_received: quote.fees_received || {},
       totals: quote.totals || {},
-      notes: quote.notes || ''
+      notes: quote.notes || '',
+      can_confirm: !!quote.can_confirm,
+      confirmed_at: quote.confirmed_at || '',
+      sent_at: quote.sent_at || ''
     });
   }
 

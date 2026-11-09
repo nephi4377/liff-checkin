@@ -1,5 +1,5 @@
 /**
- * QUOTE-EDITOR-3 主控台編輯頁（切片 1）
+ * QUOTE-EDITOR-3 主控台編輯頁（切片 1–2）
  */
 (function () {
   var session = null;
@@ -30,10 +30,40 @@
 
   function setBusy(on) {
     busy = !!on;
-    ['btnAddZone', 'btnSearch', 'btnPreflight', 'btnPrint', 'btnRefresh'].forEach(function (id) {
+    ['btnAddZone', 'btnSearch', 'btnPreflight', 'btnPrint', 'btnRefresh',
+      'btnSaveFees', 'btnSend', 'btnNewVersion'].forEach(function (id) {
       var b = $(id);
       if (b) b.disabled = busy;
     });
+  }
+
+  function statusLabel(st) {
+    var map = { draft: '草稿', sent: '已送出', confirmed: '客人已確認' };
+    return map[st] || st || '—';
+  }
+
+  function fillFeesFromStaff() {
+    var fees = (staffView && staffView.quote && staffView.quote.fees_received) || {};
+    if ($('feeMeasure')) $('feeMeasure').value = fees.measure != null ? fees.measure : 0;
+    if ($('feeStartup')) $('feeStartup').value = fees.startup != null ? fees.startup : 0;
+    if ($('feePlanning')) $('feePlanning').value = fees.planning != null ? fees.planning : 0;
+    if ($('quoteDate')) $('quoteDate').value = (staffView && staffView.quote && staffView.quote.quote_date) || '';
+  }
+
+  function renderVersions() {
+    var box = $('versionsBox');
+    if (!box) return;
+    var list = (staffView && staffView.versions) || [];
+    if (!list.length) {
+      box.textContent = '尚無版本紀錄';
+      return;
+    }
+    box.innerHTML = '<table><thead><tr><th>版本</th><th>狀態</th><th>含稅</th><th>應付</th><th>更新</th></tr></thead><tbody>' +
+      list.map(function (v) {
+        return '<tr><td>v' + escapeHtml(String(v.version)) + '</td><td>' + escapeHtml(statusLabel(v.status)) +
+          '</td><td>' + money(v.with_tax) + '</td><td>' + money(v.payable) + '</td><td>' +
+          escapeHtml(String(v.updated_at || '').slice(0, 16)) + '</td></tr>';
+      }).join('') + '</tbody></table>';
   }
 
   function renderZones() {
@@ -66,13 +96,17 @@
     if (!el) return;
     var t = (staffView && staffView.totals) || {};
     var handoff = (staffView && staffView.contract_handoff) || {};
+    var fees = (staffView && staffView.quote && staffView.quote.fees_received) || {};
+    var editable = !(staffView && staffView.editable === false);
     el.innerHTML =
       '未稅合計：' + money(t.pretax) + '<br/>' +
       '稅（5%）：' + money(t.tax) + '<br/>' +
       '含稅總計：' + money(t.with_tax) + '<br/>' +
-      '已扣（丈量／啟動／規劃）：' + money(t.deducted) + '<br/>' +
+      '丈量費 ' + money(fees.measure) + '／啟動金 ' + money(fees.startup) + '／規劃費 ' + money(fees.planning) + '<br/>' +
+      '已扣合計：' + money(t.deducted) + '<br/>' +
       '應付：' + money(t.payable) + '<br/>' +
-      '<span class="hint">合約交接 stub 總價：' + money(handoff.total_with_tax) + '</span>';
+      '<span class="hint">合約交接 stub 總價：' + money(handoff.total_with_tax) +
+      '｜目前' + (editable ? '可編輯' : '已鎖定（請開新版本）') + '</span>';
   }
 
   function escapeHtml(s) {
@@ -89,15 +123,32 @@
       if (!res || !res.success) throw new Error((res && res.message) || '載入失敗');
       staffView = res.staff;
       renderZones();
+      fillFeesFromStaff();
       renderTotals();
+      renderVersions();
+      var q = staffView.quote || {};
       var flag = staffView.feature_enabled ? '正式開放中' : (staffView.project_allowed ? '測試案可用' : '未開放');
-      $('headerSub').textContent = '案號 ' + projectNo + '｜版本 v' + (staffView.quote && staffView.quote.version || 1) + '｜' + flag;
+      $('headerSub').textContent = '案號 ' + projectNo + '｜版本 v' + (q.version || 1) +
+        '｜' + statusLabel(q.status) + '｜' + flag;
       setStatus('已更新', 'ok');
     } catch (e) {
       setStatus((e && e.message) || '載入失敗', 'err');
     } finally {
       setBusy(false);
     }
+  }
+
+  function applyStaff(res, okMsg) {
+    staffView = res.staff;
+    renderZones();
+    fillFeesFromStaff();
+    renderTotals();
+    renderVersions();
+    var q = staffView.quote || {};
+    var flag = staffView.feature_enabled ? '正式開放中' : (staffView.project_allowed ? '測試案可用' : '未開放');
+    $('headerSub').textContent = '案號 ' + projectNo + '｜版本 v' + (q.version || 1) +
+      '｜' + statusLabel(q.status) + '｜' + flag;
+    setStatus(okMsg || '已更新', 'ok');
   }
 
   async function addZone() {
@@ -108,11 +159,8 @@
     try {
       var res = await AccountingApi.quoteEditorAddZone(session, projectNo, name);
       if (!res || !res.success) throw new Error((res && res.message) || '新增失敗');
-      staffView = res.staff;
       if ($('zoneName')) $('zoneName').value = '';
-      renderZones();
-      renderTotals();
-      setStatus('已加入空間「' + name + '」', 'ok');
+      applyStaff(res, '已加入空間「' + name + '」');
     } catch (e) {
       setStatus((e && e.message) || '新增失敗', 'err');
     } finally {
@@ -177,12 +225,75 @@
         price_override_reason: reason
       });
       if (!res || !res.success) throw new Error((res && res.message) || '加入失敗');
-      staffView = res.staff;
-      renderZones();
-      renderTotals();
-      setStatus('已加入工項', 'ok');
+      applyStaff(res, '已加入工項');
     } catch (e) {
       setStatus((e && e.message) || '加入失敗', 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveFees() {
+    setBusy(true);
+    setStatus('儲存扣費中…');
+    try {
+      var res = await AccountingApi.quoteEditorSetFees(session, projectNo, {
+        measure: ($('feeMeasure') && $('feeMeasure').value) || 0,
+        startup: ($('feeStartup') && $('feeStartup').value) || 0,
+        planning: ($('feePlanning') && $('feePlanning').value) || 0
+      }, { quote_date: ($('quoteDate') && $('quoteDate').value) || '' });
+      if (!res || !res.success) throw new Error((res && res.message) || '儲存失敗');
+      applyStaff(res, '已儲存扣費');
+    } catch (e) {
+      setStatus((e && e.message) || '儲存失敗', 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendQuote() {
+    setBusy(true);
+    setStatus('送出前檢查並送出…');
+    try {
+      var res = await AccountingApi.quoteEditorSend(session, projectNo, {
+        version_note: ($('versionNote') && $('versionNote').value) || ''
+      });
+      if (!res || !res.success) {
+        var box = $('preflightBox');
+        if (box && res) {
+          box.hidden = false;
+          box.textContent = JSON.stringify({
+            ok_to_send: res.ok_to_send,
+            blockers: res.blockers,
+            warnings: res.warnings,
+            message: res.message
+          }, null, 2);
+        }
+        throw new Error((res && res.message) || '送出失敗');
+      }
+      if (typeof QuoteEditorSanitize !== 'undefined' && res.customer_preview) {
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(res.customer_preview);
+        if (leaked) throw new Error('送出資料含禁止欄位 ' + leaked);
+      }
+      applyStaff(res, '已送出給客人（此版鎖定）');
+    } catch (e) {
+      setStatus((e && e.message) || '送出失敗', 'err');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function newVersion() {
+    setBusy(true);
+    setStatus('開新版本中…');
+    try {
+      var res = await AccountingApi.quoteEditorNewVersion(session, projectNo, {
+        version_note: ($('versionNote') && $('versionNote').value) || ''
+      });
+      if (!res || !res.success) throw new Error((res && res.message) || '開新版本失敗');
+      applyStaff(res, '已開新版本草稿');
+    } catch (e) {
+      setStatus((e && e.message) || '開新版本失敗', 'err');
     } finally {
       setBusy(false);
     }
@@ -199,6 +310,7 @@
         box.hidden = false;
         box.textContent = JSON.stringify({
           ok_to_send: res.ok_to_send,
+          blockers: res.blockers,
           warnings: res.warnings,
           totals: res.totals,
           contract_handoff: res.contract_handoff
@@ -272,5 +384,8 @@
   $('btnPreflight').onclick = preflight;
   $('btnPrint').onclick = printPreview;
   $('btnRefresh').onclick = refresh;
+  if ($('btnSaveFees')) $('btnSaveFees').onclick = saveFees;
+  if ($('btnSend')) $('btnSend').onclick = sendQuote;
+  if ($('btnNewVersion')) $('btnNewVersion').onclick = newVersion;
   boot();
 })();

@@ -2030,6 +2030,53 @@ var AccountingApi = (function () {
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
+    quoteEditorSetFees: function (sessionOrToken, projectNo, fees, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_set_fees',
+        project_no: projectNo,
+        fees_received: fees || {},
+        quote_date: opts.quote_date || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorListVersions: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_list_versions',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorSend: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_send',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorNewVersion: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_new_version',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorConfirm: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_confirm',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
+    },
     quoteEditorPrint: function (sessionOrToken, projectNo) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'quote_editor_print',

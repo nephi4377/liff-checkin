@@ -47,7 +47,10 @@
     <p class="sub" id="headerSub">載入中…</p>
     <p class="status" id="statusLine" aria-live="polite"></p>
     <div id="content"></div>
-    <p><button type="button" id="btnPrint">列印／存檔</button></p>
+    <p>
+      <button type="button" id="btnConfirm" hidden>我確認這份報價</button>
+      <button type="button" id="btnPrint">列印／存檔</button>
+    </p>
   </div>
   <script>
   (function () {
@@ -59,6 +62,8 @@
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
     var projectNo = qs('project_no') || qs('projectNo');
+    var staffPreview = qs('staff_preview') === '1';
+    var session = null;
     var quote = null;
     var statusEl = document.getElementById('statusLine');
     function setStatus(t, err) {
@@ -68,8 +73,10 @@
     function render() {
       var box = document.getElementById('content');
       if (!quote) { box.innerHTML = ''; return; }
+      var stMap = { draft: '草稿（尚未送出）', sent: '待您確認', confirmed: '已確認' };
       document.getElementById('headerSub').textContent =
-        '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1);
+        '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1) +
+        '｜' + (stMap[quote.status] || quote.status || '');
       var zones = (quote.zones || []).map(function (z) {
         var rows = (z.lines || []).map(function (ln) {
           return '<tr><td>' + esc(ln.item) + '</td><td>' + esc(ln.unit) + '</td><td>' +
@@ -80,9 +87,16 @@
           rows + '</tbody></table></div>';
       }).join('');
       var t = quote.totals || {};
+      var f = quote.fees_received || {};
       box.innerHTML = zones + '<div class="card">未稅 ' + money(t.pretax) +
         '｜稅 ' + money(t.tax) + '｜含稅 ' + money(t.with_tax) +
-        '<br/>已扣 ' + money(t.deducted) + '｜應付 ' + money(t.payable) + '</div>';
+        '<br/>已收丈量費 ' + money(f.measure) + '／啟動金 ' + money(f.startup) +
+        '／規劃費 ' + money(f.planning) +
+        '<br/>已扣 ' + money(t.deducted) + '｜應付 ' + money(t.payable) +
+        (quote.confirmed_at ? '<br/>確認時間：' + esc(quote.confirmed_at) : '') +
+        '</div>';
+      var btn = document.getElementById('btnConfirm');
+      if (btn) btn.hidden = !quote.can_confirm;
     }
     async function load() {
       if (!projectNo) {
@@ -91,16 +105,19 @@
       }
       setStatus('更新中…');
       try {
-        var session = await AccountingApi.initCustomerPortalSession({
+        session = await AccountingApi.initCustomerPortalSession({
           liffId: QUOTE_VIEW_LIFF_ID,
           projectNo: projectNo
         });
         if (!session) throw new Error('登入失敗');
         var res = await AccountingApi.quoteEditorCustomerView(session, projectNo, {
-          staffPreview: qs('staff_preview') === '1'
+          staffPreview: staffPreview
         });
         if (!res || !res.success) throw new Error((res && res.message) || '讀取失敗');
         quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
+        quote.can_confirm = !!(res.quote && res.quote.can_confirm);
+        quote.confirmed_at = (res.quote && res.quote.confirmed_at) || '';
+        quote.status = (res.quote && res.quote.status) || quote.status;
         var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
         if (leaked) throw new Error('資料含不該出現的欄位，已擋下');
         render();
@@ -114,6 +131,27 @@
       var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
       if (leaked) { setStatus('列印資料異常，已擋下', true); return; }
       window.print();
+    };
+    document.getElementById('btnConfirm').onclick = async function () {
+      if (!quote || !quote.can_confirm) return;
+      if (!window.confirm('確認這份報價的內容與金額？確認後公司會依此進行後續合約。')) return;
+      setStatus('送出確認中…');
+      try {
+        var res = await AccountingApi.quoteEditorConfirm(session, projectNo, {
+          staffPreview: staffPreview
+        });
+        if (!res || !res.success) throw new Error((res && res.message) || '確認失敗');
+        quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
+        quote.can_confirm = false;
+        quote.confirmed_at = (res.quote && res.quote.confirmed_at) || '';
+        quote.status = (res.quote && res.quote.status) || 'confirmed';
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+        if (leaked) throw new Error('確認回傳含禁止欄位');
+        render();
+        setStatus('已確認這份報價');
+      } catch (e) {
+        setStatus((e && e.message) || '確認失敗', true);
+      }
     };
     load();
   })();
