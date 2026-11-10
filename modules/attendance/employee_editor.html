@@ -276,7 +276,8 @@
                     <div>
                         <label for="本年已發獎金累計" class="block text-gray-700 font-semibold mb-2">本年已發獎金累計</label>
                         <input type="number" id="本年已發獎金累計" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0" value="0">
-                        <p class="text-xs text-gray-500 mt-1">供二代健保「全年累計超過投保 4 倍」計算；每次發獎金後請更新（不含本次待發）。</p>
+                        <p class="text-xs text-gray-500 mt-1">供二代健保「全年累計超過投保 4 倍」計算；薪資核准有獎金時系統會自動累加（不含本次待發）。年中若仍為 0 請人工核對，以免補充保費少扣。</p>
+                        <p id="ytd-bonus-midyear-warn" class="hidden text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mt-1">年中「本年已發獎金累計」仍為 0：若今年已發過獎金，補充保費可能少扣，請核對後更正。</p>
                     </div>
                 </div>
 
@@ -570,6 +571,10 @@
             insuranceTypeSelect.addEventListener('change', toggleInsuranceFields);
             insuredLevelSelect.addEventListener('change', () => { insuredLevelTouched = true; });
             baseSalaryInput.addEventListener('change', suggestInsuredLevelFromBase);
+            transportationInput.addEventListener('change', suggestInsuredLevelFromBase);
+            otherAllowanceInput.addEventListener('change', suggestInsuredLevelFromBase);
+            ytdBonusPaidInput.addEventListener('input', refreshYtdBonusMidyearWarn);
+            ytdBonusPaidInput.addEventListener('change', refreshYtdBonusMidyearWarn);
             payTypeSelect.addEventListener('change', () => { syncInsuranceForPayType(); suggestInsuredLevelFromBase(); });
             payRuleSelect.addEventListener('change', syncInsuranceForPayType);
             taxWithholdModeSelect.addEventListener('change', toggleTaxDependentFields);
@@ -638,13 +643,34 @@
                 INSURED_SALARY_LEVELS.map((n) => `<option value="${n}">${n.toLocaleString()} 元</option>`).join('');
         }
 
+        function regularWageForInsuredSuggest() {
+            return (Number(baseSalaryInput.value) || 0)
+                + (Number(transportationInput.value) || 0)
+                + (Number(otherAllowanceInput.value) || 0);
+        }
+
+        function shouldWarnMidYearYtdZero(ytd, asOfMonth) {
+            const n = Math.max(0, Math.round(Number(ytd) || 0));
+            const m = Math.max(1, Math.min(12, parseInt(asOfMonth, 10) || 1));
+            return n === 0 && m >= 2;
+        }
+
+        function refreshYtdBonusMidyearWarn() {
+            const el = document.getElementById('ytd-bonus-midyear-warn');
+            if (!el) return;
+            const month = (new Date()).getMonth() + 1;
+            const ytd = Number(ytdBonusPaidInput.value) || 0;
+            el.classList.toggle('hidden', !shouldWarnMidYearYtdZero(ytd, month));
+        }
+
         function suggestInsuredLevelFromBase() {
             if (isDailyPayEmployee()) return;
             if (insuranceTypeSelect.value !== '勞健保') return;
             if (insuredLevelTouched && insuredLevelSelect.value) return;
-            const base = Number(baseSalaryInput.value) || 0;
-            if (base <= 0) return;
-            const level = resolveInsuredLevel(base);
+            // 投保建議＝本薪＋交通＋其他經常性津貼（防投保基數偏低）
+            const wage = regularWageForInsuredSuggest();
+            if (wage <= 0) return;
+            const level = resolveInsuredLevel(wage);
             if (level) insuredLevelSelect.value = level;
         }
 
@@ -883,6 +909,7 @@
             taxWithholdModeSelect.value = '固定5%';
             taxDependentCountInput.value = '0';
             ytdBonusPaidInput.value = '0';
+            refreshYtdBonusMidyearWarn();
             toggleTaxDependentFields();
             insuranceTypeSelect.value = '';
             insuredLevelSelect.value = '';
@@ -934,6 +961,7 @@
             ytdBonusPaidInput.value = String(
                 Math.max(0, Math.round(Number(employee.ytdBonusPaid ?? employee.本年已發獎金累計 ?? 0) || 0))
             );
+            refreshYtdBonusMidyearWarn();
             toggleTaxDependentFields();
             insuranceTypeSelect.value = toFormInsuranceType(employee.insuranceType || employee.保險類型);
             insuredLevelTouched = false;

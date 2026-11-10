@@ -63,3 +63,26 @@ describe('試算面板：日薪不雙扣＋中途津貼比例', () => {
     assert.match(panelJs, /按在職/);
   });
 });
+
+describe('P1 C1／C2／C4 前端守門', () => {
+  it('C1：年中 ytd=0 警告＋自動累加文案', () => {
+    assert.match(editorHtml, /ytd-bonus-midyear-warn/);
+    assert.match(editorHtml, /shouldWarnMidYearYtdZero/);
+    assert.match(editorHtml, /系統會自動累加/);
+    assert.match(reviewHtml, /本年已發獎金累計.*為 0/);
+  });
+
+  it('C2：投保建議含交通／其他津貼', () => {
+    assert.match(editorHtml, /regularWageForInsuredSuggest/);
+    assert.match(editorHtml, /本薪＋交通＋其他經常性津貼/);
+  });
+
+  it('C4：年終折現有離職草稿擋雙付提示', () => {
+    const lysp = fs.readFileSync(
+      path.join(root, 'modules', 'attendance', 'leave_year_stats_panel.js'),
+      'utf8'
+    );
+    assert.match(lysp, /resignSettlementBlocksCashout/);
+    assert.match(lysp, /防雙付/);
+  });
+});

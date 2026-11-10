@@ -245,7 +245,13 @@
         div.setAttribute('data-est', String(est));
         var tw = parseTaxWithholdFromRow(row);
         div.setAttribute('data-insured', String(parseInt(tw.insuredSalaryLevel, 10) || 0));
-        div.setAttribute('data-ytd-bonus', String(parseInt(tw.ytdBonusPaid, 10) || 0));
+        var ytdBonus = parseInt(tw.ytdBonusPaid, 10) || 0;
+        div.setAttribute('data-ytd-bonus', String(ytdBonus));
+        var ytdWarnHtml = '';
+        var asOfMonth = (new Date()).getMonth() + 1;
+        if (ytdBonus === 0 && asOfMonth >= 2) {
+          ytdWarnHtml = '<p class="sub" style="color:#92400e;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:6px 8px;margin:6px 0 0">年中「本年已發獎金累計」為 0：若今年已發過獎金，二代健保補充保費可能少扣；核准有獎金時系統會自動累加，請先核對欄位。</p>';
+        }
         var ot = Number(row.overtime_hours) || 0;
         var remote = parseInt(row.remote_allowance, 10) || 0;
         var pb = row.payroll_breakdown || {};
@@ -299,6 +305,7 @@
           '<div><label>獎金備註</label><input type="text" id="bnote-' + row.payroll_request_id + '" placeholder="選填（勿填專案報酬）" value="" /></div>' +
           '</div>' +
           '<p id="tax-hint-' + row.payroll_request_id + '" class="sub hidden" style="color:#8a5a00;margin:6px 0 0"></p>' +
+          ytdWarnHtml +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
           '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。非固定獎金另計所得稅 5%（未達起扣免扣）；超過投保 4 倍部分另扣二代健保補充保費 2.11%。</p>' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +

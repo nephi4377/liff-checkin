@@ -238,22 +238,27 @@ export function initLeaveYearStatsPanel(opts) {
         if (!dispositionEl) return;
         const disp = row.disposition || row.yearEndDisposition || '';
         const unused = row.unusedAnnualLeaveDays;
-        const preview = fmtMoney(row.cashoutAmountPreview ?? row.cashoutAmount);
+        const blocked = !!row.resignSettlementBlocksCashout;
+        const preview = blocked ? '' : fmtMoney(row.cashoutAmountPreview ?? row.cashoutAmount);
         const dailyWage = fmtMoney(row.dailyWage);
         const unusedLine = unused != null && Number(unused) > 0
             ? `<p class="text-sm text-gray-700 mt-2">目前未休特休：<span class="font-semibold tabular-nums">${esc(fmtDays(unused))} 天</span></p>`
             : '';
-        const previewLine = preview && unused != null && Number(unused) > 0
+        const blockLine = blocked
+            ? `<p class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2">${esc(row.yearEndCashoutBlockedReason || '已有離職特休結算草稿，年終折現改由離職結算處理（防雙付）')}</p>`
+            : '';
+        const previewLine = !blocked && preview && unused != null && Number(unused) > 0
             ? `<p class="text-xs text-gray-600 mt-1">折現試算（依薪資系統日薪公式）：約 <span class="font-semibold tabular-nums">${esc(preview)}</span>${dailyWage ? `（日薪 ${esc(dailyWage)}）` : ''}。實際金額以人事登錄與發薪為準。</p>`
             : '';
         const carryLine = row.carryoverDays != null && Number(row.carryoverDays) > 0
             ? `<p class="text-xs text-gray-600 mt-1">保留天數：${esc(fmtDays(row.carryoverDays))} 天</p>`
             : '';
 
-        if (!disp) {
+        if (!disp || (blocked && (disp === 'cashout' || disp === 'salary'))) {
             dispositionEl.innerHTML = `
-                <p class="text-sm text-gray-600">年底未休特休處置：<span class="font-medium">尚未登錄</span></p>
+                <p class="text-sm text-gray-600">年底未休特休處置：<span class="font-medium">${blocked ? '改走離職結算' : '尚未登錄'}</span></p>
                 ${unusedLine}
+                ${blockLine}
                 ${previewLine}
                 <p class="text-xs text-gray-500 mt-1">依內規 V7.0：若未於 12/15 前申請保留，未休天數將於次年 1 月折現發放。人事將於年底登錄處置結果。</p>`;
             return;
