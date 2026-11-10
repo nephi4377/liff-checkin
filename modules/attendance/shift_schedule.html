@@ -271,6 +271,8 @@
         let currentDate = new Date();
         // [v14.0 核心改造] 建立一個全域的前端快取，用來儲存已載入的月份資料
         let scheduleCache = {}; // { "YYYY-MM": { schedule: {...}, holidays: [...] } }
+        /** 本機已改但尚未儲存的月份：背景重抓不可覆寫，否則未存編輯會消失 */
+        let dirtyScheduleMonths = new Set();
         let employeeGroups = {}; // { "groupName": [emp1, emp2] }
         let displayedGroups = new Set(); // 快取的顯示組別
         let shiftBasedEmployees = [];
@@ -751,6 +753,10 @@
                 });
 
                 // [v15.0 改造] 智慧更新：只有在新舊資料不同時才更新畫面與快取
+                // 未儲存編輯中的月份：背景重抓只對過後端，不可覆寫本機快取
+                if (isBackgroundFetch && dirtyScheduleMonths.has(requestCacheKey)) {
+                    console.log(`${requestCacheKey} 有未儲存編輯，略過背景覆寫快取。`);
+                } else {
                 const oldData = scheduleCache[requestCacheKey];
                 const isDataSame = oldData &&
                     JSON.stringify(oldData.schedule) === JSON.stringify(newScheduleData) &&
@@ -774,6 +780,7 @@
                     } else {
                         console.log(`已在背景更新 ${requestCacheKey} 的快取，但目前顯示為 ${currentDisplayKey}，故不刷新畫面。`);
                     }
+                }
                 }
 
             } catch (error) {
@@ -1084,6 +1091,7 @@
                 scheduleData[userId][date] = shift;
             }
 
+            dirtyScheduleMonths.add(cacheKey);
             updateCalendarContent();
             saveBtn.disabled = false; // Enable save button after a change
         }
@@ -1222,6 +1230,7 @@
                 const response = await fetchApi(payload);
 
                 if (response.success) {
+                    dirtyScheduleMonths.delete(cacheKey);
                     showGlobalNotification("排班資料已成功儲存！", 8000, 'success');
                     saveBtn.disabled = true; // OPTIMISTIC UPDATE: scheduleData is already up-to-date
                 } else {
@@ -1314,7 +1323,11 @@
             if (hasUsefulCache) {
                 console.log(`從快取渲染 ${cacheKey} 的班表...`);
                 renderCalendar();
-                fetchScheduleData(true); // 背景再對一次，避免舊空／舊快取
+                if (dirtyScheduleMonths.has(cacheKey)) {
+                    console.log(`${cacheKey} 有未儲存編輯，略過背景重抓以免蓋掉。`);
+                } else {
+                    fetchScheduleData(true); // 背景再對一次，避免舊空／舊快取
+                }
             } else {
                 if (scheduleCache[cacheKey]) delete scheduleCache[cacheKey];
                 console.log(`快取中無可用的 ${cacheKey} 班表，向後端請求...`);
