@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=103"></script>
+  <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=7"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -261,6 +261,36 @@
           '<div class="att-cal-grid">' + cells + '</div></div>';
       }
 
+      function objectionsHtml(ac, prId) {
+        var list = (ac && ac.objections) || [];
+        if (!list.length) return '';
+        var items = list.map(function (o) {
+          var st = String(o.status || '處理中');
+          var side = o.lineSide === 'addition' ? '加項' : (o.lineSide === 'deduction' ? '減項' : '');
+          var badge = st === '已處理'
+            ? '<span class="tag" style="background:#e6f4ea;color:#137333">已處理</span>'
+            : '<span class="tag warn">處理中</span>';
+          var result = o.resultNote
+            ? '<span class="sub">結果：' + esc(o.resultNote) + '</span>'
+            : '';
+          var resolveBtn = (st === '處理中' && o.disputeId)
+            ? '<button type="button" class="btn" style="padding:2px 8px;font-size:12px" data-dispute-resolve="' +
+              esc(o.disputeId) + '" data-pr="' + prId + '">標為已處理</button>'
+            : '';
+          return '<li style="margin:4px 0;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #f0d9a8">' +
+            badge + ' <strong>' + esc(side) + ' ' + esc(o.lineLabel || '') + '</strong>' +
+            ' <span class="sub">' + esc(o.reason || '') +
+            (o.note ? '（' + esc(o.note) + '）' : '') +
+            (o.lineAmount != null ? ' · ' + Number(o.lineAmount || 0).toLocaleString('zh-TW') + ' 元' : '') +
+            '</span> ' + result + ' ' + resolveBtn +
+            '<p class="sub" style="margin:4px 0 0;color:#8a5a00">金額須人工在下方加減項調整，系統不自動改</p>' +
+            '</li>';
+        }).join('');
+        return '<div class="att-objections" style="margin-top:8px;padding:8px;background:#fff8e8;border-radius:8px;border:1px solid #f0e0b8">' +
+          '<p class="sub" style="margin:0 0 4px;font-weight:600;color:#8a5a00">員工異議（' + list.length + '）</p>' +
+          '<ul style="margin:0;padding:0;list-style:none">' + items + '</ul></div>';
+      }
+
       function attendanceBlockHtml(row) {
         var ac = row.attendance_check || {};
         var line = ac.summaryLine ||
@@ -271,13 +301,18 @@
         var confBtn = confirmed
           ? '<span class="tag" style="background:#e6f4ea;color:#137333">出勤已確認</span>'
           : '<button type="button" class="btn btn-primary" data-att-confirm="' + row.payroll_request_id + '">確認出勤</button>';
+        var objTag = (ac.openObjectionCount > 0)
+          ? ' <span class="tag warn">異議 ' + ac.openObjectionCount + '</span>'
+          : (ac.hasObjections ? ' <span class="tag">異議已處理</span>' : '');
         return '<div class="att-line">' + esc(line) +
           (ac.isAnomalous ? ' <span class="att-warn">· 異常：' + esc(reasons || '需核對') + '</span>' : ' <span class="tag">正常</span>') +
+          objTag +
           '</div>' +
           '<div class="att-extra" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">' +
           confBtn +
           (confirmed && ac.confirmedBy ? '<span class="sub">確認人 ' + esc(ac.confirmedBy) + '</span>' : '') +
           '</div>' +
+          objectionsHtml(ac, row.payroll_request_id) +
           attendanceCalendarHtml(ac, row.payroll_request_id);
       }
 
@@ -678,6 +713,35 @@
             setOk(res.message || '已確認出勤');
             // 就地更新確認狀態，保留其他卡片未存的加減項／備註草稿
             markAttendanceConfirmedInPlace_(confirmId, res.attendance_check || null);
+          }).catch(function (err) {
+            if (err && err.message) setMsg(err.message);
+          });
+          return;
+        }
+        var disputeId = e.target.getAttribute('data-dispute-resolve');
+        if (disputeId) {
+          var dBtn = e.target;
+          var prForDispute = dBtn.getAttribute('data-pr') || '';
+          var resultNote = window.prompt('處理結果（必填；金額請另在加減項人工調整）', '');
+          if (resultNote == null) return;
+          if (!String(resultNote).trim()) {
+            setMsg('請填寫處理結果');
+            return;
+          }
+          await AccountingUi.runAsync(dBtn, {
+            busyLabel: '標記中…',
+            queue: true,
+            queueId: 'payroll_dispute_resolve',
+            itemId: disputeId
+          }, async function () {
+            var res = await AccountingApi.payrollDisputeResolve(session, {
+              dispute_id: disputeId,
+              payroll_request_id: prForDispute,
+              result_note: String(resultNote).trim()
+            });
+            if (!res.success) throw new Error(res.message || '標記失敗');
+            setOk(res.message || '已標為已處理（金額請人工調整）');
+            await loadList(true);
           }).catch(function (err) {
             if (err && err.message) setMsg(err.message);
           });

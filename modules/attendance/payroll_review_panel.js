@@ -616,20 +616,67 @@ function renderCompanyCostHtml(companyCosts, companyCostTotal, esc) {
     `;
 }
 
-function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
+function findOpenDisputeForLine_(disputes, side, label) {
+    const list = disputes || [];
+    return list.find((d) =>
+        String(d.lineSide) === side &&
+        String(d.lineLabel) === label &&
+        String(d.status) === '處理中'
+    ) || list.find((d) =>
+        String(d.lineSide) === side && String(d.lineLabel) === label
+    ) || null;
+}
+
+function renderLineDisputeControls_(side, row, opts, escFn) {
+    const disputes = (opts && opts.disputes) || [];
+    const deadline = (opts && opts.disputeDeadline) || {};
+    const allow = opts && opts.allowDispute;
+    const existing = findOpenDisputeForLine_(disputes, side, row.label);
+    if (existing) {
+        const st = String(existing.status || '處理中');
+        const result = existing.resultNote
+            ? `<span class="block text-xs text-gray-600 mt-0.5">結果：${escFn(existing.resultNote)}</span>`
+            : '';
+        const badge = st === '已處理'
+            ? '<span class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-800">已處理</span>'
+            : '<span class="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-900">處理中</span>';
+        return `<div class="mt-1 flex flex-wrap items-center gap-1">${badge}<span class="text-xs text-gray-500">${escFn(existing.reason || '')}</span>${result}</div>`;
+    }
+    if (!allow) return '';
+    if (deadline.open === false) {
+        return '<button type="button" class="mt-1 text-xs text-gray-400 underline" disabled>有問題（已截止）</button>';
+    }
+    return `<button type="button" class="mt-1 text-xs text-indigo-700 underline payroll-dispute-btn"
+        data-side="${escFn(side)}" data-label="${escFn(row.label)}" data-amount="${Number(row.amount) || 0}">有問題</button>`;
+}
+
+function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc, disputeOpts) {
     const escFn = esc || escPayrollHtml;
+    const opts = disputeOpts || {};
+    const deadline = opts.disputeDeadline || {};
+    const deadlineBanner = deadline.message
+        ? `<p class="text-xs ${deadline.open === false ? 'text-gray-600 bg-gray-50' : 'text-indigo-800 bg-indigo-50'} rounded p-2 mb-2">${escFn(deadline.message)}</p>`
+        : '';
     const addRows = breakdown.additions.map((row) => {
         const note = row.note ? `<span class="text-gray-500">（${escFn(row.note)}）</span>` : '';
-        return `<li class="flex justify-between gap-2"><span>${escFn(row.label)}${note}</span><span class="font-medium text-green-700">+${row.amount.toLocaleString()}</span></li>`;
+        return `<li class="py-1 border-b border-green-50 last:border-0">
+            <div class="flex justify-between gap-2"><span>${escFn(row.label)}${note}</span>
+            <span class="font-medium text-green-700">+${row.amount.toLocaleString()}</span></div>
+            ${renderLineDisputeControls_('addition', row, opts, escFn)}
+        </li>`;
     }).join('');
     const dedRows = breakdown.deductions.map((row) => {
         const note = row.note ? `<span class="block text-gray-500 text-xs mt-0.5">${escFn(row.note)}</span>` : '';
         const amtCls = row.amount > 0 ? 'text-red-600 font-medium' : 'text-gray-400';
         const amtText = row.amount > 0 ? `−${row.amount.toLocaleString()}` : '—';
-        return `<li class="py-1 border-b border-red-50 last:border-0"><div class="flex justify-between gap-2"><span>${escFn(row.label)}</span><span class="${amtCls}">${amtText}</span></div>${note}</li>`;
+        return `<li class="py-1 border-b border-red-50 last:border-0">
+            <div class="flex justify-between gap-2"><span>${escFn(row.label)}</span><span class="${amtCls}">${amtText}</span></div>${note}
+            ${renderLineDisputeControls_('deduction', row, opts, escFn)}
+        </li>`;
     }).join('');
     return `
         <p class="text-xs text-amber-700 bg-amber-50 rounded p-2 mb-3">${escFn(disclaimer)}</p>
+        ${deadlineBanner}
         <p class="text-xs text-gray-500 mb-2">薪資類型：${payType === 'daily' ? '日薪' : '月薪'}（${escFn(settings.payRule)}）· 底薪 ${settings.baseSalary.toLocaleString()} 元${payType === 'daily' ? '／日（本薪＝日薪×計薪天數；含特休／補休全薪、病假半薪；遲早退依日薪÷8換算時薪扣款）' : ''}</p>
         <div class="grid sm:grid-cols-2 gap-3">
             <div class="bg-white rounded-lg p-2 border border-green-100">
@@ -855,7 +902,12 @@ export function initPayrollReviewPanel(ctx) {
             remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
             overtimeHours: Number(els.overtimeHours.value) || 0
         }, contextData.insurancePreview, contextData.attendanceBonusPolicy, period, contextData.employerCostPreview);
-        els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType, esc);
+        els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType, esc, {
+            allowDispute: !contextData.readOnly,
+            disputes: contextData.payrollDisputes || [],
+            disputeDeadline: contextData.disputeDeadline || {},
+            disputeReasons: contextData.disputeReasons || ['金額不對', '天數不對', '其他']
+        });
         if (els.supplement && !els.supplement.dataset.userEdited) {
             const existingNote = existingReview ? String(existingReview.supplementNote || '').trim() : '';
             if (existingNote) {
@@ -940,6 +992,100 @@ export function initPayrollReviewPanel(ctx) {
     ['input', 'change'].forEach((ev) => {
         els.overtimeHours.addEventListener(ev, () => { if (contextData) renderContext(); });
         els.remoteAmount.addEventListener(ev, () => { if (contextData) renderContext(); });
+    });
+
+    els.calcBox.addEventListener('click', async (ev) => {
+        const t = ev.target;
+        if (!t || !contextData?.period) return;
+
+        const openBtn = t.closest ? t.closest('.payroll-dispute-btn') : null;
+        if (openBtn) {
+            if (contextData.disputeDeadline && contextData.disputeDeadline.open === false) {
+                alert(contextData.disputeDeadline.message || '異議期限已截止');
+                return;
+            }
+            const host = openBtn.parentElement;
+            if (!host) return;
+            if (host.querySelector('.payroll-dispute-form')) return;
+            const reasons = contextData.disputeReasons || ['金額不對', '天數不對', '其他'];
+            const form = document.createElement('div');
+            form.className = 'payroll-dispute-form mt-1 p-2 rounded border border-indigo-100 bg-indigo-50 text-xs space-y-1';
+            form.innerHTML =
+                `<p class="text-gray-700">「${escPayrollHtml(openBtn.getAttribute('data-label') || '')}」選原因（可不填說明）</p>` +
+                `<div class="flex flex-wrap gap-1">${reasons.map((r) =>
+                    `<button type="button" class="payroll-dispute-reason px-2 py-1 rounded bg-white border border-indigo-200 text-indigo-800" data-reason="${escPayrollHtml(r)}">${escPayrollHtml(r)}</button>`
+                ).join('')}</div>` +
+                `<input type="text" class="payroll-dispute-note w-full border rounded px-2 py-1 mt-1" maxlength="200" placeholder="選填一句說明" />` +
+                `<div class="flex gap-2 mt-1">` +
+                `<button type="button" class="payroll-dispute-send px-2 py-1 rounded bg-indigo-600 text-white" disabled>送出</button>` +
+                `<button type="button" class="payroll-dispute-cancel px-2 py-1 rounded border">取消</button>` +
+                `</div>`;
+            form.dataset.side = openBtn.getAttribute('data-side') || '';
+            form.dataset.label = openBtn.getAttribute('data-label') || '';
+            form.dataset.amount = openBtn.getAttribute('data-amount') || '0';
+            openBtn.classList.add('hidden');
+            host.appendChild(form);
+            return;
+        }
+
+        const formEl = t.closest ? t.closest('.payroll-dispute-form') : null;
+        if (!formEl) return;
+        if (t.classList.contains('payroll-dispute-cancel')) {
+            const btn0 = formEl.parentElement && formEl.parentElement.querySelector('.payroll-dispute-btn');
+            if (btn0) btn0.classList.remove('hidden');
+            formEl.remove();
+            return;
+        }
+        if (t.classList.contains('payroll-dispute-reason')) {
+            formEl.querySelectorAll('.payroll-dispute-reason').forEach((b) => {
+                b.classList.remove('ring-2', 'ring-indigo-500', 'bg-indigo-100');
+            });
+            t.classList.add('ring-2', 'ring-indigo-500', 'bg-indigo-100');
+            formEl.dataset.chosenReason = t.getAttribute('data-reason') || '';
+            const send = formEl.querySelector('.payroll-dispute-send');
+            if (send) send.disabled = !formEl.dataset.chosenReason;
+            return;
+        }
+        if (!t.classList.contains('payroll-dispute-send')) return;
+        const reason = String(formEl.dataset.chosenReason || '').trim();
+        if (!reason) {
+            alert('請先選原因');
+            return;
+        }
+        const noteInput = formEl.querySelector('.payroll-dispute-note');
+        const note = noteInput ? String(noteInput.value || '').trim() : '';
+        const period = contextData.period;
+        t.disabled = true;
+        t.textContent = '送出中…';
+        try {
+            const payload = {
+                action: 'payroll_review',
+                op: 'dispute_submit',
+                userId,
+                periodLabel: period.periodLabel,
+                periodStart: period.periodStart,
+                periodEnd: period.periodEnd,
+                payDate: period.payDate,
+                lineSide: formEl.dataset.side || '',
+                lineLabel: formEl.dataset.label || '',
+                lineAmount: Number(formEl.dataset.amount) || 0,
+                reason,
+                note
+            };
+            const res = await fetchApi(apiBaseUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify(payload)
+            });
+            const json = await res.json();
+            if (!json.success) throw new Error(json.message || '送出失敗');
+            showGlobalNotification(json.message || '已送出異議（不會自動改金額）', 5000, 'success');
+            await fetchContext(period.periodLabel);
+        } catch (err) {
+            alert(`異議送出失敗：${err.message}`);
+            t.disabled = false;
+            t.textContent = '送出';
+        }
     });
 
     const historyCtx = { apiBaseUrl, userId, fetchApi };

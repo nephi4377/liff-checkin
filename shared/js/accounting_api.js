@@ -1743,6 +1743,13 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken)
       }, payload || {}));
     },
+    /** 規格 C：審核端將員工加減項異議標為已處理（不自動改金額） */
+    payrollDisputeResolve: function (sessionOrToken, payload) {
+      return post(Object.assign({
+        action: 'payroll_dispute_resolve',
+        auth: resolveAuth(sessionOrToken)
+      }, payload || {}));
+    },
     payrollRequestReject: function (sessionOrToken, payload) {
       return post(Object.assign({
         action: 'payroll_request_reject',
