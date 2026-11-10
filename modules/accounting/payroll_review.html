@@ -106,11 +106,21 @@
         }).join('') + '</ul>';
       }
 
+      /** 僅假勤／出勤類減項可改；所得稅／勞健保／補充保費鎖定（公司多付／少扣風險） */
       function isEditableDeductionLabel(label) {
         var s = String(label || '');
         if (!s) return false;
         if (s.indexOf('其他扣款') >= 0) return false;
-        return true;
+        if (s.indexOf('所得稅') >= 0) return false;
+        if (s.indexOf('補充保費') >= 0) return false;
+        if (s.indexOf('二代健保') >= 0) return false;
+        if (s.indexOf('勞健保') >= 0) return false;
+        if (s.indexOf('勞退') >= 0) return false;
+        var keys = ['事假', '缺勤', '病假', '遲到', '早退', '特別假', '天然災害', '颱風', '生理假'];
+        for (var i = 0; i < keys.length; i++) {
+          if (s.indexOf(keys[i]) >= 0) return true;
+        }
+        return false;
       }
 
       function editableDeductionsHtml(deductions, prId) {

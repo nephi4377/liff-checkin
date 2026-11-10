@@ -1064,7 +1064,13 @@
                             parts.push(`已關閉進行中薪資 ${rl.payroll.closedCount} 筆`);
                         }
                         if (rl.leaveSettlement && rl.leaveSettlement.ok) {
-                            parts.push('已產生特休結算草稿（待會計確認）');
+                            if (rl.leaveSettlement.usedDaysUnknown) {
+                                parts.push('已產生特休結算草稿（已用天數待人工核對，勿直接依空白折現發放）');
+                            } else {
+                                parts.push('已產生特休結算草稿（待會計確認）');
+                            }
+                        } else if (rl.leaveSettlement && rl.leaveSettlement.ok === false) {
+                            parts.push('特休結算草稿未產生，請人工處理');
                         }
                         if (rl.errors && rl.errors.length) {
                             parts.push('部分連動失敗，請洽工程');

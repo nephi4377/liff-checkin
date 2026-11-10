@@ -98,11 +98,44 @@
         return parseInt(row.off_record_amount, 10) || 0;
       }
 
+      function approvedAmountFor(id) {
+        var root = document.getElementById('pf-' + id);
+        if (root && root.getAttribute('data-approved')) {
+          return parseInt(root.getAttribute('data-approved'), 10) || 0;
+        }
+        return 0;
+      }
+
       function updateTotalDisplay(id) {
         var transfer = Number(document.getElementById('xfer-' + id).value) || 0;
         var extra = Number(document.getElementById('extra-' + id).value) || 0;
+        var total = transfer + extra;
         var el = document.getElementById('total-' + id);
-        if (el) el.textContent = '總實發 $' + (transfer + extra).toLocaleString('zh-TW');
+        var warn = document.getElementById('overpay-warn-' + id);
+        var approved = approvedAmountFor(id);
+        if (el) el.textContent = '總實發 $' + total.toLocaleString('zh-TW');
+        if (warn) {
+          if (approved > 0 && total > approved) {
+            warn.textContent = '⚠ 總實發超過核准實發 $' + approved.toLocaleString('zh-TW') + '（差額 $' + (total - approved).toLocaleString('zh-TW') + '）';
+            warn.classList.remove('hidden');
+          } else {
+            warn.textContent = '';
+            warn.classList.add('hidden');
+          }
+        }
+      }
+
+      function assertPaymentNotOverApproved(ids) {
+        var offenders = [];
+        (ids || []).forEach(function (id) {
+          var transfer = Number(document.getElementById('xfer-' + id) && document.getElementById('xfer-' + id).value) || 0;
+          var extra = Number(document.getElementById('extra-' + id) && document.getElementById('extra-' + id).value) || 0;
+          var approved = approvedAmountFor(id);
+          if (approved > 0 && (transfer + extra) > approved) {
+            offenders.push({ id: id, total: transfer + extra, approved: approved });
+          }
+        });
+        return offenders;
       }
 
       /** 只取「自動寄失敗／需手動」的草稿；成功寄出時後端也可能帶 draft，不可當失敗。 */
@@ -286,6 +319,7 @@
         var xfer = transferDefault(row);
         var extra = extraDefault(row);
         var approved = parseInt(row.final_amount, 10) || xfer || 0;
+        div.setAttribute('data-approved', String(approved));
         var est = parseInt(row.estimated_net, 10) || 0;
         var amountSummary = '<div class="sub">核准實發 $' + approved.toLocaleString('zh-TW') + '</div>';
         if (est > 0 && est !== approved) {
@@ -324,13 +358,15 @@
           '<option value="現金">現金</option><option value="匯款">另筆轉帳</option><option value="其他">其他</option></select></div>' +
           '<div><label>額外備註</label><input id="xnote-' + id + '" placeholder="例：超過薪轉上限" value="' + esc(row.off_record_note || '') + '" /></div>' +
           '</div>' +
-          '<p class="total-line" id="total-' + id + '">總實發 $' + (xfer + extra).toLocaleString('zh-TW') + '</p>';
+          '<p class="total-line" id="total-' + id + '">總實發 $' + (xfer + extra).toLocaleString('zh-TW') + '</p>' +
+          '<p class="sub hidden" id="overpay-warn-' + id + '" style="color:#b45309;margin:4px 0 0"></p>';
         div.appendChild(panel);
         ['xfer-' + id, 'extra-' + id].forEach(function (elId) {
           panel.querySelector('#' + elId).addEventListener('input', function () { updateTotalDisplay(id); });
         });
         var meth = panel.querySelector('#xmeth-' + id);
         if (row.extra_method) meth.value = row.extra_method;
+        updateTotalDisplay(id);
         return div;
       }
 
@@ -456,6 +492,14 @@
         if (!ids.length && !opts.markAll) { setMsg('請先勾選要標記的項目'); return; }
         if (opts.markAll) ids = allItemIds();
         if (!ids.length) { setMsg('目前沒有待匯款項目'); return; }
+        var over = assertPaymentNotOverApproved(ids);
+        if (over.length) {
+          var detail = over.slice(0, 5).map(function (o) {
+            return o.id + '：總實發 $' + o.total.toLocaleString('zh-TW') + ' > 核准 $' + o.approved.toLocaleString('zh-TW');
+          }).join('\n');
+          setMsg('有 ' + over.length + ' 筆總實發超過核准實發，已阻擋標記已發薪。\n' + detail);
+          return;
+        }
         if (!confirm('確認銀行已匯出？將標記 ' + ids.length + ' 筆已發薪、寫收支（總實發），並 EMAIL 員工。\n入帳日＝今日。')) return;
         await AccountingUi.runAsync(btn, { busyLabel: '處理中…', startMessage: '寫入收支並寄送 EMAIL…' }, async function () {
           setMsg(''); setOk(''); renderEmailDrafts([]);
