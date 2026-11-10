@@ -1072,7 +1072,8 @@ export function initPayrollReviewPanel(ctx) {
                 reason,
                 note
             };
-            const res = await fetchApi(apiBaseUrl, {
+            // 與 submitReview 相同：原生 POST；injected fetchApi 只做 GET 參數物件
+            const res = await fetch(apiBaseUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                 body: JSON.stringify(payload)

@@ -741,7 +741,10 @@
             });
             if (!res.success) throw new Error(res.message || '標記失敗');
             setOk(res.message || '已標為已處理（金額請人工調整）');
+            // 重抓異議狀態前先保留未存加減項／獎金草稿
+            var drafts = captureReviewDrafts_();
             await loadList(true);
+            restoreReviewDrafts_(drafts);
           }).catch(function (err) {
             if (err && err.message) setMsg(err.message);
           });

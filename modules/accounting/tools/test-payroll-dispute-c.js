@@ -41,4 +41,18 @@ describe('規格 C 加減項異議前端契約', () => {
     assert.match(panel, /disputeDeadline|異議截止/);
     assert.match(panel, /金額不對/);
   });
+
+  it('異議送出用原生 fetch POST（非 injected GET fetchApi）', () => {
+    const idx = panel.indexOf("op: 'dispute_submit'");
+    assert.ok(idx > 0);
+    const snippet = panel.slice(idx, idx + 700);
+    assert.match(snippet, /await fetch\(apiBaseUrl/);
+    assert.doesNotMatch(snippet, /await fetchApi\(apiBaseUrl/);
+  });
+
+  it('標已處理會保留審核草稿', () => {
+    assert.match(html, /captureReviewDrafts_/);
+    assert.match(html, /restoreReviewDrafts_/);
+    assert.match(html, /var drafts = captureReviewDrafts_\(\);\s*\n\s*await loadList\(true\);\s*\n\s*restoreReviewDrafts_\(drafts\)/);
+  });
 });
