@@ -107,6 +107,21 @@
       '</div></td></tr>';
   }
 
+  /** 空間內主項依工種分組（附加項跟在所屬櫃體下） */
+  function groupLinesByTrade(lines) {
+    var order = [];
+    var map = {};
+    (lines || []).forEach(function (ln) {
+      var tab = String(ln.tab || '其他').trim() || '其他';
+      if (!map[tab]) {
+        map[tab] = [];
+        order.push(tab);
+      }
+      map[tab].push(ln);
+    });
+    return order.map(function (tab) { return { tab: tab, lines: map[tab] }; });
+  }
+
   function renderZones() {
     var box = $('zonesBox');
     var sel = $('zoneSelect');
@@ -130,14 +145,24 @@
       var tradeBits = (z.trade_groups || []).map(function (g) {
         return escapeHtml(g.tab) + ' ' + money(g.subtotal);
       }).join('／') || '—';
+      var groups = groupLinesByTrade(z.lines || []);
+      var subMap = {};
+      (z.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
       var rows = '';
-      (z.lines || []).forEach(function (ln) {
-        rows += lineEditRow(ln, false);
-        (ln.addons || []).forEach(function (ad) {
-          rows += lineEditRow(ad, true);
+      if (!groups.length) {
+        rows = '<tr><td colspan=\"5\" class=\"hint\">尚無工項</td></tr>';
+      } else {
+        groups.forEach(function (g) {
+          rows += '<tr class=\"trade-head\"><td colspan=\"5\"><strong>' + escapeHtml(g.tab) +
+            '</strong> <span class=\"hint\">工種小計 ' + money(subMap[g.tab]) + '</span></td></tr>';
+          g.lines.forEach(function (ln) {
+            rows += lineEditRow(ln, false);
+            (ln.addons || []).forEach(function (ad) {
+              rows += lineEditRow(ad, true);
+            });
+          });
         });
-      });
-      if (!rows) rows = '<tr><td colspan=\"5\" class=\"hint\">尚無工項</td></tr>';
+      }
       return '<div class=\"card\"><div class=\"zone-title\">' + escapeHtml(z.name) +
         ' <span class=\"hint\">空間小計 ' + money(z.zone_subtotal) +
         '｜工種 ' + tradeBits + '</span></div>' +
@@ -467,6 +492,18 @@
     }).join('');
   }
 
+  function renderCustomerLinesByTrade(zone) {
+    var groups = groupLinesByTrade(zone.lines || []);
+    var subMap = {};
+    (zone.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
+    if (!groups.length) return '<tr><td colspan=\"4\">（無項目）</td></tr>';
+    return groups.map(function (g) {
+      return '<tr class=\"trade-head\"><td colspan=\"4\"><strong>' + escapeHtml(g.tab) +
+        '</strong> <span class=\"hint\">小計 ' + money(subMap[g.tab]) + '</span></td></tr>' +
+        renderCustomerLines(g.lines);
+    }).join('');
+  }
+
   async function printPreview() {
     setBusy(true);
     try {
@@ -491,7 +528,7 @@
           (trade ? '｜' + trade : '') + '）</h3>' +
           '<table border=\"1\" cellpadding=\"4\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%\">' +
           '<tr><th>項目</th><th>單位</th><th>數量</th><th>金額</th></tr>' +
-          renderCustomerLines(z.lines || []) + '</table>';
+          renderCustomerLinesByTrade(z) + '</table>';
       }).join('');
       var t = print.totals || {};
       var f = print.fees_received || {};

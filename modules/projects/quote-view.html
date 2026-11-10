@@ -36,6 +36,7 @@
     table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
     th, td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); vertical-align: top; }
     tr.addon td:first-child { padding-left: 1.1rem; }
+    tr.trade-head td { background: #f4f7f9; font-size: 0.88rem; border-bottom-color: #c9d3de; }
     .hint { font-size: 0.82rem; color: var(--muted); }
     button {
       font: inherit; border: 0; border-radius: 0.45rem; padding: 0.5rem 0.85rem;
@@ -90,8 +91,25 @@
           return row + lineRows(ln.addons || [], true);
         }).join('');
       }
+      function linesByTrade(zone) {
+        var order = [];
+        var map = {};
+        var subMap = {};
+        (zone.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
+        (zone.lines || []).forEach(function (ln) {
+          var tab = String(ln.tab || '其他').trim() || '其他';
+          if (!map[tab]) { map[tab] = []; order.push(tab); }
+          map[tab].push(ln);
+        });
+        if (!order.length) return '<tr><td colspan="4">（無項目）</td></tr>';
+        return order.map(function (tab) {
+          return '<tr class="trade-head"><td colspan="4"><strong>' + esc(tab) +
+            '</strong> <span class="sub">小計 ' + money(subMap[tab]) + '</span></td></tr>' +
+            lineRows(map[tab]);
+        }).join('');
+      }
       var zones = (quote.zones || []).map(function (z) {
-        var rows = lineRows(z.lines || []) || '<tr><td colspan="4">（無項目）</td></tr>';
+        var rows = linesByTrade(z);
         var trade = (z.trade_groups || []).map(function (g) {
           return esc(g.tab) + ' ' + money(g.subtotal);
         }).join('／');

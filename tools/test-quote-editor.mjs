@@ -82,9 +82,13 @@ test('print-like assembly rejects forbidden tokens including unit_price', () => 
 test('designer console has 線上報價 tab and cost-guard print', () => {
   assert.match(designer, /data-tab="quote"/);
   assert.match(designer, /panelQuote/);
+  assert.match(designer, /data-tab="esignc"/);
+  assert.match(designer, /panelEsignc/);
   assert.match(designer, /quote-editor\.html/);
   assert.match(designer, /quoteEditorPrint/);
-  assert.match(designer, /cost_unit\|vendor_price/);
+  assert.match(designer, /cost_unit\|vendor_price\|"成本"\|"廠商價"\|"unit_price"/);
+  assert.doesNotMatch(designer, /<th>單價<\/th>/);
+  assert.match(designer, /quotePrintByTrade/);
 });
 
 test('editor and view pages wire sanitize and no customer unit price', () => {
@@ -95,6 +99,9 @@ test('editor and view pages wire sanitize and no customer unit price', () => {
   assert.match(editorHtml, /自填/);
   assert.match(viewHtml, /QuoteEditorSanitize/);
   assert.match(mainJs, /payloadContainsForbiddenToken/);
+  assert.match(mainJs, /groupLinesByTrade/);
+  assert.match(mainJs, /trade-head/);
+  assert.match(viewHtml, /linesByTrade|trade-head/);
   assert.doesNotMatch(viewHtml, /廠商價|成本單價/);
   assert.match(viewHtml, /金額/);
   assert.doesNotMatch(viewHtml, /<th>單價<\/th>/);

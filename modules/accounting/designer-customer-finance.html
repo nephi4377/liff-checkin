@@ -8,6 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=20261016-customer-menu"></script>
+  <script src="../projects/js/quote-editor-sanitize.js"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -460,27 +461,57 @@
           var res = await AccountingApi.quoteEditorPrint(session, pno);
           if (!res || !res.success) { showMsg((res && res.message) || '列印資料讀取失敗'); return; }
           var p = res.print || {};
+          if (typeof QuoteEditorSanitize !== 'undefined') {
+            p = QuoteEditorSanitize.toCustomerQuote(p);
+          }
           var raw = JSON.stringify(p);
-          if (/cost_unit|vendor_price|"成本"|"廠商價"/.test(raw)) {
-            showMsg('列印資料含成本／廠商價，已擋下');
+          if (/cost_unit|vendor_price|"成本"|"廠商價"|"unit_price"/.test(raw)) {
+            showMsg('列印資料含成本／廠商價／單價，已擋下');
             return;
           }
           var w = window.open('', '_blank');
           if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
-          var zones = (p.zones || []).map(function (z) {
-            var lines = (z.lines || []).map(function (ln) {
-              return '<tr><td>' + escapeHtml(ln.item) + '</td><td>' + escapeHtml(ln.unit) + '</td><td>' +
-                escapeHtml(String(ln.qty)) + '</td><td>' + escapeHtml(String(ln.unit_price)) + '</td><td>' +
-                escapeHtml(String(ln.amount)) + '</td></tr>';
+          function quotePrintLineRows(list, indent) {
+            return (list || []).map(function (ln) {
+              var note = ln.note ? '<div style="color:#667">' + escapeHtml(ln.note) + '</div>' : '';
+              var row = '<tr><td style="padding-left:' + (indent ? '18' : '4') + 'px">' +
+                escapeHtml(ln.item) + note + '</td><td>' + escapeHtml(ln.unit) + '</td><td>' +
+                escapeHtml(String(ln.qty)) + '</td><td>' + escapeHtml(String(ln.amount)) + '</td></tr>';
+              return row + quotePrintLineRows(ln.addons || [], true);
             }).join('');
-            return '<h3>' + escapeHtml(z.name) + '</h3><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%">' +
-              '<tr><th>項目</th><th>單位</th><th>數量</th><th>單價</th><th>金額</th></tr>' + lines + '</table>';
+          }
+          function quotePrintByTrade(zone) {
+            var order = [];
+            var map = {};
+            var subMap = {};
+            (zone.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
+            (zone.lines || []).forEach(function (ln) {
+              var tab = String(ln.tab || '其他').trim() || '其他';
+              if (!map[tab]) { map[tab] = []; order.push(tab); }
+              map[tab].push(ln);
+            });
+            if (!order.length) return '<tr><td colspan="4">（無項目）</td></tr>';
+            return order.map(function (tab) {
+              return '<tr><td colspan="4"><strong>' + escapeHtml(tab) + '</strong> 小計 ' +
+                escapeHtml(String(subMap[tab] != null ? subMap[tab] : '')) + '</td></tr>' +
+                quotePrintLineRows(map[tab]);
+            }).join('');
+          }
+          var zones = (p.zones || []).map(function (z) {
+            return '<h3>' + escapeHtml(z.name) + '（小計 ' + escapeHtml(String(z.zone_subtotal != null ? z.zone_subtotal : '')) +
+              '）</h3><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%">' +
+              '<tr><th>項目</th><th>單位</th><th>數量</th><th>金額</th></tr>' +
+              quotePrintByTrade(z) + '</table>';
           }).join('');
           var tot = p.totals || {};
+          var fees = p.fees_received || {};
           w.document.write('<html><head><title>報價列印</title></head><body style="font-family:sans-serif;padding:16px">' +
             '<h2>工程報價單</h2><div>案號 ' + escapeHtml(pno) + '</div>' + zones +
             '<p>未稅 ' + escapeHtml(String(tot.pretax || '')) + '｜稅 ' + escapeHtml(String(tot.tax || '')) +
-            '｜含稅 ' + escapeHtml(String(tot.with_tax || '')) + '</p></body></html>');
+            '｜含稅 ' + escapeHtml(String(tot.with_tax || '')) +
+            '<br/>已扣丈量／啟動／規劃 ' + escapeHtml(String(fees.measure || 0)) + '／' +
+            escapeHtml(String(fees.startup || 0)) + '／' + escapeHtml(String(fees.planning || 0)) +
+            '｜應付 ' + escapeHtml(String(tot.payable || '')) + '</p></body></html>');
           w.document.close();
           w.focus();
           w.print();
