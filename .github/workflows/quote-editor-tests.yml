@@ -1,0 +1,28 @@
+name: Quote editor tests
+
+on:
+  pull_request:
+    paths:
+      - 'modules/projects/quote-editor.html'
+      - 'modules/projects/quote-view.html'
+      - 'modules/projects/js/quote-editor-*.js'
+      - 'modules/accounting/designer-customer-finance.html'
+      - 'shared/js/accounting_api.js'
+      - 'tools/test-quote-editor.mjs'
+      - 'SPEC/QUOTE_EDITOR_3.md'
+      - '.github/workflows/quote-editor-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Quote editor node tests
+        run: node --test tools/test-quote-editor.mjs

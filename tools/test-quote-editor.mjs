@@ -19,6 +19,7 @@ const mainJs = readFileSync(join(root, 'modules/projects/js/quote-editor-main.js
 const localJs = readFileSync(join(root, 'modules/projects/js/quote-editor-local.js'), 'utf8');
 const accountingApi = readFileSync(join(root, 'shared/js/accounting_api.js'), 'utf8');
 const QuoteEditorLocal = require(join(root, 'modules/projects/js/quote-editor-local.js'));
+const QuoteEditorEntry = require(join(root, 'modules/projects/js/quote-editor-entry.js'));
 
 function resolveBackendQuoteJs() {
   const candidates = [
@@ -226,4 +227,174 @@ test('local fixture is gated to project 999 only', () => {
   assert.equal(sanitize.payloadContainsForbiddenToken(customer.quote), '');
   // 非 999：假資料 helper 仍可組 payload，但 canUseLocalFixture 在瀏覽器才依 URL 擋；此處鎖常數
   assert.equal(QuoteEditorLocal.fixtureStaffPayload('888').staff.project_allowed, false);
+});
+
+function quoteOpenAnchor(html) {
+  const m = html.match(/<a\b[^>]*>開啟報價編輯<\/a>/);
+  return m ? m[0] : '';
+}
+
+test('開啟報價編輯 stays on the same tab and does not put staff identity in the url', () => {
+  const anchor = quoteOpenAnchor(designer);
+  assert.ok(anchor, 'missing 開啟報價編輯 link');
+  assert.doesNotMatch(anchor, /target\s*=\s*["']_blank["']/);
+  assert.doesNotMatch(anchor, /noopener/);
+  assert.match(designer, /var editorHref = '\.\.\/projects\/quote-editor\.html\?project_no=' \+ encodeURIComponent\(pno\)/);
+  assert.doesNotMatch(designer, /hubQueryString\s*\(/);
+  assert.doesNotMatch(anchor, /[?&](uid|name|permission|hub_liff_id)=/);
+  const material = designer.match(/<a\b[^>]*>開啟選材專頁/);
+  assert.ok(material);
+  assert.doesNotMatch(material[0], /target\s*=\s*["']_blank["']/);
+});
+
+test('other staff _blank links in the finance page are unchanged', () => {
+  assert.match(designer, /customer-finance-portal\.html#staff_preview=1" target="_blank" rel="noopener">預覽客戶畫面/);
+  assert.match(designer, /customer-richmenu-preview\.html" target="_blank" rel="noopener">Rich Menu 預覽/);
+  assert.match(designer, /target="_blank" rel="noopener">以客戶畫面預覽此案/);
+  assert.match(designer, /esign-notice\.html\?project_no=' \+ encodeURIComponent\(pno\) \+ '&staff_preview=1" target="_blank" rel="noopener"/);
+  assert.match(designer, /esign-contract\.html\?project_no=' \+ encodeURIComponent\(pno\) \+ '&staff_preview=1" target="_blank" rel="noopener"/);
+  assert.match(designer, /esign-contract\.html\?project_no=' \+ encodeURIComponent\(pno\) \+ '&staff=1" target="_blank" rel="noopener"[^>]*>簽乙方/);
+  assert.match(designer, /target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽客戶選材畫面/);
+});
+
+test('quote editor loads its own entry guard before shared login, without editing initSession', () => {
+  const opAt = editorHtml.indexOf('/shared/js/operator_context.js');
+  const apiAt = editorHtml.indexOf('/shared/js/accounting_api.js');
+  const entryAt = editorHtml.indexOf('/modules/projects/js/quote-editor-entry.js');
+  assert.ok(opAt >= 0 && apiAt > opAt && entryAt > apiAt);
+  assert.match(mainJs, /AccountingApi\.initSession\(\{ minPermission: 2 \}\)/);
+  assert.doesNotMatch(accountingApi, /請從後台『設計師客戶財務/);
+  assert.match(accountingApi, /initSession: async function \(opts\)/);
+  assert.match(accountingApi, /liff\.login\(\{ redirectUri: window\.location\.href \}\)/);
+});
+
+test('entry blocks line login only when this tab has no staff identity', () => {
+  assert.equal(QuoteEditorEntry.OPEN_FROM_FINANCE_MSG, '請從後台『設計師客戶財務 → 線上報價』開啟');
+  assert.equal(QuoteEditorEntry.shouldBlockLineLogin({}), true);
+  assert.equal(QuoteEditorEntry.shouldBlockLineLogin({ hasOperator: false, inLiff: false, inHub: false }), true);
+  assert.equal(QuoteEditorEntry.shouldBlockLineLogin({ hasOperator: true }), false);
+  assert.equal(QuoteEditorEntry.shouldBlockLineLogin({ inLiff: true }), false);
+  assert.equal(QuoteEditorEntry.shouldBlockLineLogin({ inHub: true }), false);
+  assert.equal(QuoteEditorEntry.hasOperatorUserId(null), false);
+  assert.equal(QuoteEditorEntry.hasOperatorUserId({ userId: '  ' }), false);
+  assert.equal(QuoteEditorEntry.hasOperatorUserId({ userId: 'Uabc' }), true);
+  const href = QuoteEditorEntry.financePageHref('999');
+  assert.equal(href, '../accounting/designer-customer-finance.html?project_no=999');
+  assert.doesNotMatch(href, /uid=|name=|permission=|hub_liff/);
+  assert.equal(QuoteEditorEntry.financePageHref(''), '../accounting/designer-customer-finance.html');
+  assert.equal(
+    QuoteEditorEntry.financePageHref('A B'),
+    '../accounting/designer-customer-finance.html?project_no=' + encodeURIComponent('A B')
+  );
+});
+
+function fakeEntryWindow(overrides) {
+  const nodes = {};
+  const parent = {
+    insertBefore(node) {
+      if (node && node.id) nodes[node.id] = node;
+    }
+  };
+  nodes.statusLine = { textContent: '', className: '', parentNode: parent, nextSibling: null };
+  nodes.headerSub = { textContent: '' };
+  const win = {
+    AccountingApi: {
+      initSession: async function () {
+        throw new Error('liff.login should not run');
+      }
+    },
+    OperatorContext: { read: () => null },
+    navigator: { userAgent: 'Mozilla/5.0' },
+    liff: { isInClient: () => false },
+    location: { search: '?project_no=999' },
+    document: {
+      getElementById(id) { return nodes[id] || null; },
+      createElement() {
+        const el = {
+          id: '',
+          className: '',
+          href: '',
+          textContent: '',
+          style: {},
+          children: [],
+          appendChild(child) { this.children.push(child); }
+        };
+        return el;
+      },
+      querySelectorAll() {
+        if (!this._cards) this._cards = [{ hidden: false, style: {} }, { hidden: false, style: {} }];
+        return this._cards;
+      }
+    }
+  };
+  win.parent = win;
+  win.top = win;
+  return Object.assign(win, overrides || {});
+}
+
+test('direct open does not call shared login and shows the finance link', async () => {
+  const win = fakeEntryWindow();
+  assert.equal(QuoteEditorEntry.installQuoteEditorEntryGuard(win), true);
+  const session = await win.AccountingApi.initSession({ minPermission: 2 });
+  assert.equal(session, null);
+  assert.equal(win.document.getElementById('statusLine').textContent, QuoteEditorEntry.OPEN_FROM_FINANCE_MSG);
+  assert.match(win.document.getElementById('headerSub').textContent, /案號 999/);
+  const linkHost = win.document.getElementById('backFinanceLink');
+  assert.ok(linkHost);
+  assert.equal(linkHost.children[0].textContent, '回設計師客戶財務');
+  assert.equal(linkHost.children[0].href, '../accounting/designer-customer-finance.html?project_no=999');
+  const hiddenCards = win.document.querySelectorAll('.wrap > .card');
+  assert.equal(hiddenCards[0].style.display, 'none');
+  assert.equal(hiddenCards[1].style.display, 'none');
+  assert.equal(QuoteEditorEntry.installQuoteEditorEntryGuard(win), false);
+});
+
+test('existing operator still reaches shared login', async () => {
+  let seen = null;
+  const win = fakeEntryWindow({
+    OperatorContext: { read: () => ({ userId: 'Ustaff', source: 'hub_iframe' }) },
+    AccountingApi: {
+      initSession: async function (opts) {
+        seen = opts;
+        return { auth: { user_id: 'Ustaff', permission: 5 } };
+      }
+    }
+  });
+  QuoteEditorEntry.installQuoteEditorEntryGuard(win);
+  const session = await win.AccountingApi.initSession({ minPermission: 2 });
+  assert.equal(seen.minPermission, 2);
+  assert.equal(session.auth.user_id, 'Ustaff');
+  assert.equal(win.document.getElementById('backFinanceLink'), null);
+});
+
+test('line app or hub frame still reaches shared login without a stored operator', async () => {
+  let calls = 0;
+  const win = fakeEntryWindow({
+    navigator: { userAgent: 'Mozilla/5.0 Line/12.0' },
+    AccountingApi: {
+      initSession: async function () {
+        calls += 1;
+        return { auth: { user_id: 'Uline' } };
+      }
+    }
+  });
+  QuoteEditorEntry.installQuoteEditorEntryGuard(win);
+  const session = await win.AccountingApi.initSession({});
+  assert.equal(calls, 1);
+  assert.equal(session.auth.user_id, 'Uline');
+
+  let hubCalls = 0;
+  const hub = fakeEntryWindow({
+    AccountingApi: {
+      initSession: async function () {
+        hubCalls += 1;
+        return { fromHub: true };
+      }
+    }
+  });
+  hub.parent = {};
+  QuoteEditorEntry.installQuoteEditorEntryGuard(hub);
+  const hubSession = await hub.AccountingApi.initSession({});
+  assert.equal(hubCalls, 1);
+  assert.equal(hubSession.fromHub, true);
 });
