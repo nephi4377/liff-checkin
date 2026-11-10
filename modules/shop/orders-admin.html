@@ -51,6 +51,7 @@
   <script type="module">
     import { CONFIG } from '../../shared/js/config.js';
     window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
   </script>
   <script src="../../shared/js/shop_api.js"></script>
   <script>
@@ -58,15 +59,21 @@
       return 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
     }
     function stageOf(o) {
-      if (o.stage) return o.stage;
-      if (o.status === 'paid' || o.established) return 'established';
-      if (o.quoted || o.status === 'awaiting_transfer') return 'awaiting_transfer';
+      if (o.status === 'paid' || o.established || o.stage === 'established') return 'established';
+      if (o.quoted || o.status === 'awaiting_transfer' || o.stage === 'awaiting_transfer') {
+        return 'awaiting_transfer';
+      }
+      // Woo 可能回 processing 但未標記已付款／未報價 → 仍當待報價
       return 'awaiting_quote';
     }
     function stageLabel(stage) {
       if (stage === 'established') return '已成立（已付款）';
       if (stage === 'awaiting_transfer') return '待匯款（未成立）';
       return '待報價（未成立）';
+    }
+    function whenShopReady(fn) {
+      if (window.CONFIG) fn();
+      else window.addEventListener('shop-config-ready', fn, { once: true });
     }
     function render() {
       var status = document.getElementById('status');
@@ -161,7 +168,7 @@
         });
       });
     }
-    render();
+    whenShopReady(render);
   </script>
 </body>
 </html>
