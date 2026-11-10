@@ -706,6 +706,9 @@
                     data = await requestOnce();
                 }
                 hideScheduleError();
+                if (data.message) {
+                    showScheduleError(String(data.message), true);
+                }
 
                 // 【v24.0 核心修正】宣告並初始化 newScheduleData 和 newHolidays 變數。
                 // 這是解決 "newScheduleData is not defined" 錯誤的關鍵。
@@ -1294,22 +1297,28 @@
         }
         /**
          * [v34.0 核心重構] 專門處理月份切換的函式，避免重新載入員工資料。
+         * 固定切到「目標月 1 號」，避免月底 setMonth 溢到下下月；
+         * 空班表快取不當成功（曾導致前月看起來「讀不到」卻不再重抓）。
          */
         function handleMonthChange(direction) {
             loadingSpinner.style.display = 'block';
             calendarWrapper.style.display = 'none';
-            currentDate.setMonth(currentDate.getMonth() + direction);
+            const y = currentDate.getFullYear();
+            const m = currentDate.getMonth() + direction;
+            currentDate = new Date(y, m, 1);
             updateMonthDisplay();
 
             const cacheKey = getCacheKeyForDate(currentDate);
-            // 如果新月份的資料已存在於快取中，直接渲染
-            if (scheduleCache[cacheKey]) {
+            const cached = scheduleCache[cacheKey];
+            const hasUsefulCache = !!(cached && cached.schedule && Object.keys(cached.schedule).length > 0);
+            if (hasUsefulCache) {
                 console.log(`從快取渲染 ${cacheKey} 的班表...`);
                 renderCalendar();
+                fetchScheduleData(true); // 背景再對一次，避免舊空／舊快取
             } else {
-                // 如果不存在，才向後端請求該月份的資料
-                console.log(`快取中無 ${cacheKey} 的資料，向後端請求...`);
-                fetchScheduleData(); // 此函式完成後會自動渲染日曆
+                if (scheduleCache[cacheKey]) delete scheduleCache[cacheKey];
+                console.log(`快取中無可用的 ${cacheKey} 班表，向後端請求...`);
+                fetchScheduleData(false);
             }
         }
 
