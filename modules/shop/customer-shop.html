@@ -29,6 +29,7 @@
   <script type="module">
     import { CONFIG } from '../../shared/js/config.js';
     window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
   </script>
   <script src="../../shared/js/shop_api.js"></script>
   <script>

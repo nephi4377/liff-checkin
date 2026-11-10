@@ -51,6 +51,7 @@
   <script type="module">
     import { CONFIG } from '../../shared/js/config.js';
     window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
   </script>
   <script src="../../shared/js/shop_api.js"></script>
   <script>
@@ -67,6 +68,10 @@
       if (stage === 'established') return '已成立（已付款）';
       if (stage === 'awaiting_transfer') return '待匯款（未成立）';
       return '待報價（未成立）';
+    }
+    function whenShopReady(fn) {
+      if (window.CONFIG) fn();
+      else window.addEventListener('shop-config-ready', fn, { once: true });
     }
     function render() {
       var status = document.getElementById('status');
@@ -161,7 +166,7 @@
         });
       });
     }
-    render();
+    whenShopReady(render);
   </script>
 </body>
 </html>

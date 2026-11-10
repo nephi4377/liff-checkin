@@ -25,11 +25,17 @@
   <script type="module">
     import { CONFIG } from '../../shared/js/config.js';
     window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
   </script>
   <script src="../../shared/js/shop_api.js"></script>
   <script>
+    function whenShopReady(fn) {
+      if (window.CONFIG) fn();
+      else window.addEventListener('shop-config-ready', fn, { once: true });
+    }
     var params = new URLSearchParams(location.search);
     var orderNo = params.get('order') || 'TXS-10001';
+    whenShopReady(function () {
     ShopApi.getOrder({}, orderNo).then(function (res) {
       var box = document.getElementById('box');
       if (!res.success) { box.textContent = res.message || '找不到訂單'; return; }
@@ -49,6 +55,7 @@
       document.getElementById('btnPay').onclick = function () {
         alert('示意：此處接 LINE 內金流。付完請等候店員標記已付款（訂單編號 ' + o.order_number + '）。');
       };
+    });
     });
   </script>
 </body>
