@@ -243,14 +243,46 @@
     setStatus(okMsg || '已更新', 'ok');
   }
 
+  function ensureAccountingApi_() {
+    if (typeof AccountingApi === 'undefined') {
+      throw new Error('AccountingApi 未載入：請從 repo 根目錄 serve，並確認 /shared/js/accounting_api.js');
+    }
+  }
+
+  function localHelper_() {
+    return (typeof QuoteEditorLocal !== 'undefined') ? QuoteEditorLocal : null;
+  }
+
   async function refresh() {
     setStatus('更新中…');
     setBusy(true);
     try {
-      var res = await AccountingApi.quoteEditorGet(session, projectNo);
+      ensureAccountingApi_();
+      var local = localHelper_();
+      var res = null;
+      var usedFixture = false;
+      if (local && local.canUseLocalFixture(projectNo) && qs('fixture') === '1') {
+        res = local.fixtureStaffPayload(projectNo);
+        usedFixture = true;
+      } else {
+        try {
+          res = await AccountingApi.quoteEditorGet(session, projectNo);
+        } catch (eApi) {
+          if (local && local.canUseLocalFixture(projectNo)) {
+            res = local.fixtureStaffPayload(projectNo);
+            usedFixture = true;
+          } else {
+            throw eApi;
+          }
+        }
+        if ((!res || !res.success) && local && local.canUseLocalFixture(projectNo)) {
+          res = local.fixtureStaffPayload(projectNo);
+          usedFixture = true;
+        }
+      }
       if (!res || !res.success) throw new Error((res && res.message) || '載入失敗');
-      applyStaff(res, '已更新');
-      await loadTradeTabs();
+      applyStaff(res, usedFixture ? '已載入本機假資料（測案 999；後端未部署時）' : '已更新');
+      await loadTradeTabs(usedFixture);
     } catch (e) {
       setStatus((e && e.message) || '載入失敗', 'err');
     } finally {
@@ -258,11 +290,25 @@
     }
   }
 
-  async function loadTradeTabs() {
+  async function loadTradeTabs(preferFixture) {
     var sel = $('tradeSelect');
     if (!sel) return;
     try {
-      var res = await AccountingApi.quoteEditorCatalog(session, projectNo, {});
+      var local = localHelper_();
+      var res = null;
+      if (preferFixture && local && local.canUseLocalFixture(projectNo)) {
+        res = local.fixtureCatalogPayload();
+      } else {
+        try {
+          res = await AccountingApi.quoteEditorCatalog(session, projectNo, {});
+        } catch (eCat) {
+          if (local && local.canUseLocalFixture(projectNo)) res = local.fixtureCatalogPayload();
+          else return;
+        }
+        if ((!res || !res.success) && local && local.canUseLocalFixture(projectNo)) {
+          res = local.fixtureCatalogPayload();
+        }
+      }
       if (!res || !res.success) return;
       tradeTabs = res.tabs || [];
       var prev = sel.value || '';
@@ -604,7 +650,15 @@
     }
     $('headerSub').textContent = '案號 ' + projectNo + '｜登入中…';
     try {
-      session = await AccountingApi.initSession({ minPermission: 2 });
+      ensureAccountingApi_();
+      var local = localHelper_();
+      if (local && local.isLocalStaffPreview()) {
+        session = local.buildLocalStaffSession();
+        $('headerSub').textContent = '案號 ' + projectNo + '｜本機員工預覽';
+      } else {
+        session = await AccountingApi.initSession({ minPermission: 2 });
+      }
+      if (!session) return;
       await refresh();
     } catch (e) {
       setStatus((e && e.message) || '登入失敗', 'err');

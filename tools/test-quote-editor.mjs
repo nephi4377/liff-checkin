@@ -16,7 +16,9 @@ const designer = readFileSync(join(root, 'modules/accounting/designer-customer-f
 const editorHtml = readFileSync(join(root, 'modules/projects/quote-editor.html'), 'utf8');
 const viewHtml = readFileSync(join(root, 'modules/projects/quote-view.html'), 'utf8');
 const mainJs = readFileSync(join(root, 'modules/projects/js/quote-editor-main.js'), 'utf8');
+const localJs = readFileSync(join(root, 'modules/projects/js/quote-editor-local.js'), 'utf8');
 const accountingApi = readFileSync(join(root, 'shared/js/accounting_api.js'), 'utf8');
+const QuoteEditorLocal = require(join(root, 'modules/projects/js/quote-editor-local.js'));
 
 function resolveBackendQuoteJs() {
   const candidates = [
@@ -195,4 +197,33 @@ test('backend QuoteEditor.js has howard fields when sibling mounted', () => {
   assert.match(src, /特殊五金自填/);
   assert.match(src, /qeEnrichZoneCustomer_/);
   assert.match(src, /trade_groups/);
+  assert.match(src, /return \['999'\]/);
+});
+
+test('editor/view load AccountingApi via absolute path; never classic-load ES config.js', () => {
+  assert.match(editorHtml, /\/shared\/js\/accounting_api\.js/);
+  assert.match(viewHtml, /\/shared\/js\/accounting_api\.js/);
+  assert.match(editorHtml, /quote-editor-local\.js/);
+  assert.match(viewHtml, /quote-editor-local\.js/);
+  assert.doesNotMatch(editorHtml, /script src=["'][^"']*shared\/js\/config\.js/);
+  assert.doesNotMatch(viewHtml, /script src=["'][^"']*shared\/js\/config\.js/);
+  assert.match(mainJs, /AccountingApi 未載入/);
+  assert.match(mainJs, /isLocalStaffPreview/);
+  assert.match(viewHtml, /isLocalStaffPreview|buildLocalCustomerSession/);
+});
+
+test('local fixture is gated to project 999 only', () => {
+  assert.match(localJs, /TEST_PROJECT = '999'/);
+  assert.equal(QuoteEditorLocal.TEST_PROJECT, '999');
+  const staff = QuoteEditorLocal.fixtureStaffPayload('999');
+  assert.equal(staff.success, true);
+  assert.equal(staff.staff.quote.project_no, '999');
+  assert.equal(staff.staff.feature_enabled, false);
+  assert.equal(staff.staff.project_allowed, true);
+  const customer = QuoteEditorLocal.fixtureCustomerPayload('999');
+  assert.equal(customer.success, true);
+  assert.equal('unit_price' in (customer.quote.zones[0].lines[0] || {}), false);
+  assert.equal(sanitize.payloadContainsForbiddenToken(customer.quote), '');
+  // 非 999：假資料 helper 仍可組 payload，但 canUseLocalFixture 在瀏覽器才依 URL 擋；此處鎖常數
+  assert.equal(QuoteEditorLocal.fixtureStaffPayload('888').staff.project_allowed, false);
 });

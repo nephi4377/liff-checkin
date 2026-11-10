@@ -8,9 +8,10 @@
   <script>
     var QUOTE_VIEW_LIFF_ID = '2007974938-d2y1uA1G';
   </script>
-  <script src="../../shared/js/config.js"></script>
-  <script src="../../shared/js/accounting_api.js"></script>
-  <script src="./js/quote-editor-sanitize.js"></script>
+  <!-- 勿載 shared/js/config.js（ES module）；AccountingApi 已內建 GAS URL -->
+  <script src="/shared/js/accounting_api.js?v=quote-editor-3-api"></script>
+  <script src="/modules/projects/js/quote-editor-sanitize.js?v=quote-editor-3"></script>
+  <script src="/modules/projects/js/quote-editor-local.js?v=quote-editor-3"></script>
   <style>
     :root {
       --ink: #1c2430;
@@ -65,13 +66,21 @@
       return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
     var projectNo = qs('project_no') || qs('projectNo');
-    var staffPreview = qs('staff_preview') === '1';
+    var staffPreview = qs('staff_preview') === '1' || qs('staff_preview') === 'true' || qs('dev') === '1';
     var session = null;
     var quote = null;
     var statusEl = document.getElementById('statusLine');
     function setStatus(t, err) {
       statusEl.textContent = t || '';
       statusEl.className = 'status' + (err ? ' err' : '');
+    }
+    function ensureAccountingApi_() {
+      if (typeof AccountingApi === 'undefined') {
+        throw new Error('AccountingApi 未載入：請從 repo 根目錄 serve，並確認 /shared/js/accounting_api.js');
+      }
+    }
+    function localHelper_() {
+      return (typeof QuoteEditorLocal !== 'undefined') ? QuoteEditorLocal : null;
     }
     function render() {
       var box = document.getElementById('content');
@@ -139,14 +148,40 @@
       }
       setStatus('更新中…');
       try {
-        session = await AccountingApi.initCustomerPortalSession({
-          liffId: QUOTE_VIEW_LIFF_ID,
-          projectNo: projectNo
-        });
+        ensureAccountingApi_();
+        var local = localHelper_();
+        var usedFixture = false;
+        if (local && local.isLocalStaffPreview()) {
+          session = local.buildLocalCustomerSession();
+        } else {
+          session = await AccountingApi.initCustomerPortalSession({
+            liffId: QUOTE_VIEW_LIFF_ID,
+            projectNo: projectNo
+          });
+        }
         if (!session) throw new Error('登入失敗');
-        var res = await AccountingApi.quoteEditorCustomerView(session, projectNo, {
-          staffPreview: staffPreview
-        });
+        var res = null;
+        if (local && local.canUseLocalFixture(projectNo) && qs('fixture') === '1') {
+          res = local.fixtureCustomerPayload(projectNo);
+          usedFixture = true;
+        } else {
+          try {
+            res = await AccountingApi.quoteEditorCustomerView(session, projectNo, {
+              staffPreview: staffPreview
+            });
+          } catch (eApi) {
+            if (local && local.canUseLocalFixture(projectNo)) {
+              res = local.fixtureCustomerPayload(projectNo);
+              usedFixture = true;
+            } else {
+              throw eApi;
+            }
+          }
+          if ((!res || !res.success) && local && local.canUseLocalFixture(projectNo)) {
+            res = local.fixtureCustomerPayload(projectNo);
+            usedFixture = true;
+          }
+        }
         if (!res || !res.success) throw new Error((res && res.message) || '讀取失敗');
         quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
         quote.can_confirm = !!(res.quote && res.quote.can_confirm);
@@ -155,7 +190,7 @@
         var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
         if (leaked) throw new Error('資料含不該出現的欄位，已擋下');
         render();
-        setStatus('');
+        setStatus(usedFixture ? '本機假資料（測案 999；後端未部署時）' : '');
       } catch (e) {
         setStatus((e && e.message) || '載入失敗', true);
       }
