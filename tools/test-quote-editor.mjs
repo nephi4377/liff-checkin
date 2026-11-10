@@ -95,10 +95,9 @@ test('designer console has 線上報價 tab and cost-guard print', () => {
 
 test('editor and view pages wire sanitize and no customer unit price', () => {
   assert.match(editorHtml, /quote-editor-sanitize\.js/);
+  assert.match(editorHtml, /quote-editor-grid\.js/);
   assert.match(editorHtml, /成本與廠商價不會出現/);
-  assert.match(editorHtml, /tradeSelect/);
-  assert.match(editorHtml, /btnAddCustom/);
-  assert.match(editorHtml, /自填/);
+  assert.match(editorHtml, /客人頁也不顯示單價/);
   assert.match(viewHtml, /QuoteEditorSanitize/);
   assert.match(mainJs, /payloadContainsForbiddenToken/);
   assert.match(mainJs, /groupLinesByTrade/);
@@ -121,12 +120,14 @@ test('accounting_api exposes quote_editor actions including update and custom', 
   assert.match(accountingApi, /quote_editor_print/);
 });
 
-test('editor hangs catalog addons under cabinet via 掛附加', () => {
-  assert.match(mainJs, /btn-addon-hang/);
-  assert.match(mainJs, /likely_addon|data-likely-addon/);
-  assert.match(mainJs, /掛附加/);
+test('editor sheet hangs addons under a cabinet', () => {
+  const gridSrc = readFileSync(join(root, 'modules/projects/js/quote-editor-grid.js'), 'utf8');
+  const uiSrc = readFileSync(join(root, 'modules/projects/js/quote-editor-grid-ui.js'), 'utf8');
+  assert.match(gridSrc, /addAddonRow/);
+  assert.match(gridSrc, /looksLikeAddon/);
+  assert.match(uiSrc, /＋加購/);
+  assert.match(editorHtml, /抽屜/);
   assert.match(mainJs, /resolveAddonParentId/);
-  assert.match(editorHtml, /掛附加|抽屜／拉籃/);
 });
 
 test('editor page has fees, versions, trade, custom fill controls', () => {
@@ -138,10 +139,9 @@ test('editor page has fees, versions, trade, custom fill controls', () => {
   assert.match(mainJs, /quoteEditorSetFees/);
   assert.match(mainJs, /quoteEditorSend/);
   assert.match(mainJs, /quoteEditorUpdateLine/);
-  assert.match(mainJs, /btn-addon-custom/);
-  assert.match(mainJs, /特殊五金自填/);
-  assert.match(mainJs, /tradeSelect/);
+  assert.match(readFileSync(join(root, 'modules/projects/js/quote-editor-grid.js'), 'utf8'), /特殊五金自填/);
   assert.match(mainJs, /line_subtotal/);
+  assert.doesNotMatch(editorHtml, /QUOTE_EDITOR_ENABLED/);
 });
 
 test('sanitize rounds money to integer yuan', () => {

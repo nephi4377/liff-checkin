@@ -127,71 +127,134 @@
 
   function renderZones() {
     var box = $('zonesBox');
+    if (!box) return;
     var sel = $('zoneSelect');
-    if (!box || !sel) return;
     var zones = (staffView && staffView.quote && staffView.quote.zones) || [];
-    var prevZone = sel.value || '';
-    sel.innerHTML = zones.map(function (z) {
-      return '<option value=\"' + String(z.zone_id).replace(/\"/g, '') + '\">' + escapeHtml(z.name) + '</option>';
-    }).join('') || '<option value=\"\">（尚未新增空間）</option>';
-    if (prevZone) {
-      var still = zones.some(function (z) { return String(z.zone_id) === String(prevZone); });
-      if (still) sel.value = prevZone;
+    if (sel) {
+      var prevZone = sel.value || '';
+      sel.innerHTML = zones.map(function (z) {
+        return '<option value=\"' + String(z.zone_id).replace(/\"/g, '') + '\">' + escapeHtml(z.name) + '</option>';
+      }).join('') || '<option value=\"\">（尚未新增空間）</option>';
+      if (prevZone) {
+        var still = zones.some(function (z) { return String(z.zone_id) === String(prevZone); });
+        if (still) sel.value = prevZone;
+      }
     }
-    fillCustomParentOptions(sel.value);
+    if ($('customParent')) fillCustomParentOptions(sel && sel.value);
 
+    if (window.QuoteEditorGridUi) QuoteEditorGridUi.clearTotals();
     if (!zones.length) {
       box.innerHTML = '<div class=\"card hint\">尚未新增空間。先在上方加入一個空間（例如客廳）。</div>';
       return;
     }
     box.innerHTML = zones.map(function (z) {
-      var tradeBits = (z.trade_groups || []).map(function (g) {
-        return escapeHtml(g.tab) + ' ' + money(g.subtotal);
-      }).join('／') || '—';
-      var groups = groupLinesByTrade(z.lines || []);
-      var subMap = {};
-      (z.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
-      var rows = '';
-      if (!groups.length) {
-        rows = '<tr><td colspan=\"5\" class=\"hint\">尚無工項</td></tr>';
-      } else {
-        groups.forEach(function (g) {
-          rows += '<tr class=\"trade-head\"><td colspan=\"5\"><strong>' + escapeHtml(g.tab) +
-            '</strong> <span class=\"hint\">工種小計 ' + money(subMap[g.tab]) + '</span></td></tr>';
-          g.lines.forEach(function (ln) {
-            rows += lineEditRow(ln, false);
-            (ln.addons || []).forEach(function (ad) {
-              rows += lineEditRow(ad, true);
-            });
-          });
-        });
-      }
-      return '<div class=\"card\"><div class=\"zone-title\">' + escapeHtml(z.name) +
-        ' <span class=\"hint\">空間小計 ' + money(z.zone_subtotal) +
-        '｜工種 ' + tradeBits + '</span></div>' +
-        '<table><thead><tr><th>項目／說明</th><th>單位</th><th>數量</th><th>單價（員工）</th><th>金額</th></tr></thead><tbody>' +
-        rows + '</tbody></table></div>';
+      var id = escapeHtml(z.zone_id);
+      return '<div class=\"card\" data-zone-card=\"' + id + '\">' +
+        '<div class=\"zone-title\">' + escapeHtml(z.name) +
+        ' <span class=\"hint\" data-zone-sub=\"' + id + '\"></span></div>' +
+        '<div class=\"sheet-host\" data-zone-host=\"' + id + '\"></div></div>';
     }).join('');
+    if (!window.QuoteEditorGridUi) return;
+    zones.forEach(function (z) {
+      var host = box.querySelector('[data-zone-host=\"' + String(z.zone_id).replace(/\"/g, '') + '\"]');
+      if (host) QuoteEditorGridUi.mount(host, z, gridContext());
+    });
+  }
 
-    Array.prototype.forEach.call(box.querySelectorAll('.btn-save-line'), function (btn) {
-      btn.onclick = function () { saveLineEdits(btn.getAttribute('data-id')); };
-    });
-    Array.prototype.forEach.call(box.querySelectorAll('.btn-addon-hang'), function (btn) {
-      btn.onclick = function () {
-        addonParentId = btn.getAttribute('data-id') || '';
-        fillCustomParentOptions();
-        if ($('customParent')) $('customParent').value = addonParentId;
-        setStatus('已選櫃子：接著搜尋抽屜／拉籃等價目並點選加入', 'ok');
-      };
-    });
-    Array.prototype.forEach.call(box.querySelectorAll('.btn-addon-custom'), function (btn) {
-      btn.onclick = function () {
-        addonParentId = btn.getAttribute('data-id') || '';
-        if ($('customBox')) $('customBox').hidden = false;
-        fillCustomParentOptions();
-        if ($('customParent')) $('customParent').value = addonParentId;
-        setStatus('請填特殊五金自填後按「儲存自填」', 'ok');
-      };
+  function readFeeInputs() {
+    return {
+      measure: ($('feeMeasure') && $('feeMeasure').value) || 0,
+      startup: ($('feeStartup') && $('feeStartup').value) || 0,
+      planning: ($('feePlanning') && $('feePlanning').value) || 0
+    };
+  }
+
+  function showLiveTotals(totals) {
+    var el = $('totalsBox');
+    if (!el || !totals) return;
+    var fees = readFeeInputs();
+    var handoff = (staffView && staffView.contract_handoff) || {};
+    var editable = !(staffView && staffView.editable === false);
+    el.innerHTML =
+      '未稅合計：' + money(totals.pretax) + '<br/>' +
+      '稅（5%）：' + money(totals.tax) + '<br/>' +
+      '含稅總計：' + money(totals.with_tax) + '<br/>' +
+      '丈量費 ' + money(fees.measure) + '／啟動金 ' + money(fees.startup) + '／規劃費 ' + money(fees.planning) + '<br/>' +
+      '已扣合計：' + money(totals.deducted) + '<br/>' +
+      '應付：' + money(totals.payable) + '<br/>' +
+      '<span class=\"hint\">合約交接 stub 總價：' + money(handoff.total_with_tax) +
+      '｜目前' + (editable ? '可編輯' : '已鎖定（請開新版本）') + '</span>';
+  }
+
+  async function saveGridOp(op) {
+    if (!op || !op.payload) return {};
+    if (op.type === 'add') {
+      var res = await AccountingApi.quoteEditorAddLine(session, {
+        project_no: projectNo,
+        zone_id: op.zone_id,
+        catalog_key: op.payload.catalog_key || '',
+        custom: !!op.payload.custom,
+        item: op.payload.item,
+        note: op.payload.note,
+        unit: op.payload.unit,
+        tab: op.payload.tab,
+        qty: op.payload.qty,
+        unit_price: op.payload.unit_price,
+        parent_line_id: op.payload.parent_line_id || '',
+        price_override_reason: op.payload.price_override_reason || ''
+      });
+      if (!res || !res.success) throw new Error((res && res.message) || '儲存失敗');
+      return { line_id: res.line && res.line.line_id };
+    }
+    if (op.type === 'update') {
+      var res2 = await AccountingApi.quoteEditorUpdateLine(session, {
+        project_no: projectNo,
+        line_id: op.line_id,
+        item: op.payload.item,
+        note: op.payload.note,
+        unit: op.payload.unit,
+        tab: op.payload.tab,
+        qty: op.payload.qty,
+        unit_price: op.payload.unit_price,
+        price_override_reason: op.payload.price_override_reason || ''
+      });
+      if (!res2 || !res2.success) throw new Error((res2 && res2.message) || '儲存失敗');
+      return { line_id: op.line_id };
+    }
+    return {};
+  }
+
+  function gridContext() {
+    return {
+      trades: tradeTabs.slice(),
+      editable: !(staffView && staffView.editable === false),
+      localOnly: !!(staffView && staffView.local_fixture),
+      projectNo: projectNo,
+      version: (staffView && staffView.quote && staffView.quote.version) || 1,
+      getFees: readFeeInputs,
+      onStatus: function (msg, kind) { if (msg) setStatus(msg, kind); },
+      onTotals: showLiveTotals,
+      saveOp: saveGridOp
+    };
+  }
+
+  var feeTimer = null;
+  function watchFees() {
+    ['feeMeasure', 'feeStartup', 'feePlanning'].forEach(function (id) {
+      var el = $(id);
+      if (!el || el._qeWatch) return;
+      el._qeWatch = true;
+      el.addEventListener('input', function () {
+        if (window.QuoteEditorGridUi) QuoteEditorGridUi.recalcFees();
+        if (feeTimer) clearTimeout(feeTimer);
+        feeTimer = setTimeout(function () {
+          if (staffView && staffView.local_fixture) {
+            setStatus('已自動暫存', 'ok');
+            return;
+          }
+          saveFees(true);
+        }, 700);
+      });
     });
   }
 
@@ -292,7 +355,6 @@
 
   async function loadTradeTabs(preferFixture) {
     var sel = $('tradeSelect');
-    if (!sel) return;
     try {
       var local = localHelper_();
       var res = null;
@@ -311,11 +373,37 @@
       }
       if (!res || !res.success) return;
       tradeTabs = res.tabs || [];
-      var prev = sel.value || '';
-      sel.innerHTML = '<option value=\"\">先選工種…</option>' + tradeTabs.map(function (t) {
-        return '<option value=\"' + escapeHtml(t) + '\">' + escapeHtml(t) + '</option>';
-      }).join('');
-      if (prev) sel.value = prev;
+      if (sel) {
+        var prev = sel.value || '';
+        sel.innerHTML = '<option value=\"\">先選工種…</option>' + tradeTabs.map(function (t) {
+          return '<option value=\"' + escapeHtml(t) + '\">' + escapeHtml(t) + '</option>';
+        }).join('');
+        if (prev) sel.value = prev;
+      }
+      if (window.QuoteEditorGridUi) QuoteEditorGridUi.setTrades(tradeTabs);
+      var items = [];
+      var useFixtureItems = !!(preferFixture || (staffView && staffView.local_fixture));
+      if (useFixtureItems && local && local.fixtureCatalogItems) {
+        items = local.fixtureCatalogItems();
+      } else if (tradeTabs.length) {
+        var lists = await Promise.all(tradeTabs.map(function (tab) {
+          return AccountingApi.quoteEditorCatalog(session, projectNo, { tab: tab }).catch(function () { return null; });
+        }));
+        lists.forEach(function (one) {
+          if (one && one.success && one.items) items = items.concat(one.items);
+        });
+        if (!items.length && local && local.canUseLocalFixture(projectNo) && local.fixtureCatalogItems) {
+          items = local.fixtureCatalogItems();
+        }
+      }
+      if (typeof QuoteEditorSanitize !== 'undefined' && items.length) {
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(items);
+        if (leaked) items = [];
+      }
+      if (window.QuoteEditorGridUi) {
+        if (items.length) QuoteEditorGridUi.setCatalog(items);
+        if (QuoteEditorGridUi.refreshSheets) QuoteEditorGridUi.refreshSheets();
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -487,24 +575,32 @@
     }
   }
 
-  async function saveFees() {
-    setBusy(true);
+  async function saveFees(quiet) {
+    if (!quiet) setBusy(true);
     try {
-      var res = await AccountingApi.quoteEditorSetFees(session, projectNo, {
-        measure: ($('feeMeasure') && $('feeMeasure').value) || 0,
-        startup: ($('feeStartup') && $('feeStartup').value) || 0,
-        planning: ($('feePlanning') && $('feePlanning').value) || 0
-      }, { quote_date: ($('quoteDate') && $('quoteDate').value) || '' });
+      var res = await AccountingApi.quoteEditorSetFees(session, projectNo, readFeeInputs(), {
+        quote_date: ($('quoteDate') && $('quoteDate').value) || ''
+      });
       if (!res || !res.success) throw new Error((res && res.message) || '儲存失敗');
-      applyStaff(res, '已儲存扣費');
+      if (quiet) {
+        if (res.staff) staffView = res.staff;
+        setStatus('已自動暫存', 'ok');
+        if (window.QuoteEditorGridUi) QuoteEditorGridUi.recalcFees();
+      } else {
+        applyStaff(res, '已儲存扣費');
+      }
     } catch (e) {
       setStatus((e && e.message) || '儲存失敗', 'err');
     } finally {
-      setBusy(false);
+      if (!quiet) setBusy(false);
     }
   }
 
   async function sendQuote() {
+    if (window.QuoteEditorGridUi && QuoteEditorGridUi.pendingDeletes().length) {
+      setStatus('有列只在這台拿掉，還沒從報價刪除，先不要送出。', 'err');
+      return;
+    }
     setBusy(true);
     try {
       var res = await AccountingApi.quoteEditorSend(session, projectNo, {
@@ -665,11 +761,12 @@
     }
   }
 
-  $('btnAddZone').onclick = addZone;
-  $('btnSearch').onclick = searchCatalog;
-  $('btnPreflight').onclick = preflight;
-  $('btnPrint').onclick = printPreview;
-  $('btnRefresh').onclick = refresh;
+  if ($('btnAddZone')) $('btnAddZone').onclick = addZone;
+  if ($('btnSearch')) $('btnSearch').onclick = searchCatalog;
+  if ($('btnPreflight')) $('btnPreflight').onclick = preflight;
+  if ($('btnPrint')) $('btnPrint').onclick = printPreview;
+  if ($('btnRefresh')) $('btnRefresh').onclick = refresh;
+  watchFees();
   if ($('btnSaveFees')) $('btnSaveFees').onclick = saveFees;
   if ($('btnSend')) $('btnSend').onclick = sendQuote;
   if ($('btnNewVersion')) $('btnNewVersion').onclick = newVersion;

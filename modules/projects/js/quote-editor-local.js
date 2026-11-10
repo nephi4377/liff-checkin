@@ -146,6 +146,27 @@
     };
   }
 
+  function fixtureCatalogItems() {
+    return [
+      {
+        item: '開門高衣櫃-D60H240內', unit: '尺', price: 6100, tab: '木作工程',
+        note: '含門片', catalog_key: '木作工程::開門高衣櫃-D60H240內', likely_cabinet: true
+      },
+      {
+        item: '抽屜組-標準', unit: '組', price: 1200, tab: '木作工程',
+        note: '櫃體加購', catalog_key: '木作工程::抽屜組-標準', likely_addon: true
+      },
+      {
+        item: '拉籃', unit: '組', price: 1800, tab: '木作工程',
+        note: '櫃體加購', catalog_key: '木作工程::拉籃', likely_addon: true
+      },
+      {
+        item: '矽酸鈣/石膏天花板-水泥漆', unit: '坪', price: 1650, tab: '油漆工程',
+        note: '', catalog_key: '油漆工程::矽酸鈣/石膏天花板-水泥漆'
+      }
+    ];
+  }
+
   function fixtureCatalogPayload() {
     return {
       success: true,
@@ -222,6 +243,7 @@
     buildLocalCustomerSession: buildLocalCustomerSession,
     fixtureStaffPayload: fixtureStaffPayload,
     fixtureCatalogPayload: fixtureCatalogPayload,
+    fixtureCatalogItems: fixtureCatalogItems,
     fixtureCustomerPayload: fixtureCustomerPayload
   };
 
