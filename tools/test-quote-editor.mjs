@@ -119,6 +119,14 @@ test('accounting_api exposes quote_editor actions including update and custom', 
   assert.match(accountingApi, /quote_editor_print/);
 });
 
+test('editor hangs catalog addons under cabinet via 掛附加', () => {
+  assert.match(mainJs, /btn-addon-hang/);
+  assert.match(mainJs, /likely_addon|data-likely-addon/);
+  assert.match(mainJs, /掛附加/);
+  assert.match(mainJs, /resolveAddonParentId/);
+  assert.match(editorHtml, /掛附加|抽屜／拉籃/);
+});
+
 test('editor page has fees, versions, trade, custom fill controls', () => {
   assert.match(editorHtml, /feeMeasure/);
   assert.match(editorHtml, /btnSaveFees/);

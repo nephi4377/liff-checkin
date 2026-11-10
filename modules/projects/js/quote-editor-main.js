@@ -103,7 +103,10 @@
       '<div class=\"row\" style=\"margin:0.25rem 0 0\">' +
       '<input data-f=\"price_override_reason\" placeholder=\"改價原因\" value=\"' + escapeHtml(ln.price_override_reason || '') + '\" style=\"min-width:6rem;flex:1\" />' +
       '<button type=\"button\" class=\"ghost btn-save-line\" data-id=\"' + escapeHtml(ln.line_id) + '\">存</button>' +
-      (ln.is_cabinet ? '<button type=\"button\" class=\"ghost btn-addon-custom\" data-id=\"' + escapeHtml(ln.line_id) + '\">自填附加</button>' : '') +
+      (ln.is_cabinet
+        ? '<button type=\"button\" class=\"ghost btn-addon-hang\" data-id=\"' + escapeHtml(ln.line_id) + '\">掛附加</button>' +
+          '<button type=\"button\" class=\"ghost btn-addon-custom\" data-id=\"' + escapeHtml(ln.line_id) + '\">自填附加</button>'
+        : '') +
       '</div></td></tr>';
   }
 
@@ -173,6 +176,14 @@
     Array.prototype.forEach.call(box.querySelectorAll('.btn-save-line'), function (btn) {
       btn.onclick = function () { saveLineEdits(btn.getAttribute('data-id')); };
     });
+    Array.prototype.forEach.call(box.querySelectorAll('.btn-addon-hang'), function (btn) {
+      btn.onclick = function () {
+        addonParentId = btn.getAttribute('data-id') || '';
+        fillCustomParentOptions();
+        if ($('customParent')) $('customParent').value = addonParentId;
+        setStatus('已選櫃子：接著搜尋抽屜／拉籃等價目並點選加入', 'ok');
+      };
+    });
     Array.prototype.forEach.call(box.querySelectorAll('.btn-addon-custom'), function (btn) {
       btn.onclick = function () {
         addonParentId = btn.getAttribute('data-id') || '';
@@ -181,6 +192,23 @@
         if ($('customParent')) $('customParent').value = addonParentId;
         setStatus('請填特殊五金自填後按「儲存自填」', 'ok');
       };
+    });
+  }
+
+  function resolveAddonParentId() {
+    return String(
+      addonParentId ||
+      ($('customParent') && $('customParent').value) ||
+      ''
+    ).trim();
+  }
+
+  function zoneCabinetIds(zoneId) {
+    var zones = (staffView && staffView.quote && staffView.quote.zones) || [];
+    var z = zones.filter(function (x) { return String(x.zone_id) === String(zoneId); })[0];
+    if (!z) return [];
+    return (z.lines || []).filter(function (ln) { return !!ln.is_cabinet; }).map(function (ln) {
+      return ln.line_id;
     });
   }
 
@@ -284,18 +312,24 @@
         return;
       }
       box.innerHTML = items.map(function (it) {
-        return '<button type=\"button\" data-key=\"' + escapeHtml(it.catalog_key) + '\">' +
+        var addonHint = it.likely_addon
+          ? '<div class=\"hint\">櫃體加購（請先按櫃子「掛附加」再點）</div>'
+          : '';
+        return '<button type=\"button\" data-key=\"' + escapeHtml(it.catalog_key) + '\" data-likely-addon=\"' +
+          (it.likely_addon ? '1' : '0') + '\">' +
           escapeHtml(it.item) + '｜' + escapeHtml(it.unit) + '｜' + money(it.price) +
           (it.note ? '<div class=\"hint\">' + escapeHtml(it.note) + '</div>' : '') +
+          addonHint +
           '</button>';
       }).join('');
       Array.prototype.forEach.call(box.querySelectorAll('button[data-key]'), function (btn) {
         btn.onclick = function () {
           if (busy) return;
           btn.disabled = true;
-          addLine(btn.getAttribute('data-key')).finally(function () {
-            if (btn && btn.isConnected) btn.disabled = false;
-          });
+          addLine(btn.getAttribute('data-key'), btn.getAttribute('data-likely-addon') === '1')
+            .finally(function () {
+              if (btn && btn.isConnected) btn.disabled = false;
+            });
         };
       });
       setStatus('找到 ' + items.length + ' 筆，點選加入', 'ok');
@@ -306,7 +340,7 @@
     }
   }
 
-  async function addLine(catalogKey) {
+  async function addLine(catalogKey, likelyAddon) {
     if (busy) return;
     var zoneId = ($('zoneSelect') && $('zoneSelect').value) || '';
     if (!zoneId) { setStatus('請先新增並選擇空間', 'err'); return; }
@@ -314,6 +348,18 @@
     if (Number(qty) > 9999) { setStatus('數量不可超過 9999', 'err'); return; }
     var overridePrice = ($('overridePrice') && $('overridePrice').value) || '';
     var reason = ($('overrideReason') && $('overrideReason').value) || '';
+    var parentId = resolveAddonParentId();
+    var cabinets = zoneCabinetIds(zoneId);
+    if (likelyAddon && cabinets.length && !parentId) {
+      if (cabinets.length === 1) {
+        parentId = cabinets[0];
+        addonParentId = parentId;
+        if ($('customParent')) $('customParent').value = parentId;
+      } else {
+        setStatus('此品項是櫃體加購：請先按某櫃的「掛附加」，再點價目加入', 'err');
+        return;
+      }
+    }
     setBusy(true);
     try {
       var res = await AccountingApi.quoteEditorAddLine(session, {
@@ -323,7 +369,7 @@
         qty: qty,
         unit_price: overridePrice === '' ? undefined : overridePrice,
         price_override_reason: reason,
-        parent_line_id: addonParentId || undefined
+        parent_line_id: parentId || undefined
       });
       if (!res || !res.success) throw new Error((res && res.message) || '加入失敗');
       addonParentId = '';
