@@ -6,7 +6,10 @@
   <title>線上報價編輯</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <!-- 勿載 shared/js/config.js（ES module）；AccountingApi 已內建 GAS URL -->
+  <!-- 先讀本分頁員工身分；入口判斷擋在共用登入前面，沒身分不跳 LINE -->
+  <script src="/shared/js/operator_context.js?v=3"></script>
   <script src="/shared/js/accounting_api.js?v=quote-editor-3-api"></script>
+  <script src="/modules/projects/js/quote-editor-entry.js?v=1"></script>
   <script src="/modules/projects/js/quote-editor-sanitize.js?v=quote-editor-3"></script>
   <script src="/modules/projects/js/quote-editor-local.js?v=quote-editor-3"></script>
   <style>
