@@ -320,6 +320,33 @@ test('autosave plan adds, updates, blocks a price change without a reason, and s
   assert.equal(priced.payload.price_override_reason, '客人要求');
 });
 
+test('autosave plan asks the server to delete and to save a new order', () => {
+  const first = filled({ line_id: 'l-a', item: '甲', unit: '式', qty: 1, unit_price: 100, dirty: false, custom: true });
+  const second = filled({ line_id: 'l-b', item: '乙', unit: '式', qty: 1, unit_price: 200, dirty: false, custom: true });
+  const moved = grid.ensureTrailingBlank([second, first]);
+  const plan = grid.autosavePlan(moved, { serverLineIds: ['l-a', 'l-b'] });
+  const reorder = plan.ops.filter((op) => op.type === 'reorder')[0];
+  assert.ok(reorder);
+  assert.deepEqual(reorder.line_ids, ['l-b', 'l-a']);
+  assert.deepEqual(plan.localDeletes, []);
+
+  const same = grid.autosavePlan(grid.ensureTrailingBlank([first, second]), { serverLineIds: ['l-a', 'l-b'] });
+  assert.equal(same.ops.some((op) => op.type === 'reorder'), false);
+
+  const afterDelete = grid.deleteRow(grid.ensureTrailingBlank([first, second]), 0);
+  const planDel = grid.autosavePlan(afterDelete.rows, { serverLineIds: ['l-a', 'l-b'] });
+  const del = planDel.ops.filter((op) => op.type === 'delete');
+  assert.deepEqual(del.map((op) => op.line_id), ['l-a']);
+  const left = planDel.ops.filter((op) => op.type === 'reorder')[0];
+  assert.ok(left);
+  assert.deepEqual(left.line_ids, ['l-b']);
+
+  const localOnly = filled({ line_id: 'local-temp', item: '只在這台', unit: '式', qty: 1, unit_price: 1, dirty: false, custom: true });
+  const skipLocal = grid.autosavePlan(grid.ensureTrailingBlank([localOnly, second]), { serverLineIds: ['l-b'] });
+  assert.equal(skipLocal.ops.some((op) => op.type === 'delete' && op.line_id === 'local-temp'), false);
+  assert.equal(skipLocal.ops.some((op) => op.type === 'reorder'), false);
+});
+
 test('customer lines keep unit, qty, and amount, never unit price', () => {
   const cab = filled({
     item: '開門高衣櫃', unit: '尺', qty: 1.5, unit_price: 6100, is_cabinet: true, line_id: 'c1'
@@ -397,6 +424,8 @@ test('editor page wires the sheet; customer page still has no unit price column'
   assert.match(gridUi, /＋加購/);
   assert.match(gridUi, /paste/);
   assert.match(gridUi, /自動暫存/);
+  assert.match(gridUi, /op.type === 'delete'/);
+  assert.match(gridUi, /op.type === 'reorder'/);
   assert.doesNotMatch(gridUi, /QUOTE_EDITOR_ENABLED/);
   assert.doesNotMatch(readFileSync(join(root, 'modules/projects/js/quote-editor-grid.js'), 'utf8'), /QUOTE_EDITOR_ENABLED/);
   assert.doesNotMatch(viewHtml, /<th>單價<\/th>/);

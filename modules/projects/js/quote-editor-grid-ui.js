@@ -295,9 +295,46 @@
         return;
       }
     }
+    var structural = grid().autosavePlan(st.rows, { serverLineIds: st.serverIds });
+    var deleteOps = structural.ops.filter(function (op) { return op.type === 'delete'; });
+    for (var d = 0; d < deleteOps.length; d++) {
+      var dop = deleteOps[d];
+      try {
+        if (st.ctx.saveOp) {
+          await st.ctx.saveOp({
+            type: 'delete',
+            line_id: dop.line_id,
+            zone_id: st.zone.zone_id
+          });
+        }
+        st.deleted = (st.deleted || []).filter(function (id) { return id !== dop.line_id; });
+        st.serverIds = (st.serverIds || []).filter(function (id) { return id !== dop.line_id; });
+      } catch (errDel) {
+        writeDraft(st);
+        if (st.ctx.onStatus) st.ctx.onStatus((errDel && errDel.message) || '刪除沒有存回報價，送出前會先擋住', 'err');
+        return;
+      }
+    }
+    var after = grid().autosavePlan(st.rows, { serverLineIds: st.serverIds });
+    var reorder = null;
+    after.ops.forEach(function (op) { if (op.type === 'reorder' && !reorder) reorder = op; });
+    if (reorder && st.ctx.saveOp) {
+      try {
+        await st.ctx.saveOp({
+          type: 'reorder',
+          zone_id: st.zone.zone_id,
+          line_ids: reorder.line_ids
+        });
+        st.serverIds = (reorder.line_ids || []).slice();
+      } catch (errRe) {
+        writeDraft(st);
+        if (st.ctx.onStatus) st.ctx.onStatus((errRe && errRe.message) || '順序沒有存回報價', 'err');
+        return;
+      }
+    }
     writeDraft(st);
     if (st.deleted.length && st.ctx.onStatus) {
-      st.ctx.onStatus('格子已自動暫存。有列只在這台拿掉，換一台還看得到，送出前會先擋住。', 'err');
+      st.ctx.onStatus('有列還沒從報價刪掉，送出前會先擋住。', 'err');
       return;
     }
     if (st.ctx.onStatus && !blocked) st.ctx.onStatus('已自動暫存', 'ok');
@@ -442,7 +479,9 @@
       grid().moveRow(st.rows, idx, act === 'up' ? -1 : 1);
       render(st, { rowId: rowId, field: 'item' });
       schedule(st);
-      if (st.ctx.onStatus) st.ctx.onStatus('順序已調整（這台先記住）', 'ok');
+      if (st.ctx.onStatus) {
+        st.ctx.onStatus(st.ctx.localOnly ? '順序已調整（這台先記住）' : '順序會存回這份草稿', 'ok');
+      }
       return;
     }
     if (act === 'addon') {

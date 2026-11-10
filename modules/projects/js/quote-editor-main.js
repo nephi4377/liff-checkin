@@ -187,7 +187,8 @@
   }
 
   async function saveGridOp(op) {
-    if (!op || !op.payload) return {};
+    if (!op) return {};
+    if (op.type !== 'delete' && op.type !== 'reorder' && !op.payload) return {};
     if (op.type === 'add') {
       var res = await AccountingApi.quoteEditorAddLine(session, {
         project_no: projectNo,
@@ -220,6 +221,23 @@
       });
       if (!res2 || !res2.success) throw new Error((res2 && res2.message) || '儲存失敗');
       return { line_id: op.line_id };
+    }
+    if (op.type === 'delete') {
+      var resDel = await AccountingApi.quoteEditorDeleteLine(session, {
+        project_no: projectNo,
+        line_id: op.line_id
+      });
+      if (!resDel || !resDel.success) throw new Error((resDel && resDel.message) || '刪除失敗');
+      return { line_id: op.line_id };
+    }
+    if (op.type === 'reorder') {
+      var resRe = await AccountingApi.quoteEditorReorderLines(session, {
+        project_no: projectNo,
+        zone_id: op.zone_id,
+        line_ids: op.line_ids || []
+      });
+      if (!resRe || !resRe.success) throw new Error((resRe && resRe.message) || '排序失敗');
+      return {};
     }
     return {};
   }

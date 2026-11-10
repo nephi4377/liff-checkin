@@ -560,6 +560,29 @@
     (opts.serverLineIds || []).forEach(function (id) {
       if (id && !seen[String(id)]) localDeletes.push(id);
     });
+    var order = [];
+    (rows || []).forEach(function (row) {
+      var id = row && row.line_id ? String(row.line_id) : '';
+      if (!id || id.indexOf('local-') === 0 || !seen[id]) return;
+      order.push(id);
+    });
+    var serverOrder = [];
+    (opts.serverLineIds || []).forEach(function (id) {
+      var key = String(id || '');
+      if (!key || key.indexOf('local-') === 0) return;
+      serverOrder.push(key);
+    });
+    var sameOrder = order.length === serverOrder.length;
+    if (sameOrder) {
+      for (var oi = 0; oi < order.length; oi++) {
+        if (order[oi] !== serverOrder[oi]) sameOrder = false;
+      }
+    }
+    localDeletes.forEach(function (id) {
+      if (!id || String(id).indexOf('local-') === 0) return;
+      ops.push({ type: 'delete', line_id: id });
+    });
+    if (!sameOrder) ops.push({ type: 'reorder', line_ids: order });
     return { ops: ops, localDeletes: localDeletes };
   }
 

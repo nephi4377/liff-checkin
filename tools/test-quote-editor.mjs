@@ -114,6 +114,10 @@ test('accounting_api exposes quote_editor actions including update and custom', 
   assert.match(accountingApi, /quote_editor_add_line/);
   assert.match(accountingApi, /quote_editor_update_line/);
   assert.match(accountingApi, /quoteEditorUpdateLine/);
+  assert.match(accountingApi, /quote_editor_delete_line/);
+  assert.match(accountingApi, /quote_editor_reorder_lines/);
+  assert.match(accountingApi, /quoteEditorDeleteLine/);
+  assert.match(accountingApi, /quoteEditorReorderLines/);
   assert.match(accountingApi, /parent_line_id/);
   assert.match(accountingApi, /custom: !!payload\.custom/);
   assert.match(accountingApi, /quote_editor_customer_view/);
@@ -139,6 +143,8 @@ test('editor page has fees, versions, trade, custom fill controls', () => {
   assert.match(mainJs, /quoteEditorSetFees/);
   assert.match(mainJs, /quoteEditorSend/);
   assert.match(mainJs, /quoteEditorUpdateLine/);
+  assert.match(mainJs, /quoteEditorDeleteLine/);
+  assert.match(mainJs, /quoteEditorReorderLines/);
   assert.match(readFileSync(join(root, 'modules/projects/js/quote-editor-grid.js'), 'utf8'), /特殊五金自填/);
   assert.match(mainJs, /line_subtotal/);
   assert.doesNotMatch(editorHtml, /QUOTE_EDITOR_ENABLED/);
