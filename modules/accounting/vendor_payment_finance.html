@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=103"></script>
+  <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -733,7 +733,7 @@
         if (!rows.length) { box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
         box.innerHTML = '<h3 style="margin:0 0 8px">確認這支 LINE</h3>' +
-          '<p class="sub">名冊沒對上顯示名，或這筆是廠商自己傳來的 LINE。按下後只會把別名或這支 LINE 加進名冊，再重送這筆匯款通知。</p>';
+          '<p class="sub">已送到的只把顯示名加入別名，不再重送。還沒綁上或沒送到的，才會加上後再送一次。</p>';
         rows.forEach(function (r) {
           var c = r.confirm_line;
           var div = document.createElement('div');
@@ -756,6 +756,7 @@
               payload.line_id = c.line_id || '';
               payload.line_channel = c.line_channel || 'accounting';
             }
+            var shouldResend = r.outcome === 'unlinked' || r.outcome === 'notify_failed';
             try {
               var added = await AccountingApi.vendorAliasAdd(session, payload);
               if (!added || !added.success) {
@@ -763,11 +764,20 @@
                 btn.disabled = false;
                 return;
               }
+              if (!shouldResend) {
+                setOk('已把顯示名加入別名。這筆剛才已送到，不再重送' + (who ? '（' + who + '／' + hint + '）' : ''));
+                div.remove();
+                if (!box.querySelector('button')) box.classList.add('hidden');
+                return;
+              }
               var resent = await AccountingApi.vendorRemitNotifyResend(
                 session,
                 r.payment_request_id || c.payment_request_id || ''
               );
-              if (!resent || !resent.success) {
+              var resentRows = (resent && resent.notify_records) || [];
+              var resentOk = !!(resent && resent.success !== false && resentRows.length &&
+                resentRows.every(function (row) { return row.outcome === 'notified'; }));
+              if (!resentOk) {
                 setMsg((added.message || '已記下這個 LINE') + '。' + ((resent && resent.message) || '重送未完成'));
                 btn.disabled = false;
                 return;
