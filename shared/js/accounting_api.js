@@ -1984,6 +1984,141 @@ var AccountingApi = (function () {
         customer_line_user_id: payload.customer_line_user_id || ''
       }));
     },
+    /** 線上報價 QUOTE-EDITOR-3 — project-console */
+    quoteEditorCatalog: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_catalog',
+        project_no: projectNo,
+        q: opts.q || '',
+        tab: opts.tab || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorGet: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_get',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddZone: function (sessionOrToken, projectNo, zoneName) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_zone',
+        project_no: projectNo,
+        zone_name: zoneName,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_line',
+        project_no: payload.project_no,
+        zone_id: payload.zone_id,
+        catalog_key: payload.catalog_key || '',
+        custom: !!payload.custom,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        amount: payload.amount,
+        parent_line_id: payload.parent_line_id || '',
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorUpdateLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_update_line',
+        project_no: payload.project_no,
+        line_id: payload.line_id,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorPreflight: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_preflight',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorSetFees: function (sessionOrToken, projectNo, fees, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_set_fees',
+        project_no: projectNo,
+        fees_received: fees || {},
+        quote_date: opts.quote_date || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorListVersions: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_list_versions',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorSend: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_send',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorNewVersion: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_new_version',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorConfirm: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_confirm',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
+    },
+    quoteEditorPrint: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_print',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorCustomerView: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_customer_view',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
+    },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {
       opts = opts || {};
