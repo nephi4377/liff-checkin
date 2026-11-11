@@ -105,6 +105,53 @@
       if (window.CONFIG) fn();
       else window.addEventListener('shop-config-ready', fn, { once: true });
     }
+    function qsParam(name) {
+      try {
+        return new URLSearchParams(location.search).get(name) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+    /** 向 Hub 父層索取 LIFF id_token（與會計 iframe 相同） */
+    function requestHubLiffToken() {
+      return new Promise(function (resolve) {
+        if (window.parent === window) {
+          resolve('');
+          return;
+        }
+        var done = false;
+        function finish(tok) {
+          if (done) return;
+          done = true;
+          window.removeEventListener('message', onMsg);
+          resolve(tok || '');
+        }
+        function onMsg(e) {
+          if (!e.data || e.data.type !== 'hub_liff_token') return;
+          finish(e.data.token || '');
+        }
+        window.addEventListener('message', onMsg);
+        try {
+          window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+        } catch (err) {
+          finish('');
+          return;
+        }
+        setTimeout(function () {
+          finish('');
+        }, 2500);
+      });
+    }
+    function buildStaffAuth() {
+      return requestHubLiffToken().then(function (tok) {
+        var auth = {
+          liff_id_token: tok || '',
+          user_id: qsParam('uid') || '',
+          staff_name: qsParam('name') || 'hub_staff'
+        };
+        return auth;
+      });
+    }
     function itemsRowsHtml(items) {
       if (!items || !items.length) return '';
       var rows = items.map(function (it) {
@@ -138,8 +185,8 @@
           .filter(function (x) { return !!x; })
           .join('、');
       var rows = [
-        ['收件人', o.shipping_name || o.customer_name || ''],
-        ['收件電話', o.shipping_phone || o.customer_phone || ''],
+        ['收件人', o.shipping_name || ''],
+        ['收件電話', o.shipping_phone || ''],
         ['公司／抬頭', o.shipping_company || ''],
         ['地址', addrFull],
         ['地址一行', o.shipping_address_1 || ''],
@@ -149,6 +196,9 @@
         ['縣／州', o.shipping_state || ''],
         ['國家', o.shipping_country || '']
       ];
+      if (o.shipping_source) {
+        rows.push(['資料來源', o.shipping_source === 'billing' ? '帳單地址（出貨地址空白）' : '出貨地址']);
+      }
       // 有值的欄位全顯示；全空也至少顯示收件人／電話／地址三列
       var hasAny = rows.some(function (r) { return !!r[1]; });
       var shown = hasAny
@@ -218,7 +268,9 @@
       el.querySelector('.card-head').setAttribute('aria-expanded', 'true');
       var panel = el.querySelector('.detail');
       fillDetail(panel, o, '更新詳情中…');
-      ShopApi.getOrder({}, o.order_number).then(function (res) {
+      buildStaffAuth().then(function (auth) {
+        return ShopApi.getOrder(auth, o.order_number);
+      }).then(function (res) {
         if (!el.classList.contains('is-open')) return;
         if (res && res.success && res.data && res.data.order) {
           fillDetail(panel, res.data.order, res.mock ? '示意詳情' : '');
@@ -234,7 +286,10 @@
       var status = document.getElementById('status');
       var list = document.getElementById('list');
       status.textContent = '載入訂單中…';
-      ShopApi.listOrdersStaff({}).then(function (res) {
+      buildStaffAuth().then(function (auth) {
+        window.__shopStaffAuth = auth;
+        return ShopApi.listOrdersStaff(auth);
+      }).then(function (res) {
         if (!res.success) {
           status.textContent = res.message || res.code || '讀取失敗';
           return;
@@ -261,11 +316,9 @@
             '<div class="row"><span class="ono">訂單編號 ' + esc(o.order_number) + '</span>' +
             '<span class="st ' + stage + '">' + stageLabel(stage) + '</span></div>' +
             '<div class="meta">' + esc(o.items_summary || '') +
-            (o.shipping_name || o.customer_name
-              ? '<br>收件：' + esc(o.shipping_name || o.customer_name) +
-                (o.shipping_phone || o.customer_phone
-                  ? ' · ' + esc(o.shipping_phone || o.customer_phone)
-                  : '')
+            (o.shipping_name
+              ? '<br>收件：' + esc(o.shipping_name) +
+                (o.shipping_phone ? ' · ' + esc(o.shipping_phone) : '')
               : '') +
             (o.shipping_address ? '<br>寄送：' + esc(o.shipping_address) : '') +
             '<br>商品合計 ' + money(o.product_total != null ? o.product_total : o.total) +
@@ -306,7 +359,9 @@
               var fn = ShopApi.quoteAndNotifyTransfer || function () {
                 return Promise.resolve({ success: true, mock: true, message: '已報價（示意）' });
               };
-              fn.call(ShopApi, { staff_name: 'hub_staff' }, o.order_number, { shipping_fee: fee }).then(function (r) {
+              buildStaffAuth().then(function (auth) {
+                return fn.call(ShopApi, auth, o.order_number, { shipping_fee: fee });
+              }).then(function (r) {
                 alert(r.success ? (r.message || '已報價並寄匯款說明（訂單尚未成立）') : (r.message || '失敗'));
                 render();
               });
@@ -320,7 +375,9 @@
             btnPay.textContent = '確認收款／訂單成立';
             btnPay.onclick = function () {
               if (!confirm('確認已收到匯款，將訂單 ' + o.order_number + ' 標記為已付款（訂單成立）？')) return;
-              ShopApi.markPaid({ staff_name: 'hub_staff' }, o.order_number).then(function (r) {
+              buildStaffAuth().then(function (auth) {
+                return ShopApi.markPaid(auth, o.order_number);
+              }).then(function (r) {
                 alert(r.success ? '訂單已成立（已付款）' : (r.message || '失敗'));
                 render();
               });
@@ -329,7 +386,9 @@
             var btnResend = document.createElement('button');
             btnResend.textContent = '重送匯款說明';
             btnResend.onclick = function () {
-              ShopApi.resendPayNotify({}, o.order_number).then(function (r) {
+              buildStaffAuth().then(function (auth) {
+                return ShopApi.resendPayNotify(auth, o.order_number);
+              }).then(function (r) {
                 alert((r.data && r.data.line_notify) || r.message || '已送出');
               });
             };

@@ -40,3 +40,6 @@
 - 列表點訂單 → **同頁展開詳情**（`ShopApi.getOrder`）
 - 詳情必顯 **寄送地址**：收件人／電話／公司／地址（Woo shipping 欄有值全顯示；電話缺則用 billing）
 - 另顯示品項列、金額、狀態、帳單聯絡、客人備註
+## 員工授權（前端）
+主控台 iframe 經 `postMessage` 索取 Hub `id_token`，呼叫 `shop_orders_*` 時帶 `liff_id_token`＋`user_id`。
+
