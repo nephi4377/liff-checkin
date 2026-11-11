@@ -1,6 +1,11 @@
 # 添心施工回報系統 — 完整技術規格（現況版）
 
-**文件版本：** 1.0（2026-04-25）  
+**最後對照程式：** 2026-11-11（Asia/Taipei）  
+**文件版本：** 1.1（2026-04-25 初稿；2026-11-11 對照極速路徑與總覽）  
+
+> **一句話**：現場人員在回報頁填案號、施工內容、照片；畫面顯示成功只代表後端已收下並多半已進排隊，不是照片已經進雲端硬碟、也不是總覽已經看得到。  
+> 後端契約以 `Backend_GAS/project-console/SPEC/08_REPORT_SYSTEM_ACTION_SPEC.md` 為準（同目錄 `REPORT_BACKEND_SPEC.md` 已改指向現行極速路徑）。`SPEC/11_AI施工日誌與全域參數整合規格書.md` 是舊白皮書，不要當現行回報流程。施工回報 AI 總開關在程式裡是關的（見後端 `SITE_REPORT_AI_SPEC.md` 文首）。
+
 **合併來源（已於 2026-04-25 封存至 `_DEPRECATED_/2026-04-25_施工回報合併前_SPEC/`，內文未刪）：** `REPORT_SYSTEM_SPEC.md`（V3）、`施工回報_FirebaseStorage_遷移計劃書.md`、`UPLOAD_OPTIMIZATION_PLAN.md`  
 **程式對照（權威）：** 前端 `CODING/modules/projects/reportV3.html`；後端 `backend/project-console/`（`WebApp.js`、`FirebaseHandler.js`、`line_reply.js`）
 
@@ -14,8 +19,8 @@
 
 | 路徑 | 前端動作 | GAS `action` | 第一階段（即時回應） | 第二階段以後（背景） |
 |------|----------|----------------|----------------------|------------------------|
-| **A. 極速／現行主線** | `reportV3.html`：相機／檔案 → 壓縮 → 優先上 Firebase → 單次 POST 含 URL 與可選 Base64 降級 | `submitFastReport` | `handleFastReport_()`：寫 `UploadQueue`（狀態 `[Firebase待搬運]`）、排程約 15 秒後執行 `processFirebaseToDrive_` | Firebase→Drive 搬運完改為 `待處理` → 既有 `processUploadQueue()` → Dropbox／Sheet／日誌／LINE |
-| **B. 相容舊客戶端** | 舊版多批 Base64 分片 POST | `submitReport` | `handleReportSubmission_()`：直接寫 Drive 暫存取得 `driveFileId`，`UploadQueue` 狀態直接為 `待處理` | 同上 `processUploadQueue()` |
+| **A. 極速／現行主線** | `reportV3.html`：相機／檔案 → 壓縮 → 優先上暫存桶 → 單次 POST | `submitFastReport` | 有照片才寫上傳排隊（待搬運）並約 15 秒後搬運。**沒有照片仍回成功且不寫排隊（已知問題，見 §10）** | 搬運完改為待歸檔 → 背景歸檔 → 備份／日誌／最後一批才 LINE |
+| **B. 舊路徑仍掛著** | 現行回報頁不走這條 | `submitReport` | 路由**不看處理結果**就回成功（不要當現行契約） | 舊歸檔若真的寫進排隊，仍走同一條背景 |
 
 > 舊文件中的 **`report_test.html` + `isTest` 隔離** 屬歷史演進敘述；**現況**以 **`reportV3.html` + `submitFastReport`** 為正式極速路徑。後端測試隔離邏輯已收斂在 `FirebaseHandler` 的搬運與佇列設計內，不必另開一頁才能驗證（除非專案再次拆測試頁）。
 
@@ -24,38 +29,34 @@
 ## 2. 端對端資料流（極速路徑 A）
 
 ```mermaid
-flowchart LR
-  subgraph 前端
-    U[使用者]
-    V3[reportV3.html]
-    FB[Firebase Storage]
-  end
-  subgraph GAS
-    W[WebApp doPost]
-    F[handleFastReport_]
-    Q[(UploadQueue)]
-    P[processFirebaseToDrive_]
-    M[processUploadQueue]
-    X[executeFullReportLogic 等]
-  end
-  subgraph 儲存
-    GD[Google Drive 暫存]
-    DB[Dropbox]
-    SH[Sheets / 日誌]
-  end
-  U --> V3
-  V3 --> FB
-  V3 -->|multipart：payload 內含 photos| W
-  W --> F
-  F --> Q
-  P -->|UrlFetch 下載 URL 或解 Base64| GD
-  P --> Q
-  M --> X
-  X --> DB
-  X --> SH
+flowchart TD
+  A[現場填案號與說明並選照片] --> B[照片先傳到暫存桶]
+  B --> C[一次送給後端]
+  C --> D{有照片嗎}
+  D -->|有| E[寫進上傳排隊並約十五秒後搬到雲端硬碟]
+  D -->|沒有| F[目前仍回成功但沒有寫進排隊]
+  E --> G[背景再歸檔到備份與日誌]
+  G --> H[最後一批完成才排 LINE 通知]
+  F --> I[畫面仍當成功並清掉這台暫存]
 ```
 
-**使用者可感知的「成功」**（GAS 回 `success: true`）在極速路徑下代表：該次回報**已寫入佇列**並已排定背景搬運；**不是**當下已完成 Dropbox 與所有 Sheet。與舊路徑「先暫存再佇列」的語意一致，只是**不再**在請求內承載大塊 Base64、改由後端從 URL 拉檔或降級 Base64。
+### 程式對照表
+
+| 白話（圖上寫的） | 程式對照 |
+|------------------|----------|
+| 現場填案號與說明並選照片 | `modules/projects/reportV3.html`；允許「有文字或有照片」其一 |
+| 照片先傳到暫存桶 | 頁內上傳；路徑前綴 `reports/`（選材前綴不要進這條排隊） |
+| 一次送給後端 | `submitFastReport`；`postToGasWithRetry` |
+| 有照片嗎 | `handleFastReport_` → `_enqueueFastReportRows_` 看 `photos` 長度 |
+| 寫進上傳排隊並約十五秒後搬到雲端硬碟 | 狀態 `[Firebase待搬運]`；`ensureFirebaseDriveTrigger_(15000)` → `processFirebaseToDrive_` |
+| 目前仍回成功但沒有寫進排隊 | 照片數 0 時直接 `{ success: true, message: '無相片需處理' }`，**已知問題，不是正確行為** |
+| 背景再歸檔到備份與日誌 | `processUploadQueue` |
+| 最後一批完成才排 LINE 通知 | 最後一塊完成時寫入回覆排隊；AI 總開關關閉時不跑分析 |
+| 畫面仍當成功並清掉這台暫存 | `response.ok && result.success` → `handleSuccess()` 並 `idbClearPending()` |
+
+**使用者可感知的「成功」**（GAS 回 `success: true` 且有照片）代表：該次回報**已寫入佇列**並已排定背景搬運；**不是**當下已完成 Dropbox 與所有 Sheet。與舊路徑「先暫存再佇列」的語意一致，只是**不再**在請求內承載大塊 Base64、改由後端從 URL 拉檔或降級 Base64。
+
+**沒有照片時的成功是錯的**（見文末已知問題）：文字說明不會進排隊，畫面仍關窗並清本機暫存。
 
 **後台搬運要點（`processFirebaseToDrive_`）**（見 `FirebaseHandler.js`）：
 
@@ -187,4 +188,25 @@ flowchart LR
 
 ---
 
-**最後審閱建議週期：** 每次 GAS 大改版或 Firebase 規則變更後重讀 **§1–§3、§6**。
+**最後審閱建議週期：** 每次 GAS 大改版或 Firebase 規則變更後重讀 **§1–§3、§6** 與下面「風險與等待」。
+
+---
+
+## 8. 每日回報總覽（另一頁，不是送出頁）
+
+給主管看一段日期裡誰交了回報。入口 `modules/projects/daily_report.html`，邏輯在 `daily_report_main.js`。一次同時問：員工、該區間日誌、當月排班、打卡。日誌 API 為 `get_daily_reports`。
+
+畫面上有「正在載入回報資料...」。讀取丟例外時，前端把日誌當成空陣列，只在主控台留警告，畫面仍可能寫「此區間無任何記錄」或「沒有任何工作回報紀錄」。後端若篩選過程出錯，也是回空陣列且外層仍 `success: true`。這是失敗當空，不是「真的沒有回報」。
+
+施工回報 AI 區塊的程式還在，但後端總開關關閉，完成通知不會再附 AI 段落。
+
+## 9. 風險與等待
+
+- 送出：照片併發上傳後再打後端；後端呼叫有逾時（頁內設定約 120 秒）與可重試。業務拒絕（`success: false`）不重試。有進度文字。同一批次編號若已受理，後端回成功並標重複，避免照片重送變兩筆排隊。
+- 總覽：四件事一起等，沒有各自逾時。日誌先吃專案日誌快取再在記憶體裡篩日期；快取冷掉會慢。等級：**中**（送出看得到進度；總覽可能轉圈，失敗時看起來像沒資料）。
+- 舊動作 `submitReport` 仍掛在路由，且不看處理結果就回成功。現行回報頁不走這條。
+
+## 10. 已知問題／風險（不要當成正確行為）
+
+1. **只有文字、沒有照片**：頁面允許送出（有施工說明或問題說明即可）。後端回成功、不寫排隊、不發 LINE。頁面當成成功，清掉這台暫存並約 30 秒關窗。人會以為交出去了，雲端沒有這筆。應改成寫進排隊（無檔案）或明白回失敗且保留暫存。
+2. **總覽失敗當空**：連線失敗或後端篩選丟錯，畫面用「沒有紀錄」而不是「載入失敗、請再試」。後端 `get_daily_reports` 在內部錯誤時仍回成功加空陣列。
