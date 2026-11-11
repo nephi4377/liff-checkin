@@ -2046,6 +2046,25 @@ var AccountingApi = (function () {
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
+    quoteEditorDeleteLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_delete_line',
+        project_no: payload.project_no,
+        line_id: payload.line_id,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorReorderLines: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_reorder_lines',
+        project_no: payload.project_no,
+        zone_id: payload.zone_id,
+        line_ids: payload.line_ids || [],
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
     quoteEditorPreflight: function (sessionOrToken, projectNo) {
       return postMaterial(buildMaterialPostBody_(sessionOrToken, {
         action: 'quote_editor_preflight',
