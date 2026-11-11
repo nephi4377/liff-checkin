@@ -51,7 +51,7 @@
         '<p class="note">' + (o.items_summary || '') + '</p>' +
         (ex.expires ? '<div class="expire">' + ex.message + '</div>' : '') +
         '<button type="button" id="btnPay">在 LINE 完成付款（示意）</button>' +
-        '<p class="sub">請與我們聯繫確認付款後訂單才算成立。付完後狀態不會自動變成已付款；店員會在後台「標記已付款」。請保留訂單編號。</p>';
+        '<p class="sub">請記住訂單編號並通知我們完成付款，訂單才算成立。若旺季，訂單編號需重新下單。付完後狀態不會自動變成已付款；店員會在後台「標記已付款」。請保留訂單編號。</p>';
       document.getElementById('btnPay').onclick = function () {
         alert('示意：此處接 LINE 內金流。付完請等候店員標記已付款（訂單編號 ' + o.order_number + '）。');
       };
