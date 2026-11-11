@@ -15,6 +15,9 @@
     .steps { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
     .steps strong { color: var(--ink); }
     .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .card.is-open { border-color: #fdba74; box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.18); }
+    .card-head { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: inherit; }
+    .card-head:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 8px; }
     .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
     .ono { font-weight: 700; letter-spacing: 0.02em; }
     .st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--teal); }
@@ -23,6 +26,20 @@
     .st.established, .st.paid { background: #ecfdf5; color: var(--teal); }
     .meta { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
     .expire { font-size: 12px; color: #9a3412; margin-top: 8px; }
+    .detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .card.is-open .detail { display: block; }
+    .detail h3 { font-size: 13px; margin: 0 0 8px; color: var(--ink); }
+    .detail .ship-dl { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 10px 12px; }
+    .detail dl { margin: 0 0 12px; display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; font-size: 13px; }
+    .detail dt { color: var(--muted); }
+    .detail dd { margin: 0; line-height: 1.4; word-break: break-word; }
+    .items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
+    .items th, .items td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; }
+    .items th { color: var(--muted); font-weight: 600; font-size: 12px; }
+    .items td.num, .items th.num { text-align: right; white-space: nowrap; }
+    .detail-empty { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+    .detail-status { font-size: 12px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; }
+    .toggle-hint { font-size: 12px; color: var(--blue); margin-top: 8px; font-weight: 600; }
     .quote-box { margin-top: 10px; padding: 10px; background: #f8fafc; border: 1px dashed var(--line); border-radius: 8px; }
     .quote-box label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
     .quote-box input { width: 100%; max-width: 180px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
@@ -38,7 +55,7 @@
 <body>
   <div class="wrap">
     <h1>官網商店訂單</h1>
-    <p class="sub">Hub 員工後台 · 官網 Woo 建單。標記已付款＝確認收款後訂單才<strong>成立</strong>。</p>
+    <p class="sub">Hub 員工後台 · 官網 Woo 建單。標記已付款＝確認收款後訂單才<strong>成立</strong>。點訂單可看詳情。</p>
     <div class="banner">未成立（未標記已付款）超過 <strong>7 天</strong>將到期刪除。客人匯款 ≠ 自動成立。</div>
     <div class="steps">
       <div><strong>①</strong> 客人取得訂單編號（待報價／未成立）</div>
@@ -56,14 +73,21 @@
   <script src="../../shared/js/shop_api.js"></script>
   <script>
     function money(n) {
+      if (n == null || n === '') return '—';
       return 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
+    }
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
     function stageOf(o) {
       if (o.status === 'paid' || o.established || o.stage === 'established') return 'established';
       if (o.quoted || o.status === 'awaiting_transfer' || o.stage === 'awaiting_transfer') {
         return 'awaiting_transfer';
       }
-      // Woo 可能回 processing 但未標記已付款／未報價 → 仍當待報價
       return 'awaiting_quote';
     }
     function stageLabel(stage) {
@@ -71,9 +95,140 @@
       if (stage === 'awaiting_transfer') return '待匯款（未成立）';
       return '待報價（未成立）';
     }
+    function fmtWhen(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('zh-TW', { hour12: false });
+    }
     function whenShopReady(fn) {
       if (window.CONFIG) fn();
       else window.addEventListener('shop-config-ready', fn, { once: true });
+    }
+    function itemsRowsHtml(items) {
+      if (!items || !items.length) return '';
+      var rows = items.map(function (it) {
+        return (
+          '<tr><td>' + esc(it.name || '品項') +
+          (it.sku ? '<div style="font-size:11px;color:#64748b">SKU ' + esc(it.sku) + '</div>' : '') +
+          '</td><td class="num">' + esc(it.quantity != null ? it.quantity : 1) +
+          '</td><td class="num">' + money(it.price) +
+          '</td><td class="num">' + money(it.total) + '</td></tr>'
+        );
+      }).join('');
+      return (
+        '<table class="items" aria-label="品項明細">' +
+        '<thead><tr><th>品項</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>'
+      );
+    }
+    function dlRows(rows) {
+      return rows.map(function (pair) {
+        return '<dt>' + esc(pair[0]) + '</dt><dd>' + esc(pair[1] == null || pair[1] === '' ? '—' : pair[1]) + '</dd>';
+      }).join('');
+    }
+    function shippingBlockHtml(o) {
+      var line2 = o.shipping_address_2 || '';
+      var cityBits = [o.shipping_postcode, o.shipping_city, o.shipping_state]
+        .filter(function (x) { return !!x; })
+        .join(' ');
+      var addrFull =
+        o.shipping_address ||
+        [o.shipping_address_1, line2, cityBits, o.shipping_country]
+          .filter(function (x) { return !!x; })
+          .join('、');
+      var rows = [
+        ['收件人', o.shipping_name || o.customer_name || ''],
+        ['收件電話', o.shipping_phone || o.customer_phone || ''],
+        ['公司／抬頭', o.shipping_company || ''],
+        ['地址', addrFull],
+        ['地址一行', o.shipping_address_1 || ''],
+        ['地址二行', o.shipping_address_2 || ''],
+        ['郵遞區號', o.shipping_postcode || ''],
+        ['縣市／鄉鎮', o.shipping_city || ''],
+        ['縣／州', o.shipping_state || ''],
+        ['國家', o.shipping_country || '']
+      ];
+      // 有值的欄位全顯示；全空也至少顯示收件人／電話／地址三列
+      var hasAny = rows.some(function (r) { return !!r[1]; });
+      var shown = hasAny
+        ? rows.filter(function (r) {
+            return !!r[1] || r[0] === '收件人' || r[0] === '收件電話' || r[0] === '地址';
+          })
+        : [
+            ['收件人', ''],
+            ['收件電話', ''],
+            ['地址', '']
+          ];
+      return '<h3>寄送地址</h3><dl class="ship-dl">' + dlRows(shown) + '</dl>';
+    }
+    function orderMetaHtml(o) {
+      return dlRows([
+        ['狀態', stageLabel(stageOf(o)) + (o.woo_status ? '（Woo：' + o.woo_status + '）' : '')],
+        ['下單時間', fmtWhen(o.created_at)],
+        ['帳單聯絡人', o.customer_name || ''],
+        ['帳單電話', o.customer_phone || ''],
+        ['Email', o.customer_email || ''],
+        ['帳單地址', o.billing_address || ''],
+        ['客人備註', o.customer_note || ''],
+        ['商品合計', money(o.product_total != null ? o.product_total : o.total)],
+        ['運費', o.shipping_fee != null ? money(o.shipping_fee) : '尚未報價'],
+        ['應付總額', o.payable_total != null ? money(o.payable_total) : ''],
+        ['成立確認', o.marked_paid_by ? o.marked_paid_by + (o.paid_at ? ' · ' + fmtWhen(o.paid_at) : '') : '']
+      ]);
+    }
+    function fillDetail(panel, o, loadingText) {
+      var statusEl = panel.querySelector('.detail-status');
+      var body = panel.querySelector('.detail-body');
+      if (statusEl) statusEl.textContent = loadingText || '';
+      var itemsHtml = itemsRowsHtml(o.items);
+      var summaryFallback =
+        !itemsHtml && o.items_summary
+          ? '<p class="detail-empty">品項摘要：' + esc(o.items_summary) + '</p>'
+          : !itemsHtml
+            ? '<p class="detail-empty">尚無品項明細</p>'
+            : '';
+      body.innerHTML =
+        shippingBlockHtml(o) +
+        '<h3>品項</h3>' +
+        (itemsHtml || summaryFallback) +
+        '<h3>訂單資料</h3><dl>' +
+        orderMetaHtml(o) +
+        '</dl>';
+    }
+    function openDetail(el, o) {
+      var wasOpen = el.classList.contains('is-open');
+      document.querySelectorAll('.card.is-open').forEach(function (c) {
+        if (c !== el) {
+          c.classList.remove('is-open');
+          var th = c.querySelector('.toggle-hint');
+          if (th) th.textContent = '點此查看詳情';
+          var head = c.querySelector('.card-head');
+          if (head) head.setAttribute('aria-expanded', 'false');
+        }
+      });
+      if (wasOpen) {
+        el.classList.remove('is-open');
+        el.querySelector('.toggle-hint').textContent = '點此查看詳情';
+        el.querySelector('.card-head').setAttribute('aria-expanded', 'false');
+        return;
+      }
+      el.classList.add('is-open');
+      el.querySelector('.toggle-hint').textContent = '收合詳情';
+      el.querySelector('.card-head').setAttribute('aria-expanded', 'true');
+      var panel = el.querySelector('.detail');
+      fillDetail(panel, o, '更新詳情中…');
+      ShopApi.getOrder({}, o.order_number).then(function (res) {
+        if (!el.classList.contains('is-open')) return;
+        if (res && res.success && res.data && res.data.order) {
+          fillDetail(panel, res.data.order, res.mock ? '示意詳情' : '');
+        } else {
+          fillDetail(panel, o, (res && res.message) || '無法更新詳情，顯示列表資料');
+        }
+      }).catch(function () {
+        if (!el.classList.contains('is-open')) return;
+        fillDetail(panel, o, '無法更新詳情，顯示列表資料');
+      });
     }
     function render() {
       var status = document.getElementById('status');
@@ -87,7 +242,7 @@
         var orders = (res.data && res.data.orders) || [];
         status.textContent =
           (res.mock ? '示意資料（兩段報價／匯款）· ' : '已連線官網商店 GAS · ') +
-          '共 ' + orders.length + ' 筆';
+          '共 ' + orders.length + ' 筆 · 點訂單可看詳情';
         list.innerHTML = '';
         orders.forEach(function (o) {
           var stage = stageOf(o);
@@ -102,16 +257,33 @@
                 (o.payable_total != null ? ' · 應付 ' + money(o.payable_total) : '')
               : '<br>運費：尚未報價';
           el.innerHTML =
-            '<div class="row"><span class="ono">訂單編號 ' + o.order_number + '</span>' +
+            '<button type="button" class="card-head" aria-expanded="false" aria-controls="detail-' + esc(o.order_number) + '">' +
+            '<div class="row"><span class="ono">訂單編號 ' + esc(o.order_number) + '</span>' +
             '<span class="st ' + stage + '">' + stageLabel(stage) + '</span></div>' +
-            '<div class="meta">' + (o.items_summary || '') +
+            '<div class="meta">' + esc(o.items_summary || '') +
+            (o.shipping_name || o.customer_name
+              ? '<br>收件：' + esc(o.shipping_name || o.customer_name) +
+                (o.shipping_phone || o.customer_phone
+                  ? ' · ' + esc(o.shipping_phone || o.customer_phone)
+                  : '')
+              : '') +
+            (o.shipping_address ? '<br>寄送：' + esc(o.shipping_address) : '') +
             '<br>商品合計 ' + money(o.product_total != null ? o.product_total : o.total) +
             shipLine +
-            (o.marked_paid_by ? '<br>成立確認：' + o.marked_paid_by : '') + '</div>' +
-            (ex.expires && stage !== 'established' ? '<div class="expire">' + ex.message + '</div>' : '') +
+            (o.marked_paid_by ? '<br>成立確認：' + esc(o.marked_paid_by) : '') + '</div>' +
+            '<div class="toggle-hint">點此查看詳情</div>' +
+            '</button>' +
+            (ex.expires && stage !== 'established' ? '<div class="expire">' + esc(ex.message) + '</div>' : '') +
+            '<div class="detail" id="detail-' + esc(o.order_number) + '">' +
+            '<div class="detail-status"></div><div class="detail-body"></div></div>' +
             '<div class="quote-box" style="display:none"></div>' +
             '<div class="actions"></div>' +
             '<p class="hint">匯款說明僅在報價後寄出；確認收款後才標記已付款／訂單成立。</p>';
+
+          var head = el.querySelector('.card-head');
+          head.addEventListener('click', function () {
+            openDetail(el, o);
+          });
 
           var actions = el.querySelector('.actions');
           var quoteBox = el.querySelector('.quote-box');

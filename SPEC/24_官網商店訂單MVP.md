@@ -34,3 +34,9 @@
 
 - 前端：合併 main → GitHub Pages（`info.tanxin.space`）  
 - 後端：`shop-orders` **已部署 Web App；`WOO_*` Script Properties 已設定（值不進 Git）；前端已接 `SHOP_GAS_WEB_APP_URL`
+
+## Hub 訂單詳情（2026-11-11）
+
+- 列表點訂單 → **同頁展開詳情**（`ShopApi.getOrder`）
+- 詳情必顯 **寄送地址**：收件人／電話／公司／地址（Woo shipping 欄有值全顯示；電話缺則用 billing）
+- 另顯示品項列、金額、狀態、帳單聯絡、客人備註
