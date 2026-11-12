@@ -24,6 +24,9 @@ export default {
         const projectIdInput = ref('');
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
 
+        /** 線上報價編輯：前端只開測案 999（與後端 project_allowed 一致） */
+        const QUOTE_EDITOR_ROLLOUT_PROJECT = '999';
+
         const openProjectConsole = () => {
             const projectId = projectIdInput.value.trim();
             if (!projectId || !/^\d+$/.test(projectId)) {
@@ -36,6 +39,29 @@ export default {
             }
             window.location.hash = `#/project-console?id=${projectId}`;
         };
+
+        const openQuoteEditor = () => {
+            const projectId = projectIdInput.value.trim();
+            if (!projectId || !/^\d+$/.test(projectId)) {
+                alert('請先在上方輸入案號（例：999）！');
+                return;
+            }
+            if (projectId !== QUOTE_EDITOR_ROLLOUT_PROJECT) {
+                return;
+            }
+            if (!props.userProfile?.userId) {
+                alert('無法取得您的使用者資訊，請重新載入頁面。');
+                return;
+            }
+            window.location.hash = `#/quote-editor?project_no=${encodeURIComponent(projectId)}`;
+        };
+
+        const quoteEditorCardVisible = computed(() => {
+            const p = Number(props.currentUser?.permission || 0);
+            if (p < 2) return false;
+            const id = projectIdInput.value.trim();
+            return id === QUOTE_EDITOR_ROLLOUT_PROJECT;
+        });
 
         // [v426.0 SPA化] 統一所有內部連結為 hash 路由
         const addSiteUrl = computed(() => `#/new-site`);
@@ -431,6 +457,8 @@ export default {
         return {
             projectIdInput,
             openProjectConsole,
+            openQuoteEditor,
+            quoteEditorCardVisible,
             addSiteUrl,
             approvalDashboardUrl,
             leaveRequestUrl,
@@ -678,15 +706,26 @@ export default {
                     </div>
                 </a>
 
-                <!-- 4. 報價單解析器 -->
-                <a :href="budgetWebUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🧾</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">報價單解析器</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 Excel 並自動解析工項分區。</p>
-                    </div>
-                </a>
+                <!-- 4. 報價單解析器 ＋ 4a. 線上報價編輯（豪哥：編輯入口緊接在解析器正下方） -->
+                <div class="md:col-span-2 flex flex-col gap-3">
+                    <a :href="budgetWebUrl"
+                        class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🧾</div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-base font-bold text-gray-800 leading-tight">報價單解析器</h2>
+                            <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 Excel 並自動解析工項分區。</p>
+                        </div>
+                    </a>
+                    <a v-if="quoteEditorCardVisible" href="#"
+                        @click.prevent="openQuoteEditor"
+                        class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">📋</div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-base font-bold text-gray-800 leading-tight">報價編輯</h2>
+                            <p class="text-xs text-gray-500 mt-1 leading-snug">依案號編輯線上報價單（Hub 同分頁；目前開放測試案 999）。</p>
+                        </div>
+                    </a>
+                </div>
 
                 <!-- 4b. 副本文字冒險（實驗中：須權限 ≥ 5；外部網站：開啟＋複製連結，非 iframe） -->
                 <div v-if="currentUser && Number(currentUser.permission) >= 5"
