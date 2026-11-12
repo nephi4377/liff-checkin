@@ -218,18 +218,19 @@ test('editor/view load AccountingApi via absolute path; never classic-load ES co
   assert.match(viewHtml, /isLocalStaffPreview|buildLocalCustomerSession/);
 });
 
-test('local fixture is gated to project 999 only', () => {
-  assert.match(localJs, /TEST_PROJECT = '999'/);
+test('local fixture simulates full rollout for any numeric project_no', () => {
   assert.equal(QuoteEditorLocal.TEST_PROJECT, '999');
-  const staff = QuoteEditorLocal.fixtureStaffPayload('999');
-  assert.equal(staff.success, true);
-  assert.equal(staff.staff.quote.project_no, '999');
-  assert.equal(staff.staff.feature_enabled, false);
-  assert.equal(staff.staff.project_allowed, true);
-  const customer = QuoteEditorLocal.fixtureCustomerPayload('999');
+  const staff999 = QuoteEditorLocal.fixtureStaffPayload('999');
+  assert.equal(staff999.success, true);
+  assert.equal(staff999.staff.quote.project_no, '999');
+  assert.equal(staff999.staff.feature_enabled, true);
+  assert.equal(staff999.staff.project_allowed, true);
+  const staff715 = QuoteEditorLocal.fixtureStaffPayload('715');
+  assert.equal(staff715.staff.quote.project_no, '715');
+  assert.equal(staff715.staff.feature_enabled, true);
+  assert.equal(staff715.staff.project_allowed, true);
+  const customer = QuoteEditorLocal.fixtureCustomerPayload('715');
   assert.equal(customer.success, true);
   assert.equal('unit_price' in (customer.quote.zones[0].lines[0] || {}), false);
   assert.equal(sanitize.payloadContainsForbiddenToken(customer.quote), '');
-  // 非 999：假資料 helper 仍可組 payload，但 canUseLocalFixture 在瀏覽器才依 URL 擋；此處鎖常數
-  assert.equal(QuoteEditorLocal.fixtureStaffPayload('888').staff.project_allowed, false);
 });

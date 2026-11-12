@@ -24,7 +24,9 @@ test('Dashboard stacks quote editor card directly under budget parser', () => {
   assert.ok(parserIdx >= 0 && editorIdx > parserIdx, 'quote editor appears after parser in card block');
   assert.match(dashJs, /md:col-span-2 flex flex-col gap-3/);
   assert.match(dashJs, /openQuoteEditor/);
-  assert.match(dashJs, /QUOTE_EDITOR_ROLLOUT_PROJECT = '999'/);
+  assert.doesNotMatch(dashJs, /QUOTE_EDITOR_ROLLOUT_PROJECT/);
+  assert.match(dashJs, /quoteEditorCardVisible/);
+  assert.doesNotMatch(dashJs, /目前開放測試案 999/);
   assert.match(dashJs, /quoteEditorCardVisible/);
   assert.match(dashJs, /#\/quote-editor\?project_no=/);
 });
