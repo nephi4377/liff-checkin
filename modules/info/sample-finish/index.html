@@ -269,6 +269,7 @@
         name: "暖白",
         hex: "#f2eee6",
         space: "客廳牆面與櫃體",
+        // W-01：色票與實景對照待人工核對（YY-88）；本輪不換圖。
         photos: [
           { src: "photos/warm-white-living-01.jpg", alt: "暖白客廳完工實景" },
           { src: "photos/warm-white-living-02.jpg", alt: "暖白客廳另一角度" }
@@ -302,6 +303,13 @@
           { src: "photos/walnut-entry-01.jpg", alt: "霧灰玄關完工實景" },
           { src: "photos/walnut-work-01.jpg", alt: "工作區完工實景" }
         ]
+      },
+      {
+        id: "Y-05",
+        name: "雲灰",
+        hex: "#bcc2be",
+        space: "—",
+        photos: []
       }
     ];
 
@@ -315,9 +323,56 @@
 
     let activeId = COLORS[0].id;
     let photoIndex = 0;
+    let photoRequestId = 0;
+    let photoListeners = null;
 
     function current() {
       return COLORS.find((c) => c.id === activeId) || COLORS[0];
+    }
+
+    function detachPhotoListeners() {
+      if (!photoListeners) return;
+      photoEl.removeEventListener("load", photoListeners.onLoad);
+      photoEl.removeEventListener("error", photoListeners.onError);
+      photoListeners = null;
+    }
+
+    function setStatusChosen(c, suffix) {
+      statusEl.innerHTML = "已選 <strong>" + c.name + "</strong> · " + suffix;
+    }
+
+    function clearPhotoViewport() {
+      detachPhotoListeners();
+      photoEl.classList.remove("is-shown");
+      photoEl.removeAttribute("src");
+      photoEl.alt = "";
+      titleEl.textContent = "—";
+      captionEl.textContent = "—";
+    }
+
+    function setPagerForPhotos(count) {
+      const off = count < 2;
+      prevBtn.disabled = off;
+      nextBtn.disabled = off;
+    }
+
+    function showNoPhotos(c) {
+      clearPhotoViewport();
+      titleEl.textContent = c.name + " · " + c.id;
+      captionEl.textContent = "尚無公開完工照";
+      setStatusChosen(c, "尚無公開完工照");
+      setPagerForPhotos(0);
+    }
+
+    function showLoadError(c) {
+      detachPhotoListeners();
+      photoEl.classList.remove("is-shown");
+      photoEl.removeAttribute("src");
+      photoEl.alt = "";
+      titleEl.textContent = c.name + " · " + c.id;
+      captionEl.textContent = "此張完工照暫時無法顯示";
+      setStatusChosen(c, "完工照無法顯示，可改選其他色號或稍後再試");
+      setPagerForPhotos(c.photos ? c.photos.length : 0);
     }
 
     function renderSwatches() {
@@ -341,42 +396,76 @@
     function selectColor(id) {
       activeId = id;
       photoIndex = 0;
-      statusEl.innerHTML = "已選 <strong>" + current().name + "</strong> · 載入完工照";
       renderSwatches();
       showPhoto();
     }
 
     function showPhoto() {
+      const requestId = ++photoRequestId;
       const c = current();
-      const shot = c.photos[photoIndex];
-      photoEl.classList.remove("is-shown");
-      const reveal = () => {
-        photoEl.classList.add("is-shown");
-        titleEl.textContent = c.name + " · " + c.id;
-        captionEl.textContent = c.space + "（精選實景 " + (photoIndex + 1) + "/" + c.photos.length + "）";
-        statusEl.innerHTML = "已選 <strong>" + c.name + "</strong> · 完工照已顯示";
-        prevBtn.disabled = c.photos.length < 2;
-        nextBtn.disabled = c.photos.length < 2;
-      };
-      // 先換圖再淡入，避免空白乾等
+      const photos = Array.isArray(c.photos) ? c.photos : [];
+
+      clearPhotoViewport();
+
+      if (photos.length === 0) {
+        showNoPhotos(c);
+        return;
+      }
+
+      if (photoIndex < 0 || photoIndex >= photos.length) {
+        photoIndex = 0;
+      }
+
+      const shot = photos[photoIndex];
+      if (!shot || !shot.src) {
+        showLoadError(c);
+        return;
+      }
+
+      setStatusChosen(c, "載入完工照");
+      setPagerForPhotos(photos.length);
+
       const onLoad = () => {
-        photoEl.removeEventListener("load", onLoad);
-        requestAnimationFrame(reveal);
+        if (requestId !== photoRequestId) return;
+        if (photoEl.naturalWidth === 0) {
+          onError();
+          return;
+        }
+        detachPhotoListeners();
+        requestAnimationFrame(() => {
+          if (requestId !== photoRequestId) return;
+          photoEl.classList.add("is-shown");
+          titleEl.textContent = c.name + " · " + c.id;
+          captionEl.textContent =
+            c.space + "（精選實景 " + (photoIndex + 1) + "/" + photos.length + "）";
+          setStatusChosen(c, "完工照已顯示");
+        });
       };
+
+      const onError = () => {
+        if (requestId !== photoRequestId) return;
+        showLoadError(c);
+      };
+
+      photoListeners = { onLoad, onError };
       photoEl.addEventListener("load", onLoad);
+      photoEl.addEventListener("error", onError);
+      photoEl.alt = shot.alt || c.name + " 完工實景";
       photoEl.src = shot.src;
-      photoEl.alt = shot.alt;
-      if (photoEl.complete) onLoad();
     }
 
     prevBtn.addEventListener("click", () => {
       const c = current();
-      photoIndex = (photoIndex - 1 + c.photos.length) % c.photos.length;
+      const photos = c.photos || [];
+      if (photos.length < 2) return;
+      photoIndex = (photoIndex - 1 + photos.length) % photos.length;
       showPhoto();
     });
     nextBtn.addEventListener("click", () => {
       const c = current();
-      photoIndex = (photoIndex + 1) % c.photos.length;
+      const photos = c.photos || [];
+      if (photos.length < 2) return;
+      photoIndex = (photoIndex + 1) % photos.length;
       showPhoto();
     });
 
