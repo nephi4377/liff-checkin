@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   rtdb-tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
           RTDB_E2E_ARTIFACTS: ${{ runner.temp }}/rtdb-e2e
 
   layout-planner:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:

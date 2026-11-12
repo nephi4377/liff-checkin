@@ -8,6 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=20261016-customer-menu"></script>
+  <script src="../projects/js/quote-editor-sanitize.js"></script>
   <script src="../../shared/js/accounting_boot.js?v=9"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -115,12 +116,18 @@
         <span class="tab" data-tab="mat">選材</span>
         <span class="tab" data-tab="audit">稽核</span>
         <span class="tab" data-tab="bind">客戶綁定</span>
+        <span class="tab" data-tab="esign">簽約注意</span>
+        <span class="tab" data-tab="esignc">線上合約</span>
+        <span class="tab" data-tab="quote">線上報價</span>
       </div>
       <div id="panelAdj" class="card"></div>
       <div id="panelRec" class="card hidden"></div>
       <div id="panelMat" class="card hidden"></div>
       <div id="panelAudit" class="card hidden"></div>
       <div id="panelBind" class="card hidden"></div>
+      <div id="panelEsign" class="card hidden"></div>
+      <div id="panelEsignc" class="card hidden"></div>
+      <div id="panelQuote" class="card hidden"></div>
     </div>
   </div>
   <script>
@@ -372,6 +379,9 @@
       renderMatPanel();
       renderAuditPanel();
       renderBindPanel();
+      renderEsignPanel();
+      renderEsignContractPanel();
+      renderQuotePanel();
       document.querySelectorAll('.tab').forEach(function (t) {
         t.classList.toggle('active', t.getAttribute('data-tab') === activeTab);
       });
@@ -380,6 +390,410 @@
       $('panelMat').classList.toggle('hidden', activeTab !== 'mat');
       $('panelAudit').classList.toggle('hidden', activeTab !== 'audit');
       $('panelBind').classList.toggle('hidden', activeTab !== 'bind');
+      $('panelEsign').classList.toggle('hidden', activeTab !== 'esign');
+      $('panelEsignc').classList.toggle('hidden', activeTab !== 'esignc');
+      $('panelQuote').classList.toggle('hidden', activeTab !== 'quote');
+    }
+
+    function renderQuotePanel() {
+      var pno = currentProject || '';
+      var panel = $('panelQuote');
+      if (!panel) return;
+      var editorHref = '../projects/quote-editor.html?project_no=' + encodeURIComponent(pno);
+      var clientLink = location.origin + '/modules/projects/quote-view.html?project_no=' + encodeURIComponent(pno);
+      panel.innerHTML =
+        '<h4>線上報價</h4>' +
+        '<p class="form-hint">依空間分區從標準計價表加工項。成本／廠商價只留後台，不會出現在客人頁或列印。系統不做主動推播；連結請用官 LINE 回覆傳。</p>' +
+        '<p id="quoteStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="quoteLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<p style="margin:12px 0">' +
+        '<a class="btn btn-primary" href="' + editorHref + '" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">開啟報價編輯</a> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuoteCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuoteRefresh">重新整理狀態</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnQuotePrint">列印預覽（無成本）</button>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關閉；測試案號需後端白名單。平面配置帶入櫃子留第 4 階。</p>';
+
+      function setQuoteStatus(t) {
+        var line = $('quoteStatusLine');
+        if (line) line.textContent = t;
+      }
+      async function refreshQuoteStatus() {
+        setQuoteStatus('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setQuoteStatus('本機模擬：未連後端（可先開編輯頁看 UI）');
+            return;
+          }
+          var res = await AccountingApi.quoteEditorGet(session, pno);
+          if (!res || !res.success) {
+            setQuoteStatus((res && res.message) || '狀態讀取失敗');
+            return;
+          }
+          var staff = res.staff || {};
+          var q = staff.quote || {};
+          var t = staff.totals || {};
+          var flag = staff.feature_enabled ? '正式開放中' : (staff.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          setQuoteStatus('版本 v' + (q.version || 1) + '｜狀態 ' + (q.status || 'draft') + '｜含稅 ' + (t.with_tax != null ? t.with_tax : '—') + '｜' + flag);
+        } catch (e) {
+          setQuoteStatus((e && e.message) || '狀態讀取失敗');
+        }
+      }
+      var copyBtn = $('btnQuoteCopy');
+      if (copyBtn) copyBtn.onclick = function () {
+        var text = ($('quoteLinkText') && $('quoteLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showOk('已複製客戶連結');
+          }).catch(function () {
+            window.prompt('請手動複製：', text);
+          });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      };
+      var refreshBtn = $('btnQuoteRefresh');
+      if (refreshBtn) refreshBtn.onclick = refreshQuoteStatus;
+      var printBtn = $('btnQuotePrint');
+      if (printBtn) printBtn.onclick = async function () {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法列印'); return; }
+          var res = await AccountingApi.quoteEditorPrint(session, pno);
+          if (!res || !res.success) { showMsg((res && res.message) || '列印資料讀取失敗'); return; }
+          var p = res.print || {};
+          if (typeof QuoteEditorSanitize !== 'undefined') {
+            p = QuoteEditorSanitize.toCustomerQuote(p);
+          }
+          var raw = JSON.stringify(p);
+          if (/cost_unit|vendor_price|"成本"|"廠商價"|"unit_price"/.test(raw)) {
+            showMsg('列印資料含成本／廠商價／單價，已擋下');
+            return;
+          }
+          var w = window.open('', '_blank');
+          if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
+          function quotePrintLineRows(list, indent) {
+            return (list || []).map(function (ln) {
+              var note = ln.note ? '<div style="color:#667">' + escapeHtml(ln.note) + '</div>' : '';
+              var row = '<tr><td style="padding-left:' + (indent ? '18' : '4') + 'px">' +
+                escapeHtml(ln.item) + note + '</td><td>' + escapeHtml(ln.unit) + '</td><td>' +
+                escapeHtml(String(ln.qty)) + '</td><td>' + escapeHtml(String(ln.amount)) + '</td></tr>';
+              return row + quotePrintLineRows(ln.addons || [], true);
+            }).join('');
+          }
+          function quotePrintByTrade(zone) {
+            var order = [];
+            var map = {};
+            var subMap = {};
+            (zone.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
+            (zone.lines || []).forEach(function (ln) {
+              var tab = String(ln.tab || '其他').trim() || '其他';
+              if (!map[tab]) { map[tab] = []; order.push(tab); }
+              map[tab].push(ln);
+            });
+            if (!order.length) return '<tr><td colspan="4">（無項目）</td></tr>';
+            return order.map(function (tab) {
+              return '<tr><td colspan="4"><strong>' + escapeHtml(tab) + '</strong> 小計 ' +
+                escapeHtml(String(subMap[tab] != null ? subMap[tab] : '')) + '</td></tr>' +
+                quotePrintLineRows(map[tab]);
+            }).join('');
+          }
+          var zones = (p.zones || []).map(function (z) {
+            return '<h3>' + escapeHtml(z.name) + '（小計 ' + escapeHtml(String(z.zone_subtotal != null ? z.zone_subtotal : '')) +
+              '）</h3><table border="1" cellpadding="4" cellspacing="0" style="border-collapse:collapse;width:100%">' +
+              '<tr><th>項目</th><th>單位</th><th>數量</th><th>金額</th></tr>' +
+              quotePrintByTrade(z) + '</table>';
+          }).join('');
+          var tot = p.totals || {};
+          var fees = p.fees_received || {};
+          w.document.write('<html><head><title>報價列印</title></head><body style="font-family:sans-serif;padding:16px">' +
+            '<h2>工程報價單</h2><div>案號 ' + escapeHtml(pno) + '</div>' + zones +
+            '<p>未稅 ' + escapeHtml(String(tot.pretax || '')) + '｜稅 ' + escapeHtml(String(tot.tax || '')) +
+            '｜含稅 ' + escapeHtml(String(tot.with_tax || '')) +
+            '<br/>已扣丈量／啟動／規劃 ' + escapeHtml(String(fees.measure || 0)) + '／' +
+            escapeHtml(String(fees.startup || 0)) + '／' + escapeHtml(String(fees.planning || 0)) +
+            '｜應付 ' + escapeHtml(String(tot.payable || '')) + '</p></body></html>');
+          w.document.close();
+          w.focus();
+          w.print();
+        } catch (ePrint) {
+          showMsg((ePrint && ePrint.message) || '列印失敗');
+        }
+      };
+      refreshQuoteStatus();
+    }
+
+    function renderEsignPanel() {
+      var pno = currentProject || '';
+      var panel = $('panelEsign');
+      if (!panel) return;
+      var clientLink = location.origin + '/modules/projects/esign-notice.html?project_no=' + encodeURIComponent(pno);
+      panel.innerHTML =
+        '<h4>簽約注意事項</h4>' +
+        '<p class="form-hint">客戶逐條確認＋手寫簽名。系統不做主動推播；請同事用官方 LINE「回覆」把連結傳給客戶。</p>' +
+        '<p id="esignStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="esignLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<p style="margin:12px 0">' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignRefresh">重新整理狀態</button> ' +
+        '<a class="btn btn-primary" id="btnEsignPreview" href="../projects/esign-notice.html?project_no=' + encodeURIComponent(pno) + '&staff_preview=1" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽客戶畫面</a> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsignPrint">列印已簽版本</button>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關閉；測試案號需後端白名單。已簽內容會鎖定，不隨之後改版變動。</p>';
+
+      function setStatusText(t) {
+        var line = $('esignStatusLine');
+        if (line) line.textContent = t;
+      }
+      async function refreshStatus() {
+        setStatusText('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setStatusText('本機模擬：未連後端（狀態未知）');
+            return;
+          }
+          var res = await AccountingApi.esignNoticeStatus(session, pno);
+          if (!res || !res.success) {
+            setStatusText((res && res.message) || '狀態讀取失敗');
+            return;
+          }
+          var flag = res.feature_enabled ? '正式開放中' : (res.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          setStatusText('狀態：' + (res.status_label || res.status || '—') + '｜' + flag);
+          if (res.client_link) {
+            var linkEl = $('esignLinkText');
+            if (linkEl) linkEl.textContent = res.client_link;
+          }
+        } catch (e) {
+          setStatusText((e && e.message) || '狀態讀取失敗');
+        }
+      }
+      var copyBtn = $('btnEsignCopy');
+      if (copyBtn) copyBtn.onclick = function () {
+        var text = ($('esignLinkText') && $('esignLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            showOk('已複製客戶連結');
+          }).catch(function () {
+            window.prompt('請手動複製：', text);
+          });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      };
+      var refreshBtn = $('btnEsignRefresh');
+      if (refreshBtn) refreshBtn.onclick = refreshStatus;
+      var printBtn = $('btnEsignPrint');
+      if (printBtn) printBtn.onclick = async function () {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法列印'); return; }
+          var res = await AccountingApi.esignNoticePrint(session, pno);
+          if (!res || !res.success) { showMsg((res && res.message) || '列印資料讀取失敗'); return; }
+          var w = window.open('', '_blank');
+          if (!w) { showMsg('瀏覽器阻擋彈窗，請允許後再試'); return; }
+          var p = res.print || {};
+          var base = location.origin + '/modules/projects/';
+          var items = (p.items || []).map(function (it) {
+            var ack = (p.ack_times && p.ack_times[String(it.id)]) || '—';
+            var imgs = (it.images || []).filter(function (img) { return img && img.src; }).map(function (img) {
+              var src = String(img.src);
+              if (!/^https?:\/\//i.test(src) && src.charAt(0) !== '/') src = base + src.replace(/^\.\//, '');
+              var alt = img.alt || img.caption || '';
+              return '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(alt) + '" style="max-width:220px;margin:4px 6px 4px 0;vertical-align:top"/>' +
+                '<div style="font-size:12px;color:#555">' + escapeHtml(alt) + '</div>';
+            }).join('');
+            return '<div style="margin:0 0 10px"><strong>第 ' + it.id + ' 條' +
+              (it.title ? '｜' + escapeHtml(it.title) : '') + '</strong><div>' +
+              escapeHtml(it.body || '').replace(/\n/g, '<br/>') +
+              '</div>' + (imgs ? '<div>' + imgs + '</div>' : '') +
+              '<div>我了解時間：' + escapeHtml(ack) + '</div></div>';
+          }).join('');
+          w.document.write('<html><head><title>簽約注意事項列印</title></head><body style="font-family:sans-serif;padding:16px">' +
+            '<h2>' + escapeHtml(p.title || '簽約注意事項') + '</h2>' +
+            '<div>案號 ' + escapeHtml(pno) + '｜版本 ' + escapeHtml(p.notice_version || '') + '</div>' +
+            '<div>內容雜湊：' + escapeHtml(p.notice_content_hash || '') + '</div>' +
+            items +
+            '<p><strong>' + escapeHtml(p.closing || '對於以上說明已經清楚了解。') + '</strong></p>' +
+            '<p>立同意書人：' + escapeHtml(p.display_name || '') + '</p>' +
+            '<p>簽名時間（台北）：' + escapeHtml(p.signed_at || '') + '</p>' +
+            (p.signature_data_url ? '<img src="' + p.signature_data_url + '" style="max-width:280px;border:1px solid #999"/>' : '') +
+            '</body></html>');
+          w.document.close();
+          w.focus();
+          w.print();
+        } catch (ePrint) {
+          showMsg((ePrint && ePrint.message) || '列印失敗');
+        }
+      };
+      refreshStatus();
+    }
+
+    function renderEsignContractPanel() {
+      var pno = currentProject || '';
+      var panel = $('panelEsignc');
+      if (!panel) return;
+      var clientLink = location.origin + '/modules/projects/esign-contract.html?project_no=' + encodeURIComponent(pno);
+      var defaultPay = [
+        { stage: 1, name: '簽約金', ratio: 30, node: '簽約' },
+        { stage: 2, name: '木作退場', ratio: 30, node: '木作裝修退場或超過施作工項的二分之一' },
+        { stage: 3, name: '系統櫃完工', ratio: 30, node: '系統櫃完工（或本案另定同等節點）' },
+        { stage: 4, name: '驗收尾款', ratio: 10, node: '工程完工驗收' }
+      ];
+      panel.innerHTML =
+        '<h4>線上合約</h4>' +
+        '<p class="form-hint">案號／總價／工期／付款／客戶欄從案件帶入（勿寫死）。未自訂付款表＝預設 30/30/30/10。系統不做推播；請用官 LINE 回覆傳連結。</p>' +
+        '<p id="esigncStatusLine" class="sub">狀態載入中…</p>' +
+        '<p style="margin:10px 0;word-break:break-all;font-size:13px" id="esigncLinkText">' + escapeHtml(clientLink) + '</p>' +
+        '<div id="esigncFields" class="form-hint" style="margin:8px 0;white-space:pre-line"></div>' +
+        '<h5 style="margin:14px 0 6px">付款節點（每案可改）</h5>' +
+        '<div id="esigncPayRows"></div>' +
+        '<p style="margin:8px 0">' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncAddPay">加一期</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncResetPay">還原預設 30/30/30/10</button>' +
+        '</p>' +
+        '<label class="form-hint">總價覆寫（選填；空白＝用毛利合約額自動帶入）' +
+        '<input type="text" id="esigncTotalOverride" placeholder="例如 100000" style="display:block;width:100%;max-width:240px;margin-top:4px;padding:6px"/></label>' +
+        '<p style="margin:12px 0">' +
+        '<button type="button" class="btn btn-primary" id="btnEsigncSave">儲存付款表／欄位</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncSend">標記已寄出</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncCopy">複製客戶連結</button> ' +
+        '<button type="button" class="btn btn-secondary" id="btnEsigncRefresh">重新整理</button> ' +
+        '<a class="btn btn-secondary" id="btnEsigncPreview" href="../projects/esign-contract.html?project_no=' + encodeURIComponent(pno) + '&staff_preview=1" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">預覽客戶畫面</a> ' +
+        '<a class="btn btn-secondary" id="btnEsigncSignB" href="../projects/esign-contract.html?project_no=' + encodeURIComponent(pno) + '&staff=1" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none">簽乙方</a>' +
+        '</p>' +
+        '<p class="form-hint">正式開關預設關；測試案需白名單。「預覽」唯讀；「簽乙方」才可送公司簽名。甲方簽名後不可再改付款表。金額／個資合併前須豪哥點頭。</p>';
+
+      var payState = defaultPay.map(function (r) { return Object.assign({}, r); });
+
+      function setStatusText(t) {
+        var line = $('esigncStatusLine');
+        if (line) line.textContent = t;
+      }
+      function renderPayRows() {
+        var box = $('esigncPayRows');
+        if (!box) return;
+        box.innerHTML = payState.map(function (row, idx) {
+          return '<div data-pay-idx="' + idx + '" style="display:grid;grid-template-columns:1.2fr 0.5fr 1.4fr auto;gap:6px;margin:4px 0;align-items:center">' +
+            '<input type="text" data-f="name" value="' + escapeHtml(row.name || '') + '" placeholder="期名"/>' +
+            '<input type="number" data-f="ratio" value="' + escapeHtml(String(row.ratio != null ? row.ratio : '')) + '" placeholder="%" min="0" max="100" step="0.01"/>' +
+            '<input type="text" data-f="node" value="' + escapeHtml(row.node || '') + '" placeholder="節點說明"/>' +
+            '<button type="button" class="btn btn-secondary btnEsigncDelPay" data-idx="' + idx + '">刪</button>' +
+            '</div>';
+        }).join('');
+        box.querySelectorAll('input').forEach(function (inp) {
+          inp.oninput = function () {
+            var wrap = inp.closest('[data-pay-idx]');
+            if (!wrap) return;
+            var i = parseInt(wrap.getAttribute('data-pay-idx'), 10);
+            var f = inp.getAttribute('data-f');
+            if (!payState[i]) return;
+            payState[i][f] = f === 'ratio' ? parseFloat(inp.value) : inp.value;
+          };
+        });
+        box.querySelectorAll('.btnEsigncDelPay').forEach(function (btn) {
+          btn.onclick = function () {
+            var i = parseInt(btn.getAttribute('data-idx'), 10);
+            if (payState.length <= 1) { showMsg('至少保留一期'); return; }
+            payState.splice(i, 1);
+            renderPayRows();
+          };
+        });
+      }
+      function readPayFromDom() {
+        return payState.map(function (r, idx) {
+          return {
+            stage: idx + 1,
+            name: String(r.name || '').trim(),
+            ratio: Number(r.ratio),
+            node: String(r.node || r.name || '').trim()
+          };
+        });
+      }
+      async function refreshStatus() {
+        setStatusText('狀態載入中…');
+        try {
+          if (localMockMode) {
+            setStatusText('本機模擬：未連後端（狀態未知）');
+            renderPayRows();
+            return;
+          }
+          var res = await AccountingApi.esignContractStatus(session, pno);
+          if (!res || !res.success) {
+            setStatusText((res && res.message) || '狀態讀取失敗');
+            renderPayRows();
+            return;
+          }
+          var flag = res.feature_enabled ? '正式開放中' : (res.project_allowed ? '測試案可用（正式開關仍關）' : '正式開關關閉且非測試案');
+          var rec = res.record || {};
+          setStatusText('狀態：' + (res.status_label || res.status || '—') + '｜' + flag +
+            (rec.payment_schedule_custom ? '｜付款表已自訂' : '｜付款表預設'));
+          if (res.client_link) {
+            var linkEl = $('esigncLinkText');
+            if (linkEl) linkEl.textContent = res.client_link;
+          }
+          var cf = rec.case_fields || {};
+          var fieldsEl = $('esigncFields');
+          if (fieldsEl) {
+            fieldsEl.textContent = [
+              '案號：' + (cf.project_no || pno || '—'),
+              '案名：' + (cf.project_name || '—'),
+              '地址：' + (cf.project_address || '—'),
+              '甲方：' + (cf.party_a_name || '—') + '／' + (cf.party_a_phone || '—'),
+              '開工：' + (cf.start_date || '—') + '　工期天數：' + (cf.work_days || '—'),
+              '總價：' + (cf.total_amount || '—')
+            ].join('\n');
+          }
+          if (Array.isArray(rec.payment_schedule) && rec.payment_schedule.length) {
+            payState = rec.payment_schedule.map(function (r) {
+              return { stage: r.stage, name: r.name, ratio: r.ratio, node: r.node };
+            });
+          }
+          var tot = $('esigncTotalOverride');
+          if (tot && cf.total_amount) tot.placeholder = '目前 ' + cf.total_amount;
+          renderPayRows();
+        } catch (e) {
+          setStatusText((e && e.message) || '狀態讀取失敗');
+          renderPayRows();
+        }
+      }
+      function copyLink() {
+        var text = ($('esigncLinkText') && $('esigncLinkText').textContent) || clientLink;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { showOk('已複製客戶連結'); })
+            .catch(function () { window.prompt('請手動複製：', text); });
+        } else {
+          window.prompt('請手動複製：', text);
+        }
+      }
+      async function save(markSent) {
+        try {
+          if (localMockMode) { showMsg('本機模擬無法儲存'); return; }
+          var payload = {
+            payment_schedule: readPayFromDom(),
+            case_fields: {}
+          };
+          var tot = $('esigncTotalOverride') && $('esigncTotalOverride').value;
+          if (tot && String(tot).trim()) payload.case_fields.total_amount = String(tot).trim();
+          if (markSent) payload.mark_sent = '1';
+          var res = await AccountingApi.esignContractStaffSave(session, pno, payload);
+          if (!res || !res.success) { showMsg((res && res.message) || '儲存失敗'); return; }
+          showOk(res.message || '已儲存');
+          await refreshStatus();
+        } catch (eSave) {
+          showMsg((eSave && eSave.message) || '儲存失敗');
+        }
+      }
+      if ($('btnEsigncAddPay')) $('btnEsigncAddPay').onclick = function () {
+        payState.push({ stage: payState.length + 1, name: '', ratio: 0, node: '' });
+        renderPayRows();
+      };
+      if ($('btnEsigncResetPay')) $('btnEsigncResetPay').onclick = function () {
+        payState = defaultPay.map(function (r) { return Object.assign({}, r); });
+        renderPayRows();
+      };
+      if ($('btnEsigncSave')) $('btnEsigncSave').onclick = function () { save(false); };
+      if ($('btnEsigncSend')) $('btnEsigncSend').onclick = function () { save(true); };
+      if ($('btnEsigncCopy')) $('btnEsigncCopy').onclick = copyLink;
+      if ($('btnEsigncRefresh')) $('btnEsigncRefresh').onclick = refreshStatus;
+      refreshStatus();
     }
 
     function renderMatPanel() {

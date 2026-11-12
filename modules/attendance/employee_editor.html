@@ -257,6 +257,30 @@
                 </div>
 
                 <hr class="mt-2">
+                <div id="tax-withhold-section-wrap" class="space-y-3">
+                    <h3 class="text-base font-semibold text-gray-800">所得稅扣繳／二代健保</h3>
+                    <p class="text-xs text-gray-500 -mt-1">依財政部薪資所得扣繳辦法：可選「依扣繳稅額表」或「固定 5%」。非固定獎金另計；獎金超過投保金額 4 倍部分另扣二代健保補充保費 2.11%。</p>
+                    <div>
+                        <label for="扣繳方式" class="block text-gray-700 font-semibold mb-2">扣繳方式</label>
+                        <select id="扣繳方式" class="w-full px-3 py-2 border border-gray-300 rounded-md bg-white">
+                            <option value="固定5%">固定 5%</option>
+                            <option value="依扣繳稅額表">依扣繳稅額表</option>
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">未填免稅額申報表時通常用固定 5%；已申報可改依表。</p>
+                    </div>
+                    <div id="tax-dependents-wrap">
+                        <label for="扣繳扶養人數" class="block text-gray-700 font-semibold mb-2">扣繳扶養人數（配偶＋受扶養合計）</label>
+                        <input type="number" id="扣繳扶養人數" min="0" max="11" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0" value="0">
+                        <p class="text-xs text-gray-500 mt-1">官方「配偶及受扶養親屬」合計人數（不含本人；0～11）。例：無配偶＋1 名受扶養＝1；有配偶＋2 名受扶養＝3。僅「依扣繳稅額表」時使用。</p>
+                    </div>
+                    <div>
+                        <label for="本年已發獎金累計" class="block text-gray-700 font-semibold mb-2">本年已發獎金累計</label>
+                        <input type="number" id="本年已發獎金累計" min="0" step="1" class="w-full px-3 py-2 border border-gray-300 rounded-md" placeholder="0" value="0">
+                        <p class="text-xs text-gray-500 mt-1">供二代健保「全年累計超過投保 4 倍」計算；每次發獎金後請更新（不含本次待發）。</p>
+                    </div>
+                </div>
+
+                <hr class="mt-2">
                 <div id="insurance-section-wrap">
                     <h3 class="text-base font-semibold text-gray-800">勞健保</h3>
                     <p id="insurance-monthly-hint" class="text-xs text-gray-500 -mt-1">依政府投保級距表試算個人負擔（勞保＋健保＋勞退自提）；僅月薪員工適用。</p>
@@ -346,6 +370,10 @@
         const otherAllowanceInput = document.getElementById('其他津貼');
         const otherAllowanceNoteInput = document.getElementById('其他津貼說明');
         const payrollNoteInput = document.getElementById('薪資備註');
+        const taxWithholdModeSelect = document.getElementById('扣繳方式');
+        const taxDependentCountInput = document.getElementById('扣繳扶養人數');
+        const ytdBonusPaidInput = document.getElementById('本年已發獎金累計');
+        const taxDependentsWrap = document.getElementById('tax-dependents-wrap');
         const insuranceTypeSelect = document.getElementById('保險類型');
         const insuredLevelSelect = document.getElementById('投保級距');
         const healthDependentInput = document.getElementById('健保眷屬人數');
@@ -544,8 +572,22 @@
             baseSalaryInput.addEventListener('change', suggestInsuredLevelFromBase);
             payTypeSelect.addEventListener('change', () => { syncInsuranceForPayType(); suggestInsuredLevelFromBase(); });
             payRuleSelect.addEventListener('change', syncInsuranceForPayType);
+            taxWithholdModeSelect.addEventListener('change', toggleTaxDependentFields);
             setupPassbookDropZone();
             populateInsuredLevelSelect();
+            toggleTaxDependentFields();
+        }
+
+        function toggleTaxDependentFields() {
+            const table = taxWithholdModeSelect.value === '依扣繳稅額表';
+            taxDependentsWrap.classList.toggle('hidden', !table);
+        }
+
+        function toFormTaxWithholdMode(v) {
+            const s = String(v || '').trim();
+            if (!s) return '固定5%';
+            if (s === 'table' || s.indexOf('扣繳稅額表') >= 0) return '依扣繳稅額表';
+            return '固定5%';
         }
 
         function isDailyPayEmployee() {
@@ -570,10 +612,11 @@
             }
         }
 
+        // 115/01 勞健保投保級距（與 CheckinSystem Logic_InsurancePremium 同步；不含職訓特級）
         const INSURED_SALARY_LEVELS = [
             11100, 12540, 13500, 15840, 16500, 17280, 17880, 19047, 20008, 21009,
-            22000, 23100, 24000, 25250, 26400, 27600, 28800, 30300, 31800, 33300,
-            34800, 36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 52800,
+            22000, 23100, 24000, 25250, 26400, 27600, 29500, 30300, 31800, 33300,
+            34800, 36300, 38200, 40100, 42000, 43900, 45800, 48200, 50600, 53000,
             55400, 57800, 60800, 63800, 66800, 69800, 72800, 76500, 80200, 83900,
             87600, 92100, 96600, 101100, 105600, 110100
         ];
@@ -837,6 +880,10 @@
             otherAllowanceInput.value = '';
             otherAllowanceNoteInput.value = '';
             payrollNoteInput.value = '';
+            taxWithholdModeSelect.value = '固定5%';
+            taxDependentCountInput.value = '0';
+            ytdBonusPaidInput.value = '0';
+            toggleTaxDependentFields();
             insuranceTypeSelect.value = '';
             insuredLevelSelect.value = '';
             healthDependentInput.value = '0';
@@ -880,6 +927,14 @@
             otherAllowanceInput.value = employee.otherAllowance || employee.其他津貼 || '';
             otherAllowanceNoteInput.value = employee.otherAllowanceNote || employee.其他津貼說明 || '';
             payrollNoteInput.value = employee.payrollNote || employee.薪資備註 || '';
+            taxWithholdModeSelect.value = toFormTaxWithholdMode(employee.taxWithholdMode || employee.扣繳方式);
+            taxDependentCountInput.value = String(
+                Math.max(0, Math.min(11, parseInt(employee.taxDependentCount ?? employee.扣繳扶養人數 ?? 0, 10) || 0))
+            );
+            ytdBonusPaidInput.value = String(
+                Math.max(0, Math.round(Number(employee.ytdBonusPaid ?? employee.本年已發獎金累計 ?? 0) || 0))
+            );
+            toggleTaxDependentFields();
             insuranceTypeSelect.value = toFormInsuranceType(employee.insuranceType || employee.保險類型);
             insuredLevelTouched = false;
             const savedLevel = employee.insuredSalaryLevel || employee.投保級距 || '';
@@ -976,6 +1031,9 @@
                 其他津貼: otherAllowanceInput.value !== '' ? Number(otherAllowanceInput.value) : '',
                 其他津貼說明: otherAllowanceNoteInput.value.trim(),
                 薪資備註: payrollNoteInput.value.trim(),
+                扣繳方式: taxWithholdModeSelect.value || '固定5%',
+                扣繳扶養人數: Math.max(0, Math.min(11, parseInt(taxDependentCountInput.value, 10) || 0)),
+                本年已發獎金累計: Math.max(0, Math.round(Number(ytdBonusPaidInput.value) || 0)),
                 保險類型: isDailyPayEmployee() ? '無' : insuranceTypeSelect.value,
                 投保級距: isDailyPayEmployee() ? '' : (insuredLevelSelect.value !== '' ? Number(insuredLevelSelect.value) : ''),
                 健保眷屬人數: isDailyPayEmployee() ? 0 : Math.max(0, Math.min(10, parseInt(healthDependentInput.value, 10) || 0)),
@@ -993,7 +1051,27 @@
             try {
                 const response = await fetchApi(payload);
                 if (response.success) {
-                    updateStatus(response.message, 'success');
+                    let msg = response.message || '操作成功';
+                    // 離職連動摘要（不顯示薪資金額，避免畫面外洩）
+                    if (response.resignLink && response.resignLink.triggered) {
+                        const rl = response.resignLink;
+                        const parts = [];
+                        parts.push('離職日後將無法打卡');
+                        if (rl.schedule && rl.schedule.daysRemoved > 0) {
+                            parts.push(`已清離職後班表 ${rl.schedule.daysRemoved} 日`);
+                        }
+                        if (rl.payroll && rl.payroll.closedCount > 0) {
+                            parts.push(`已關閉進行中薪資 ${rl.payroll.closedCount} 筆`);
+                        }
+                        if (rl.leaveSettlement && rl.leaveSettlement.ok) {
+                            parts.push('已產生特休結算草稿（待會計確認）');
+                        }
+                        if (rl.errors && rl.errors.length) {
+                            parts.push('部分連動失敗，請洽工程');
+                        }
+                        if (parts.length) msg = (msg || '操作成功') + '｜' + parts.join('、');
+                    }
+                    updateStatus(msg, 'success');
                     await fetchEmployeesAndPopulateDropdown();
                     employeeSelect.value = payload.userId; // 重新選中剛編輯的員工
                     handleEmployeeSelection();

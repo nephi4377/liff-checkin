@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>我的商店訂單</title>
+  <style>
+    body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: #f5f3f0; color: #222; }
+    .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.1rem; margin: 0 0 6px; }
+    .sub { font-size: 13px; color: #666; margin: 0 0 14px; line-height: 1.45; }
+    .card { background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .ono { font-weight: 700; }
+    .st { font-size: 12px; color: #8b6914; }
+    .expire { font-size: 12px; color: #9a3412; margin-top: 8px; line-height: 1.4; }
+    button { margin-top: 8px; margin-right: 6px; padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-weight: 600; }
+    a.pay { display: inline-block; margin-top: 8px; padding: 8px 12px; background: #c62828; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>我的訂單</h1>
+    <p class="sub">LINE 自查官網商店訂單。付款請走 LINE「需付款」通知。員工確認收款後才會顯示「已付款」（不會自動變）。</p>
+    <div id="list">載入中…</div>
+    <p style="margin-top:16px;font-size:13px"><a href="customer-shop.html">去選購下單</a></p>
+  </div>
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
+  </script>
+  <script src="../../shared/js/shop_api.js"></script>
+  <script>
+    function whenShopReady(fn) {
+      if (window.CONFIG) fn();
+      else window.addEventListener('shop-config-ready', fn, { once: true });
+    }
+    whenShopReady(function () {
+    ShopApi.listMyOrders({}).then(function (res) {
+      var list = document.getElementById('list');
+      if (!res.success) { list.textContent = res.message || '讀取失敗'; return; }
+      var orders = (res.data && res.data.orders) || [];
+      if (!orders.length) { list.textContent = '目前沒有訂單'; return; }
+      list.innerHTML = '';
+      orders.forEach(function (o) {
+        var ex = ShopApi.expireInfo(o);
+        var el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML =
+          '<div class="ono">訂單編號 ' + o.order_number + '</div>' +
+          '<div class="st">' + o.status_label + ' · NT$ ' + Number(o.total).toLocaleString('zh-TW') + '</div>' +
+          '<div style="font-size:13px;margin-top:6px;color:#555">' + (o.items_summary || '') + '</div>' +
+          (ex.expires ? '<div class="expire">' + ex.message + '</div>' : '');
+        if (o.status === 'pending_payment') {
+          var a = document.createElement('a');
+          a.className = 'pay';
+          a.href = 'customer-pay.html?order=' + encodeURIComponent(o.order_number);
+          a.textContent = '去付款';
+          el.appendChild(a);
+          var b = document.createElement('button');
+          b.textContent = '取消訂單';
+          b.onclick = function () {
+            if (!confirm('取消訂單 ' + o.order_number + '？')) return;
+            ShopApi.cancelOrder({}, o.order_number, 'customer').then(function (r) {
+              alert(r.success ? '已取消' : (r.message || '失敗'));
+              location.reload();
+            });
+          };
+          el.appendChild(b);
+        }
+        list.appendChild(el);
+      });
+    });
+    });
+  </script>
+</body>
+</html>
