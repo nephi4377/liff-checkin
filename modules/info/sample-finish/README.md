@@ -13,6 +13,8 @@ npx --yes serve@14 -l 8080 .
 開啟：http://127.0.0.1:8080/modules/info/sample-finish/  
 （或直接 `.../sample-finish/index.html`）
 
+若 8080 已被占用，可改用其他埠號，並同步調整瀏覽器網址。
+
 ## 圖從哪來
 
 頁面只引用本目錄 `photos/`（精選可公開副本）。  
