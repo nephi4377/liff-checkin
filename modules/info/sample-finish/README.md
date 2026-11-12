@@ -26,7 +26,7 @@ npx --yes serve@14 -l 8080 .
 倉庫根目錄先開 `serve@14 :8080`，再執行：
 
 ```bash
-node tools/test-sample-finish.mjs
+npx --yes -p playwright@1.49.1 node tools/test-sample-finish.mjs
 ```
 
 無圖色號由 `fixtures/no-photo-color.json` 經測試腳本 `addInitScript` 注入，正式頁面仍只顯示四色。
