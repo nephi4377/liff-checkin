@@ -206,6 +206,14 @@ test('backend QuoteEditor.js has howard fields when sibling mounted', () => {
   assert.match(src, /return \['999'\]/);
 });
 
+test('editor/view load OperatorContext before AccountingApi (hub iframe auth)', () => {
+  assert.match(editorHtml, /operator_context\.js/);
+  assert.match(viewHtml, /operator_context\.js/);
+  var editorIdx = editorHtml.indexOf('operator_context.js');
+  var apiIdx = editorHtml.indexOf('accounting_api.js');
+  assert.ok(editorIdx >= 0 && apiIdx > editorIdx, 'operator_context before accounting_api in editor');
+});
+
 test('editor/view load AccountingApi via absolute path; never classic-load ES config.js', () => {
   assert.match(editorHtml, /\/shared\/js\/accounting_api\.js/);
   assert.match(viewHtml, /\/shared\/js\/accounting_api\.js/);
