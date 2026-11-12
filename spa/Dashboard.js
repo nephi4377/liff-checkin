@@ -706,7 +706,17 @@ export default {
                     </div>
                 </div>
 
-                <!-- 4c. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
+                <!-- 4c. Messenger 真人客服（權限 ≥ 2；HUMAN_AGENT 手動回覆） -->
+                <a v-if="currentUser && Number(currentUser.permission) >= 2" href="#/fb-human-desk"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center text-xl">💬</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">Messenger 真人客服</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">選對話、看最後來訊時間、親自回覆；逾 24 小時且未滿七天才帶 HUMAN_AGENT。</p>
+                    </div>
+                </a>
+
+                <!-- 4c2. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
                 <div v-if="false"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📣</div>

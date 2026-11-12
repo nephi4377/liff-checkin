@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>添心設計 · Messenger 真人客服</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: #d5dde6;
+      --bg: #f0f4f7;
+      --panel: #ffffff;
+      --accent: #1f6b5c;
+      --accent-ink: #fff;
+      --warn: #8a5a12;
+      --warn-bg: #fff6e8;
+      --danger: #9b2c2c;
+      --danger-bg: #fdecec;
+      --ok: #1b6b3a;
+      --ok-bg: #e8f6ee;
+      --shadow: 0 10px 28px rgba(26, 35, 50, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #dce9e4 0%, transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, #e7eef5 0%, transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 20px 16px 48px; }
+    header { margin-bottom: 16px; }
+    .brand {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      margin: 0 0 4px;
+    }
+    .sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .status {
+      margin: 12px 0 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+      min-height: 1.4em;
+    }
+    .status.ok { background: var(--ok-bg); color: var(--ok); border-color: #b7e0c5; }
+    .status.err { background: var(--danger-bg); color: var(--danger); border-color: #f0b4b4; }
+    .layout {
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 820px) {
+      .layout { grid-template-columns: 320px 1fr; align-items: start; }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 12px 14px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafb;
+    }
+    .list { max-height: 62vh; overflow: auto; }
+    .conv {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      padding: 12px 14px;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+    }
+    .conv:hover { background: #f5f9f8; }
+    .conv.is-active { background: #e8f3ef; box-shadow: inset 3px 0 0 var(--accent); }
+    .conv .name { font-weight: 700; font-size: 14px; }
+    .conv .meta { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .badge {
+      display: inline-block;
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #eef2f6;
+      color: var(--muted);
+    }
+    .badge.response { background: var(--ok-bg); color: var(--ok); }
+    .badge.human_agent { background: var(--warn-bg); color: var(--warn); }
+    .badge.expired { background: var(--danger-bg); color: var(--danger); }
+    .detail { padding: 14px; }
+    .detail.empty { color: var(--muted); font-size: 14px; padding: 24px 14px; }
+    .detail .when { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+    .detail .hint {
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      margin-bottom: 12px;
+      line-height: 1.45;
+      background: #f4f7fa;
+      border: 1px solid var(--line);
+    }
+    .detail .hint.human_agent { background: var(--warn-bg); border-color: #f0d5a4; color: var(--warn); }
+    .detail .hint.expired { background: var(--danger-bg); border-color: #f0b4b4; color: var(--danger); }
+    .detail .hint.response { background: var(--ok-bg); border-color: #b7e0c5; color: var(--ok); }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      font: inherit;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    textarea:disabled { background: #f3f5f7; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    button.primary {
+      border: 0;
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .result {
+      margin-top: 12px;
+      font-size: 14px;
+      line-height: 1.45;
+      min-height: 1.3em;
+    }
+    .result.ok { color: var(--ok); font-weight: 600; }
+    .result.err { color: var(--danger); font-weight: 600; }
+    .rules {
+      margin-top: 14px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 class="brand">添心設計</h1>
+      <p class="sub">Messenger 真人客服 · 選對話、看最後來訊時間、親自回覆。24 小時內一般回覆；超過 24 小時仍在七天內才帶 HUMAN_AGENT；超過七天停用。</p>
+    </header>
+    <div id="status" class="status" role="status">載入中…</div>
+    <div class="layout">
+      <section class="panel" aria-label="對話列表">
+        <h2>對話</h2>
+        <div id="list" class="list"></div>
+      </section>
+      <section class="panel" aria-label="回覆區">
+        <h2>回覆</h2>
+        <div id="detail" class="detail empty">請先選左側對話。</div>
+      </section>
+    </div>
+    <p class="rules">授權：員工 LINE 登入且權限 ≥ 2。正式部署與 Meta 送審另待確認。本頁防重複送出：送出中鎖按鈕，並帶一次性送出編號。</p>
+  </div>
+
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.FB_HUMAN_CONFIG = CONFIG;
+    window.dispatchEvent(new Event('fb-human-config-ready'));
+  </script>
+  <script>
+    (function () {
+      var state = {
+        token: '',
+        actorName: '',
+        conversations: [],
+        selected: null,
+        sending: false,
+        mock: false
+      };
+
+      var statusEl = document.getElementById('status');
+      var listEl = document.getElementById('list');
+      var detailEl = document.getElementById('detail');
+
+      function qs(name) {
+        try { return new URLSearchParams(location.search).get(name) || ''; }
+        catch (e) { return ''; }
+      }
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (kind ? ' ' + kind : '');
+      }
+
+      function fmtWhen(msOrIso) {
+        if (!msOrIso) return '（無紀錄）';
+        var d = typeof msOrIso === 'number' ? new Date(msOrIso) : new Date(msOrIso);
+        if (isNaN(d.getTime())) return String(msOrIso);
+        return d.toLocaleString('zh-TW', { hour12: false });
+      }
+
+      function windowLabel(w) {
+        if (w === 'response') return '24 小時內 · 一般回覆';
+        if (w === 'human_agent') return '超過 24 小時 · 手動送出帶 HUMAN_AGENT';
+        if (w === 'expired') return '超過七天 · 已停用';
+        return '無法判定視窗';
+      }
+
+      function uuid() {
+        if (crypto && crypto.randomUUID) return crypto.randomUUID();
+        return 's-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+      }
+
+      function gasUrl() {
+        var cfg = window.FB_HUMAN_CONFIG || {};
+        return cfg.GAS_WEB_APP_URL || '';
+      }
+
+      function postAction(action, body) {
+        var url = gasUrl();
+        if (!url) return Promise.reject(new Error('尚未載入後端網址'));
+        var payload = Object.assign({ action: action, liff_id_token: state.token }, body || {});
+        return fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        }).then(function (res) { return res.json(); });
+      }
+
+      function requestHubToken() {
+        return new Promise(function (resolve) {
+          if (window.parent === window) {
+            resolve('');
+            return;
+          }
+          var done = false;
+          function finish(tok) {
+            if (done) return;
+            done = true;
+            window.removeEventListener('message', onMsg);
+            resolve(tok || '');
+          }
+          function onMsg(e) {
+            if (!e.data || e.data.type !== 'hub_liff_token') return;
+            finish(e.data.token || '');
+          }
+          window.addEventListener('message', onMsg);
+          try {
+            window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+          } catch (err) {
+            finish('');
+            return;
+          }
+          setTimeout(function () { finish(''); }, 8000);
+        });
+      }
+
+      function initLiffToken() {
+        if (state.mock) {
+          state.token = 'mock-token';
+          state.actorName = '本地模擬同事';
+          return Promise.resolve();
+        }
+        return requestHubToken().then(function (hubTok) {
+          if (hubTok) {
+            state.token = hubTok;
+            return;
+          }
+          var cfg = window.FB_HUMAN_CONFIG || {};
+          var liffId = cfg.HUB_LIFF_ID || cfg.PROJECT_CONSOLE_LIFF_ID || '';
+          if (!liffId || typeof liff === 'undefined') {
+            throw new Error('請從主控台開啟本頁，或設定 LIFF 後再試');
+          }
+          return liff.init({ liffId: liffId }).then(function () {
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: location.href });
+              return;
+            }
+            state.token = liff.getIDToken() || '';
+            return liff.getProfile().then(function (p) {
+              state.actorName = (p && p.displayName) || '';
+            });
+          });
+        });
+      }
+
+      function mockConversations() {
+        var now = Date.now();
+        return [
+          {
+            psid: 'mock-within-24h',
+            display_name: '測試客・24小時內',
+            last_inbound_ms: now - 2 * 3600000,
+            last_inbound_at: new Date(now - 2 * 3600000).toISOString(),
+            window: 'response',
+            can_send: true,
+            tag_if_send: '',
+            window_message: '24 小時內：一般回覆（不帶 HUMAN_AGENT）'
+          },
+          {
+            psid: 'mock-human-agent',
+            display_name: '測試客・逾24h未滿7天',
+            last_inbound_ms: now - 36 * 3600000,
+            last_inbound_at: new Date(now - 36 * 3600000).toISOString(),
+            window: 'human_agent',
+            can_send: true,
+            tag_if_send: 'HUMAN_AGENT',
+            window_message: '超過 24 小時、仍在七天內：手動送出時會帶 HUMAN_AGENT'
+          },
+          {
+            psid: 'mock-expired',
+            display_name: '測試客・超過七天',
+            last_inbound_ms: now - 8 * 24 * 3600000,
+            last_inbound_at: new Date(now - 8 * 24 * 3600000).toISOString(),
+            window: 'expired',
+            can_send: false,
+            tag_if_send: '',
+            window_message: '超過七天訊息視窗，此發送入口已停用'
+          }
+        ];
+      }
+
+      function loadList() {
+        if (state.mock) {
+          state.conversations = mockConversations();
+          renderList();
+          setStatus('模擬模式（?mock=1）：可演練三種時間視窗，送出不會打正式 API。', 'ok');
+          return Promise.resolve();
+        }
+        setStatus('載入對話中…');
+        return postAction('fb_human_list', { limit: 80 }).then(function (res) {
+          if (!res || !res.success) {
+            throw new Error((res && res.message) || '載入失敗');
+          }
+          state.conversations = res.conversations || [];
+          if (res.actor && res.actor.display_name) {
+            state.actorName = res.actor.display_name;
+          }
+          renderList();
+          setStatus(
+            '已登入' + (state.actorName ? '：' + state.actorName : '') +
+            ' · 共 ' + state.conversations.length + ' 則 FB 對話',
+            'ok'
+          );
+        });
+      }
+
+      function renderList() {
+        if (!state.conversations.length) {
+          listEl.innerHTML = '<div class="detail empty">目前沒有可顯示的 FB 對話。</div>';
+          return;
+        }
+        listEl.innerHTML = state.conversations.map(function (c) {
+          var active = state.selected && state.selected.psid === c.psid ? ' is-active' : '';
+          return (
+            '<button type="button" class="conv' + active + '" data-psid="' + esc(c.psid) + '">' +
+              '<div class="name">' + esc(c.display_name || c.psid) + '</div>' +
+              '<div class="meta">最後來訊：' + esc(fmtWhen(c.last_inbound_ms || c.last_inbound_at)) + '</div>' +
+              '<span class="badge ' + esc(c.window || '') + '">' + esc(windowLabel(c.window)) + '</span>' +
+            '</button>'
+          );
+        }).join('');
+        Array.prototype.forEach.call(listEl.querySelectorAll('.conv'), function (btn) {
+          btn.addEventListener('click', function () {
+            var psid = btn.getAttribute('data-psid');
+            state.selected = state.conversations.find(function (x) { return x.psid === psid; }) || null;
+            renderList();
+            renderDetail();
+          });
+        });
+      }
+
+      function renderDetail() {
+        var c = state.selected;
+        if (!c) {
+          detailEl.className = 'detail empty';
+          detailEl.textContent = '請先選左側對話。';
+          return;
+        }
+        detailEl.className = 'detail';
+        var can = !!c.can_send;
+        detailEl.innerHTML =
+          '<div class="name" style="font-weight:700;font-size:16px;margin-bottom:4px">' +
+            esc(c.display_name || c.psid) +
+          '</div>' +
+          '<p class="when">顧客最後來訊時間：<strong>' + esc(fmtWhen(c.last_inbound_ms || c.last_inbound_at)) +
+          '</strong></p>' +
+          '<div class="hint ' + esc(c.window || '') + '">' + esc(c.window_message || windowLabel(c.window)) + '</div>' +
+          '<label for="replyText">回覆內容</label>' +
+          '<textarea id="replyText" placeholder="親自輸入回覆…" ' + (can ? '' : 'disabled') + '></textarea>' +
+          '<div class="actions">' +
+            '<button type="button" class="primary" id="sendBtn" ' + (can ? '' : 'disabled') + '>' +
+              (can ? '送出回覆' : '已停用') +
+            '</button>' +
+            '<button type="button" class="ghost" id="refreshBtn">重新整理列表</button>' +
+          '</div>' +
+          '<div class="result" id="sendResult" role="status"></div>';
+
+        document.getElementById('refreshBtn').addEventListener('click', function () {
+          loadList().catch(function (e) {
+            setStatus(e.message || '重新整理失敗', 'err');
+          });
+        });
+        var sendBtn = document.getElementById('sendBtn');
+        if (sendBtn && can) {
+          sendBtn.addEventListener('click', onSend);
+        }
+      }
+
+      function onSend() {
+        if (state.sending || !state.selected) return;
+        var textEl = document.getElementById('replyText');
+        var resultEl = document.getElementById('sendResult');
+        var sendBtn = document.getElementById('sendBtn');
+        var text = (textEl && textEl.value || '').trim();
+        if (!text) {
+          resultEl.className = 'result err';
+          resultEl.textContent = '請先輸入回覆內容。';
+          return;
+        }
+
+        state.sending = true;
+        if (sendBtn) sendBtn.disabled = true;
+        if (textEl) textEl.disabled = true;
+        resultEl.className = 'result';
+        resultEl.textContent = '送出中…';
+
+        var clientSendId = uuid();
+
+        var run;
+        if (state.mock) {
+          run = Promise.resolve().then(function () {
+            if (state.selected.window === 'expired') {
+              return {
+                success: false,
+                message: '超過七天訊息視窗，此發送入口已停用',
+                window: 'expired'
+              };
+            }
+            if (qs('mock_fail') === '1') {
+              return { success: false, message: '模擬發送失敗（mock_fail=1）', window: state.selected.window };
+            }
+            return {
+              success: true,
+              message: state.selected.window === 'human_agent'
+                ? '已送出（帶 HUMAN_AGENT）【模擬】'
+                : '已送出（一般回覆）【模擬】',
+              window: state.selected.window,
+              tag_used: state.selected.tag_if_send || '',
+              deduped: false
+            };
+          });
+        } else {
+          run = postAction('fb_human_reply', {
+            psid: state.selected.psid,
+            text: text,
+            client_send_id: clientSendId
+          });
+        }
+
+        run.then(function (res) {
+          if (res && res.success) {
+            resultEl.className = 'result ok';
+            resultEl.textContent = (res.message || '送出成功') +
+              (res.deduped ? '（已防止重複送出）' : '');
+            if (textEl) textEl.value = '';
+          } else {
+            resultEl.className = 'result err';
+            resultEl.textContent = (res && res.message) || '送出失敗';
+          }
+        }).catch(function (e) {
+          resultEl.className = 'result err';
+          resultEl.textContent = e.message || '連線失敗';
+        }).finally(function () {
+          state.sending = false;
+          var stillOk = state.selected && state.selected.can_send;
+          if (sendBtn) sendBtn.disabled = !stillOk;
+          if (textEl) textEl.disabled = !stillOk;
+        });
+      }
+
+      function whenConfigReady(fn) {
+        if (window.FB_HUMAN_CONFIG) fn();
+        else window.addEventListener('fb-human-config-ready', fn, { once: true });
+      }
+
+      whenConfigReady(function () {
+        state.mock = qs('mock') === '1';
+        initLiffToken()
+          .then(function () {
+            if (!state.mock && !state.token) {
+              throw new Error('尚未取得員工登入憑證');
+            }
+            return loadList();
+          })
+          .catch(function (e) {
+            setStatus(e.message || '無法開啟真人客服頁', 'err');
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
