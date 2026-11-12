@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>線上報價編輯</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- 主控台 iframe：須先載入 OperatorContext，AccountingApi 才能讀 uid／permission（見 SPEC/19） -->
+  <script src="/shared/js/operator_context.js?v=3"></script>
   <!-- 勿載 shared/js/config.js（ES module）；AccountingApi 已內建 GAS URL -->
-  <script src="/shared/js/accounting_api.js?v=quote-editor-3-api"></script>
+  <script src="/shared/js/accounting_api.js?v=quote-hub-auth-1"></script>
   <script src="/modules/projects/js/quote-editor-sanitize.js?v=quote-editor-3"></script>
   <script src="/modules/projects/js/quote-editor-local.js?v=quote-editor-3"></script>
   <style>

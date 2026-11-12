@@ -329,7 +329,7 @@ const App = {
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
-            '#/quote-editor': { name: 'iframe', src: 'modules/projects/quote-editor.html?v=quote-sheet-2', title: '線上報價編輯' },
+            '#/quote-editor': { name: 'iframe', src: 'modules/projects/quote-editor.html?v=quote-hub-auth-1', title: '線上報價編輯' },
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
             '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/index.html', title: '收支登錄', params: '&route=accounting_ingest.html' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '會計系統' },
