@@ -20,3 +20,13 @@ npx --yes serve@14 -l 8080 .
 **不要**把私人 Dropbox 案場路徑寫進本頁。
 
 說明全文見專案文件 `樣本頁連完工照-MVP說明.md`。
+
+## 自動化 smoke
+
+倉庫根目錄先開 `serve@14 :8080`，再執行：
+
+```bash
+node tools/test-sample-finish.mjs
+```
+
+無圖色號由 `fixtures/no-photo-color.json` 經測試腳本 `addInitScript` 注入，正式頁面仍只顯示四色。

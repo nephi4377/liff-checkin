@@ -303,15 +303,12 @@
           { src: "photos/walnut-entry-01.jpg", alt: "霧灰玄關完工實景" },
           { src: "photos/walnut-work-01.jpg", alt: "工作區完工實景" }
         ]
-      },
-      {
-        id: "Y-05",
-        name: "雲灰",
-        hex: "#bcc2be",
-        space: "—",
-        photos: []
       }
     ];
+
+    if (Array.isArray(window.__SAMPLE_FINISH_FIXTURE_COLORS__)) {
+      COLORS.push.apply(COLORS, window.__SAMPLE_FINISH_FIXTURE_COLORS__);
+    }
 
     const swatchesEl = document.getElementById("swatches");
     const photoEl = document.getElementById("photo");
