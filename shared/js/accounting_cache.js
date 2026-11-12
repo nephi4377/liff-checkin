@@ -359,6 +359,26 @@ var AccountingCache = (function () {
     return true;
   }
 
+  /** 從 masters 列表刪掉一筆（廠商 LINE 移除後勿再 upsert 成仍有效） */
+  function removeMasterRow(session, entity, rowOrId) {
+    if (!entity || rowOrId == null || !BOOTSTRAP_INVALIDATE_ENTITIES[entity]) return false;
+    var data = read(session);
+    if (!data || !data.masters) return false;
+    var masterKey = ENTITY_MASTER_KEY[entity];
+    var idField = ENTITY_ID_FIELD[entity];
+    if (!masterKey || !idField || !data.masters[masterKey]) return false;
+    var id = typeof rowOrId === 'object' ? rowOrId[idField] : rowOrId;
+    if (id == null || id === '') return false;
+    var list = data.masters[masterKey];
+    var next = list.filter(function (r) {
+      return String(r[idField]) !== String(id);
+    });
+    if (next.length === list.length) return false;
+    data.masters[masterKey] = next;
+    write(session, data);
+    return true;
+  }
+
   function patchVendorFields(session, vendorId, fields) {
     if (!vendorId || !fields) return false;
     var data = read(session);
@@ -377,6 +397,13 @@ var AccountingCache = (function () {
   function afterCrudSuccess(session, entity, res) {
     if (!entity || !BOOTSTRAP_INVALIDATE_ENTITIES[entity]) return;
     var row = res && res.data;
+    // 移除 LINE 綁定：後端回 is_active=否／removed；必須刪快取列，不可 upsert 回「仍有效」
+    if (entity === 'vendor_line_binding' && row &&
+        (res.removed === true || String(row.is_active || '') === '否')) {
+      if (removeMasterRow(session, entity, row)) return;
+      clear(session);
+      return;
+    }
     if (row && patchMaster(session, entity, row)) return;
     clear(session);
   }
@@ -420,6 +447,7 @@ var AccountingCache = (function () {
     patchMaster: patchMaster,
     patchVendorFields: patchVendorFields,
     afterCrudSuccess: afterCrudSuccess,
+    removeMasterRow: removeMasterRow,
     get: function (session) {
       return read(session);
     },

@@ -1507,8 +1507,14 @@
           btn.addEventListener('click', async function () {
             if (!confirm('移除此 LINE 綁定？\n（廠商暫停合作請改合作狀態，不必在此一個個關。）')) return;
             await AccountingUi.runAsync(btn, { busyLabel: '處理中…', clear: false }, async function () {
+              // 立刻打 API，不必再按下方「更新」
               var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
               if (!data.success) { setMsg(data.message); return; }
+              // 雙保險：舊後端若仍回「有效」列，前端也從快取刪掉，避免畫面以為沒移掉
+              if (typeof AccountingCache !== 'undefined' && AccountingCache.removeMasterRow) {
+                AccountingCache.removeMasterRow(session, 'vendor_line_binding', b.binding_id);
+              }
+              setOk('已移除 LINE 綁定');
               refreshVendors(true);
               renderBindings(vendorId);
             });
