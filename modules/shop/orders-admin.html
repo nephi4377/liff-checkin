@@ -288,10 +288,18 @@
       status.textContent = '載入訂單中…';
       buildStaffAuth().then(function (auth) {
         window.__shopStaffAuth = auth;
+        if (!auth.liff_id_token && !qsParam('shop_mock')) {
+          status.textContent = '請從主控台開啟（需已登入且權限 ≥3）';
+          return null;
+        }
         return ShopApi.listOrdersStaff(auth);
       }).then(function (res) {
+        if (!res) return;
         if (!res.success) {
-          status.textContent = res.message || res.code || '讀取失敗';
+          var msg = res.message || res.code || '讀取失敗';
+          if (res.code === 'forbidden') msg = res.message || '權限不足（需 ≥3）';
+          if (res.code === 'auth_required') msg = '請從主控台開啟（需已登入且權限 ≥3）';
+          status.textContent = msg;
           return;
         }
         var orders = (res.data && res.data.orders) || [];
