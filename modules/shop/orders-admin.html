@@ -139,7 +139,7 @@
         }
         setTimeout(function () {
           finish('');
-        }, 2500);
+        }, 8000);
       });
     }
     function buildStaffAuth() {
@@ -288,10 +288,20 @@
       status.textContent = '載入訂單中…';
       buildStaffAuth().then(function (auth) {
         window.__shopStaffAuth = auth;
+        if (!auth.liff_id_token && !qsParam('shop_mock')) {
+          status.textContent = '請從主控台開啟（需已登入且權限 ≥3；若已在主控台請重新從 LINE 開一次）';
+          return null;
+        }
         return ShopApi.listOrdersStaff(auth);
       }).then(function (res) {
+        if (!res) return;
         if (!res.success) {
-          status.textContent = res.message || res.code || '讀取失敗';
+          var msg = res.message || res.code || '讀取失敗';
+          if (res.code === 'forbidden') msg = res.message || '權限不足（需 ≥3）';
+          if (res.code === 'auth_required') msg = '請從主控台開啟（需已登入且權限 ≥3）';
+          if (res.code === 'employee_lookup_failed') msg = res.message || '員工身分查詢失敗，請稍後再試';
+          if (res.code === 'auth_failed') msg = '登入已過期，請關閉後從 LINE 主控台重新開啟';
+          status.textContent = msg;
           return;
         }
         var orders = (res.data && res.data.orders) || [];

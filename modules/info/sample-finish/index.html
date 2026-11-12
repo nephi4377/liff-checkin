@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>添心｜色號看完工</title>
+  <meta name="description" content="點一個色號，立刻看到真實完工空間。原型頁，僅少數已整理可公開案例。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Shippori+Mincho:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1c2420;
+      --muted: #5c6a62;
+      --brand: #2a3c35;
+      --paper: #f3eee4;
+      --wash: #e7efe8;
+      --line: rgba(42, 60, 53, 0.14);
+      --focus: #c4a574;
+      --ok: #2f6b4f;
+      --radius: 18px;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      font-family: "Noto Sans TC", sans-serif;
+      background:
+        radial-gradient(ellipse 90% 60% at 12% 0%, rgba(196, 165, 116, 0.18), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 90% 8%, rgba(90, 130, 110, 0.16), transparent 50%),
+        linear-gradient(165deg, #f7f3eb 0%, #eef2ed 48%, #e8ebe4 100%);
+    }
+
+    .shell {
+      width: min(980px, calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 1.25rem 0 3.5rem;
+    }
+
+    .brand {
+      font-family: "Shippori Mincho", serif;
+      font-weight: 700;
+      font-size: clamp(1.85rem, 5vw, 2.6rem);
+      letter-spacing: 0.08em;
+      color: var(--brand);
+      margin: 0;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: rise 0.7s var(--ease) 0.05s forwards;
+    }
+
+    .lede {
+      margin: 0.55rem 0 0;
+      max-width: 28rem;
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.65;
+      opacity: 0;
+      transform: translateY(12px);
+      animation: rise 0.7s var(--ease) 0.18s forwards;
+    }
+
+    .stage {
+      margin-top: 1.5rem;
+      display: grid;
+      gap: 1.1rem;
+      opacity: 0;
+      transform: translateY(16px);
+      animation: rise 0.75s var(--ease) 0.28s forwards;
+    }
+
+    @media (min-width: 820px) {
+      .stage {
+        grid-template-columns: 1fr 1.35fr;
+        align-items: stretch;
+        min-height: 62vh;
+      }
+    }
+
+    .swatches {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.7rem;
+      align-content: start;
+    }
+
+    .swatch {
+      appearance: none;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      padding: 0.85rem 0.85rem 0.95rem;
+      text-align: left;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(8px);
+      transition: transform 0.25s var(--ease), border-color 0.25s, box-shadow 0.25s;
+      min-height: 5.4rem;
+    }
+    .swatch:hover { transform: translateY(-2px); }
+    .swatch:focus-visible {
+      outline: 2px solid var(--brand);
+      outline-offset: 3px;
+    }
+    .swatch.is-active {
+      border-color: var(--brand);
+      box-shadow: 0 0 0 1px var(--brand), 0 10px 28px rgba(42, 60, 53, 0.1);
+      background: rgba(255, 255, 255, 0.82);
+    }
+
+    .chip {
+      width: 100%;
+      height: 2.35rem;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      margin-bottom: 0.65rem;
+    }
+    .swatch-code {
+      font-size: 0.78rem;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0;
+    }
+    .swatch-name {
+      margin: 0.15rem 0 0;
+      font-family: "Shippori Mincho", serif;
+      font-size: 1.08rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .viewer {
+      position: relative;
+      border-radius: calc(var(--radius) + 4px);
+      overflow: hidden;
+      min-height: 320px;
+      background:
+        linear-gradient(135deg, #d9e2da 0%, #c9b89a 100%);
+      box-shadow: 0 18px 50px rgba(28, 36, 32, 0.12);
+    }
+
+    .viewer img {
+      width: 100%;
+      height: 100%;
+      min-height: 320px;
+      max-height: 68vh;
+      object-fit: cover;
+      display: block;
+      opacity: 0;
+      transform: scale(1.04);
+      transition: opacity 0.45s var(--ease), transform 0.7s var(--ease);
+    }
+    .viewer img.is-shown {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .viewer-meta {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      padding: 1.15rem 1.2rem 1.05rem;
+      background: linear-gradient(180deg, transparent, rgba(18, 24, 20, 0.72));
+      color: #f7f3eb;
+    }
+    .viewer-meta h2 {
+      margin: 0;
+      font-family: "Shippori Mincho", serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+    }
+    .viewer-meta p {
+      margin: 0.25rem 0 0;
+      font-size: 0.92rem;
+      opacity: 0.9;
+      line-height: 1.45;
+    }
+
+    .status {
+      margin-top: 0.85rem;
+      min-height: 1.4rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .status strong { color: var(--ok); font-weight: 600; }
+
+    .pager {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.85rem;
+    }
+    .pager button {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.65);
+      color: var(--brand);
+      border-radius: 999px;
+      padding: 0.55rem 1rem;
+      font: inherit;
+      font-size: 0.92rem;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+    .pager button:hover { background: #fff; transform: translateY(-1px); }
+    .pager button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .note {
+      margin-top: 1.75rem;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.55;
+      max-width: 36rem;
+    }
+
+    @keyframes rise {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation: none !important;
+        transition: none !important;
+      }
+      .brand, .lede, .stage { opacity: 1; transform: none; }
+      .viewer img { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <h1 class="brand">添心</h1>
+    <p class="lede">點一個色號，立刻看真實完工空間。這是最小原型——先連得上的少數色。</p>
+
+    <section class="stage" aria-label="色號與完工照">
+      <div>
+        <div class="swatches" id="swatches" role="listbox" aria-label="色號清單"></div>
+        <p class="status" id="status" aria-live="polite">選一個色號開始</p>
+        <div class="pager">
+          <button type="button" id="prev" aria-label="上一張完工照">上一張</button>
+          <button type="button" id="next" aria-label="下一張完工照">下一張</button>
+        </div>
+      </div>
+      <figure class="viewer" aria-label="完工實景">
+        <img id="photo" alt="" />
+        <figcaption class="viewer-meta">
+          <h2 id="title">—</h2>
+          <p id="caption">—</p>
+        </figcaption>
+      </figure>
+    </section>
+
+    <p class="note">原型說明：圖為已整理可公開副本，不含電話／住址／人臉標示。案場私人雲端路徑不會出現在本頁。</p>
+  </main>
+
+  <script>
+    /** 手工色號對照（MVP）。路徑只指向本目錄 photos／精選公開副本。 */
+    const COLORS = [
+      {
+        id: "W-01",
+        name: "暖白",
+        hex: "#f2eee6",
+        space: "客廳牆面與櫃體",
+        // W-01：色票與實景對照待人工核對（YY-88）；本輪不換圖。
+        photos: [
+          { src: "photos/warm-white-living-01.jpg", alt: "暖白客廳完工實景" },
+          { src: "photos/warm-white-living-02.jpg", alt: "暖白客廳另一角度" }
+        ]
+      },
+      {
+        id: "O-02",
+        name: "淺橡",
+        hex: "#c9b08a",
+        space: "臥室木紋牆板",
+        photos: [
+          { src: "photos/smoke-grey-bedroom-01.jpg", alt: "淺橡木牆板臥室完工實景" }
+        ]
+      },
+      {
+        id: "G-03",
+        name: "灰陶",
+        hex: "#9a948c",
+        space: "廚房下櫃",
+        photos: [
+          { src: "photos/oak-kitchen-01.jpg", alt: "灰陶廚下櫃完工實景" },
+          { src: "photos/oak-kitchen-02.jpg", alt: "廚房完工實景另一角度" }
+        ]
+      },
+      {
+        id: "M-04",
+        name: "霧灰",
+        hex: "#8d9490",
+        space: "玄關與客廳過渡",
+        photos: [
+          { src: "photos/walnut-entry-01.jpg", alt: "霧灰玄關完工實景" },
+          { src: "photos/walnut-work-01.jpg", alt: "工作區完工實景" }
+        ]
+      }
+    ];
+
+    if (Array.isArray(window.__SAMPLE_FINISH_FIXTURE_COLORS__)) {
+      COLORS.push.apply(COLORS, window.__SAMPLE_FINISH_FIXTURE_COLORS__);
+    }
+
+    const swatchesEl = document.getElementById("swatches");
+    const photoEl = document.getElementById("photo");
+    const titleEl = document.getElementById("title");
+    const captionEl = document.getElementById("caption");
+    const statusEl = document.getElementById("status");
+    const prevBtn = document.getElementById("prev");
+    const nextBtn = document.getElementById("next");
+
+    let activeId = COLORS[0].id;
+    let photoIndex = 0;
+    let photoRequestId = 0;
+    let photoListeners = null;
+
+    function current() {
+      return COLORS.find((c) => c.id === activeId) || COLORS[0];
+    }
+
+    function detachPhotoListeners() {
+      if (!photoListeners) return;
+      photoEl.removeEventListener("load", photoListeners.onLoad);
+      photoEl.removeEventListener("error", photoListeners.onError);
+      photoListeners = null;
+    }
+
+    function setStatusChosen(c, suffix) {
+      statusEl.innerHTML = "已選 <strong>" + c.name + "</strong> · " + suffix;
+    }
+
+    function clearPhotoViewport() {
+      detachPhotoListeners();
+      photoEl.classList.remove("is-shown");
+      photoEl.removeAttribute("src");
+      photoEl.alt = "";
+      titleEl.textContent = "—";
+      captionEl.textContent = "—";
+    }
+
+    function setPagerForPhotos(count) {
+      const off = count < 2;
+      prevBtn.disabled = off;
+      nextBtn.disabled = off;
+    }
+
+    function showNoPhotos(c) {
+      clearPhotoViewport();
+      titleEl.textContent = c.name + " · " + c.id;
+      captionEl.textContent = "尚無公開完工照";
+      setStatusChosen(c, "尚無公開完工照");
+      setPagerForPhotos(0);
+    }
+
+    function showLoadError(c) {
+      detachPhotoListeners();
+      photoEl.classList.remove("is-shown");
+      photoEl.removeAttribute("src");
+      photoEl.alt = "";
+      titleEl.textContent = c.name + " · " + c.id;
+      captionEl.textContent = "此張完工照暫時無法顯示";
+      setStatusChosen(c, "完工照無法顯示，可改選其他色號或稍後再試");
+      setPagerForPhotos(c.photos ? c.photos.length : 0);
+    }
+
+    function renderSwatches() {
+      swatchesEl.innerHTML = "";
+      COLORS.forEach((c) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "swatch" + (c.id === activeId ? " is-active" : "");
+        btn.setAttribute("role", "option");
+        btn.setAttribute("aria-selected", c.id === activeId ? "true" : "false");
+        btn.dataset.id = c.id;
+        btn.innerHTML =
+          '<div class="chip" style="background:' + c.hex + '"></div>' +
+          '<p class="swatch-code">' + c.id + "</p>" +
+          '<p class="swatch-name">' + c.name + "</p>";
+        btn.addEventListener("click", () => selectColor(c.id));
+        swatchesEl.appendChild(btn);
+      });
+    }
+
+    function selectColor(id) {
+      activeId = id;
+      photoIndex = 0;
+      renderSwatches();
+      showPhoto();
+    }
+
+    function showPhoto() {
+      const requestId = ++photoRequestId;
+      const c = current();
+      const photos = Array.isArray(c.photos) ? c.photos : [];
+
+      clearPhotoViewport();
+
+      if (photos.length === 0) {
+        showNoPhotos(c);
+        return;
+      }
+
+      if (photoIndex < 0 || photoIndex >= photos.length) {
+        photoIndex = 0;
+      }
+
+      const shot = photos[photoIndex];
+      if (!shot || !shot.src) {
+        showLoadError(c);
+        return;
+      }
+
+      setStatusChosen(c, "載入完工照");
+      setPagerForPhotos(photos.length);
+
+      const onLoad = () => {
+        if (requestId !== photoRequestId) return;
+        if (photoEl.naturalWidth === 0) {
+          onError();
+          return;
+        }
+        detachPhotoListeners();
+        requestAnimationFrame(() => {
+          if (requestId !== photoRequestId) return;
+          photoEl.classList.add("is-shown");
+          titleEl.textContent = c.name + " · " + c.id;
+          captionEl.textContent =
+            c.space + "（精選實景 " + (photoIndex + 1) + "/" + photos.length + "）";
+          setStatusChosen(c, "完工照已顯示");
+        });
+      };
+
+      const onError = () => {
+        if (requestId !== photoRequestId) return;
+        showLoadError(c);
+      };
+
+      photoListeners = { onLoad, onError };
+      photoEl.addEventListener("load", onLoad);
+      photoEl.addEventListener("error", onError);
+      photoEl.alt = shot.alt || c.name + " 完工實景";
+      photoEl.src = shot.src;
+    }
+
+    prevBtn.addEventListener("click", () => {
+      const c = current();
+      const photos = c.photos || [];
+      if (photos.length < 2) return;
+      photoIndex = (photoIndex - 1 + photos.length) % photos.length;
+      showPhoto();
+    });
+    nextBtn.addEventListener("click", () => {
+      const c = current();
+      const photos = c.photos || [];
+      if (photos.length < 2) return;
+      photoIndex = (photoIndex + 1) % photos.length;
+      showPhoto();
+    });
+
+    renderSwatches();
+    showPhoto();
+  </script>
+</body>
+</html>

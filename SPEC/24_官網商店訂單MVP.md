@@ -43,3 +43,7 @@
 ## 員工授權（前端）
 主控台 iframe 經 `postMessage` 索取 Hub `id_token`，呼叫 `shop_orders_*` 時帶 `liff_id_token`＋`user_id`。
 
+
+## 授權（前端）
+主控台 iframe 索取 `id_token`；後端以員工資料**權限 ≥3** 授權（非白名單）。直接開頁請回主控台。
+
