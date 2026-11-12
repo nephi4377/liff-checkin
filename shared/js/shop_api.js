@@ -197,7 +197,8 @@
       if (useMock()) return mockOk({ orders: MOCK_ORDERS.slice() });
       return postAction({
         action: 'shop_orders_list',
-        liff_id_token: (auth && auth.liff_id_token) || ''
+        liff_id_token: (auth && auth.liff_id_token) || '',
+        user_id: (auth && auth.user_id) || ''
       });
     },
 
@@ -226,7 +227,8 @@
       return postAction({
         action: 'shop_orders_get',
         order_number: orderNumber,
-        liff_id_token: (auth && auth.liff_id_token) || ''
+        liff_id_token: (auth && auth.liff_id_token) || '',
+        user_id: (auth && auth.user_id) || ''
       });
     },
 
