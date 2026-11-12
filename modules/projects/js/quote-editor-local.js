@@ -1,5 +1,5 @@
 /**
- * QUOTE-EDITOR-3 本機殼：員工預覽／假資料（僅 127.0.0.1＋測案 999）
+ * QUOTE-EDITOR-3 本機殼：員工預覽／假資料（僅 127.0.0.1；案號任意數字）
  * 正式站永不啟用；不影響簽約／算薪／打卡等其他模組。
  */
 (function (root) {
@@ -36,11 +36,11 @@
     return isLocalHost() && isStaffPreviewQuery();
   }
 
-  /** 本機假資料：僅測案 999；?fixture=1 強制，或 ?dev=1 可作 API 失敗後備 */
+  /** 本機假資料：?fixture=1 強制，或 ?dev=1 可作 API 失敗後備（任意數字案號） */
   function canUseLocalFixture(projectNo) {
     if (!isLocalHost()) return false;
     var pno = String(projectNo || projectNoFromUrl() || '').trim();
-    if (pno !== TEST_PROJECT) return false;
+    if (!pno || !/^\d+$/.test(pno)) return false;
     return qs('fixture') === '1' || qs('dev') === '1';
   }
 
@@ -137,8 +137,8 @@
         totals: totals,
         versions: [],
         editable: true,
-        feature_enabled: false,
-        project_allowed: pno === TEST_PROJECT,
+        feature_enabled: true,
+        project_allowed: true,
         contract_handoff: { total_with_tax: totals.with_tax },
         local_fixture: true
       },
@@ -174,7 +174,7 @@
       selected_tab: '',
       items: [],
       need_tab: true,
-      feature_enabled: false,
+      feature_enabled: true,
       project_allowed: true,
       local_fixture: true
     };

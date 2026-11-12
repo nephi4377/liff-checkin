@@ -24,9 +24,6 @@ export default {
         const projectIdInput = ref('');
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
 
-        /** 線上報價編輯：前端只開測案 999（與後端 project_allowed 一致） */
-        const QUOTE_EDITOR_ROLLOUT_PROJECT = '999';
-
         const openProjectConsole = () => {
             const projectId = projectIdInput.value.trim();
             if (!projectId || !/^\d+$/.test(projectId)) {
@@ -43,10 +40,7 @@ export default {
         const openQuoteEditor = () => {
             const projectId = projectIdInput.value.trim();
             if (!projectId || !/^\d+$/.test(projectId)) {
-                alert('請先在上方輸入案號（例：999）！');
-                return;
-            }
-            if (projectId !== QUOTE_EDITOR_ROLLOUT_PROJECT) {
+                alert('請先在上方輸入案號！');
                 return;
             }
             if (!props.userProfile?.userId) {
@@ -60,7 +54,7 @@ export default {
             const p = Number(props.currentUser?.permission || 0);
             if (p < 2) return false;
             const id = projectIdInput.value.trim();
-            return id === QUOTE_EDITOR_ROLLOUT_PROJECT;
+            return !!id && /^\d+$/.test(id);
         });
 
         // [v426.0 SPA化] 統一所有內部連結為 hash 路由
@@ -722,7 +716,7 @@ export default {
                         <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">📋</div>
                         <div class="min-w-0 flex-1">
                             <h2 class="text-base font-bold text-gray-800 leading-tight">報價編輯</h2>
-                            <p class="text-xs text-gray-500 mt-1 leading-snug">依案號編輯線上報價單（Hub 同分頁；目前開放測試案 999）。</p>
+                            <p class="text-xs text-gray-500 mt-1 leading-snug">依上方案號編輯線上報價單（Hub 同分頁；實際可否編輯由後端開放名單決定）。</p>
                         </div>
                     </a>
                 </div>
