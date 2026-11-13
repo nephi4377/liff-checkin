@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=104"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=5"></script>
@@ -66,6 +66,7 @@
     <div id="ok"></div>
     <div id="progressLine" class="sub" aria-live="polite"></div>
     <div id="emailDrafts" class="card hidden" style="margin-top:12px"></div>
+    <div id="confirmLineBox" class="card hidden" style="margin-top:12px"></div>
 
     <div class="card">
       <h3 style="margin:0 0 8px">新增待匯款</h3>
@@ -524,8 +525,9 @@
             var pushSummary = summarizePushResults(data);
             if (pushSummary) msg += '\n' + pushSummary;
             if ((data.unlinked_vendors || []).length) {
-              setMsg('未綁 LINE：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
+              setMsg('名冊未綁 LINE，請先綁定：' + data.unlinked_vendors.map(function (u) { return u.vendor_name; }).join('、'));
             }
+            renderVendorConfirmLineActions(data.notify_records || []);
             setOk(msg);
             setProgress('');
             removeItemFromView(row.payment_request_id);
@@ -718,6 +720,82 @@
         });
       }
 
+      function renderVendorConfirmLineActions(records) {
+        var box = document.getElementById('confirmLineBox');
+        if (!box) return;
+        box.innerHTML = '';
+        var rows = (records || []).filter(function (r) {
+          var c = r && r.confirm_line;
+          if (!c || !c.vendor_id) return false;
+          if (c.mode === 'bind') return !!c.line_id;
+          return !!(c.display_name || c.line_id);
+        });
+        if (!rows.length) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        box.innerHTML = '<h3 style="margin:0 0 8px">確認這支 LINE</h3>' +
+          '<p class="sub">已送到的只把顯示名加入別名，不再重送。還沒綁上或沒送到的，才會加上後再送一次。</p>';
+        rows.forEach(function (r) {
+          var c = r.confirm_line;
+          var div = document.createElement('div');
+          div.style.cssText = 'margin-top:8px';
+          var who = r.vendor_name || c.vendor_id || '';
+          var hint = c.display_name ? ('顯示名「' + c.display_name + '」') : '這支 LINE';
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-ok';
+          btn.textContent = '這個 LINE 就是該廠商';
+          btn.onclick = async function () {
+            btn.disabled = true;
+            var payload = {
+              vendor_id: c.vendor_id,
+              payment_request_id: r.payment_request_id || c.payment_request_id || '',
+              display_name: c.display_name || '',
+              alias: c.display_name || ''
+            };
+            if (c.mode === 'bind') {
+              payload.line_id = c.line_id || '';
+              payload.line_channel = c.line_channel || 'accounting';
+            }
+            var shouldResend = r.outcome === 'unlinked' || r.outcome === 'notify_failed';
+            try {
+              var added = await AccountingApi.vendorAliasAdd(session, payload);
+              if (!added || !added.success) {
+                setMsg((added && added.message) || '沒寫進名冊');
+                btn.disabled = false;
+                return;
+              }
+              if (!shouldResend) {
+                setOk('已把顯示名加入別名。這筆剛才已送到，不再重送' + (who ? '（' + who + '／' + hint + '）' : ''));
+                div.remove();
+                if (!box.querySelector('button')) box.classList.add('hidden');
+                return;
+              }
+              var resent = await AccountingApi.vendorRemitNotifyResend(
+                session,
+                r.payment_request_id || c.payment_request_id || ''
+              );
+              var resentRows = (resent && resent.notify_records) || [];
+              var resentOk = !!(resent && resent.success !== false && resentRows.length &&
+                resentRows.every(function (row) { return row.outcome === 'notified'; }));
+              if (!resentOk) {
+                setMsg((added.message || '已記下這個 LINE') + '。' + ((resent && resent.message) || '重送未完成'));
+                btn.disabled = false;
+                return;
+              }
+              setOk('已確認這個 LINE 就是該廠商，並已重送匯款通知' + (who ? '（' + who + '／' + hint + '）' : ''));
+              div.remove();
+              if (!box.querySelector('button')) box.classList.add('hidden');
+            } catch (eConfirm) {
+              setMsg(eConfirm && eConfirm.message ? eConfirm.message : String(eConfirm));
+              btn.disabled = false;
+            }
+          };
+          div.appendChild(document.createTextNode((who ? who + '：' : '') + hint + ' '));
+          div.appendChild(btn);
+          box.appendChild(div);
+        });
+      }
+
       function summarizePushResults(data) {
         var lines = [];
         if (data.remit_date) lines.push('入帳日：' + data.remit_date);
@@ -734,6 +812,13 @@
           records.filter(function (r) { return r.outcome === 'notify_failed'; }).forEach(function (r) {
             lines.push('通知失敗：' + (r.vendor_name || r.payment_request_id || '') +
               (r.message ? '（' + r.message + '）' : ''));
+          });
+          records.filter(function (r) { return r.outcome === 'unlinked'; }).forEach(function (r) {
+            lines.push((r.vendor_name || r.payment_request_id || '廠商') + '：' +
+              (r.message || '名冊未綁 LINE，請先綁定'));
+          });
+          records.filter(function (r) { return r.name_mismatch_warning; }).forEach(function (r) {
+            lines.push('顯示名提醒：' + (r.vendor_name || '') + '（' + r.name_mismatch_warning + '）');
           });
         } else {
           var unlinkedList = data.unlinked_vendors || [];
@@ -841,6 +926,7 @@
           var pushSummary = summarizePushResults(summaryData);
           if (pushSummary) msg += '\n' + pushSummary;
           if (allDrafts.length) renderVendorEmailDrafts(allDrafts);
+          renderVendorConfirmLineActions(allNotifyRecords);
           if (failLines.length) {
             setMsg('以下未完成：' + failLines.join('；'));
             msg += '（另有 ' + failLines.length + ' 筆問題，見上方紅字）';

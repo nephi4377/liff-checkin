@@ -941,7 +941,22 @@
         if (!window.confirm(confirmMsg)) return;
         AccountingUi.runAsync(btn, { busyLabel: '補通知中…', clear: false }, async function () {
           var data = await AccountingApi.vendorPaymentResendNotify(session, [it.payment_request_id]);
-          if (!data || !data.success) throw new Error((data && data.message) || '補通知失敗');
+          if (!data) throw new Error('補通知失敗');
+          if (!data.success) {
+            setMsg((data.message || '匯款通知沒送到') +
+              (summarizeResendNotify(data) ? '\n' + summarizeResendNotify(data) : ''));
+            var failDrafts = data.email_drafts || [];
+            if (failDrafts.length) {
+              var failBox = $('payHistoryList');
+              var failNote = document.createElement('div');
+              failNote.className = 'pay-notify-email';
+              failNote.style.marginTop = '10px';
+              failNote.innerHTML = '<strong>EMAIL 備援草稿</strong>';
+              failBox.insertBefore(failNote, failBox.firstChild);
+              renderPayEmailDrafts(failDrafts, failBox);
+            }
+            return;
+          }
           setOk(summarizeResendNotify(data));
           await loadPayHistory($('editId').value, true);
           var drafts = data.email_drafts || [];

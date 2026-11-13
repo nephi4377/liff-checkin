@@ -1504,6 +1504,28 @@ var AccountingApi = (function () {
       }
       return post(body, 120000);
     },
+    /** 匯款標記頁：只新增廠商別名或綁定這支 LINE */
+    vendorAliasAdd: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return post({
+        action: 'vendor_alias_add',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: payload.vendor_id || '',
+        alias: payload.alias || '',
+        display_name: payload.display_name || '',
+        line_id: payload.line_id || '',
+        line_channel: payload.line_channel || '',
+        payment_request_id: payload.payment_request_id || payload.request_id || ''
+      }, 120000);
+    },
+    /** 只重送一筆已匯款通知（10 分鐘冷卻） */
+    vendorRemitNotifyResend: function (sessionOrToken, requestId) {
+      return post({
+        action: 'vendor_remit_notify_resend',
+        auth: resolveAuth(sessionOrToken),
+        request_id: requestId || ''
+      }, 120000);
+    },
     /** 已匯款補通知：只重送匯款 LINE，不改入帳 */
     vendorPaymentResendNotify: function (sessionOrToken, paymentRequestIds) {
       return post({
