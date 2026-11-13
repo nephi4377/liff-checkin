@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta name="shop-orders-build" content="26.11.13.4-hubpath" />
+  <title>官網商店訂單（員工）</title>
+  <style>
+    :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --teal:#0f766e; --amber:#b45309; --bg:#f8fafc; --blue:#1d4ed8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.45; }
+    .banner { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; line-height: 1.45; }
+    .steps { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+    .steps strong { color: var(--ink); }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .card.is-open { border-color: #fdba74; box-shadow: 0 0 0 2px rgba(251, 146, 60, 0.18); }
+    .card-head { display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 0; cursor: pointer; font: inherit; color: inherit; }
+    .card-head:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 8px; }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .ono { font-weight: 700; letter-spacing: 0.02em; }
+    .st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--teal); }
+    .st.awaiting_quote { background: #eff6ff; color: var(--blue); }
+    .st.awaiting_transfer, .st.pending { background: #fff7ed; color: var(--amber); }
+    .st.established, .st.paid { background: #ecfdf5; color: var(--teal); }
+    .meta { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .expire { font-size: 12px; color: #9a3412; margin-top: 8px; }
+    .detail { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .card.is-open .detail { display: block; }
+    .detail h3 { font-size: 13px; margin: 0 0 8px; color: var(--ink); }
+    .detail .ship-dl { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 10px 12px; }
+    .detail dl { margin: 0 0 12px; display: grid; grid-template-columns: 88px 1fr; gap: 6px 10px; font-size: 13px; }
+    .detail dt { color: var(--muted); }
+    .detail dd { margin: 0; line-height: 1.4; word-break: break-word; }
+    .items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
+    .items th, .items td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: middle; }
+    .items th { color: var(--muted); font-weight: 600; font-size: 12px; }
+    .items td.num, .items th.num { text-align: right; white-space: nowrap; }
+    .items td.thumb { width: 56px; }
+    .item-thumb {
+      width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
+      border: 1px solid var(--line); background: #f1f5f9; display: block;
+    }
+    .item-thumb-ph {
+      width: 56px; height: 56px; border-radius: 8px; border: 1px dashed var(--line);
+      background: #f8fafc; color: var(--muted); font-size: 11px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .item-name { display: flex; flex-direction: column; gap: 2px; }
+    .card-thumbs { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+    .card-thumbs .item-thumb, .card-thumbs .item-thumb-ph { width: 44px; height: 44px; }
+    .detail-empty { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
+    .detail-status { font-size: 12px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; }
+    .toggle-hint { font-size: 12px; color: var(--blue); margin-top: 8px; font-weight: 600; }
+    .quote-box { margin-top: 10px; padding: 10px; background: #f8fafc; border: 1px dashed var(--line); border-radius: 8px; }
+    .quote-box label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .quote-box input { width: 100%; max-width: 180px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+    button.quote { background: var(--blue); color: #fff; border-color: var(--blue); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    #status { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>官網商店訂單</h1>
+    <p class="sub">Hub 員工後台 · 官網 Woo 建單。標記已付款＝確認收款後訂單才<strong>成立</strong>。點訂單可看詳情。</p>
+    <div class="banner">未成立（未標記已付款）超過 <strong>7 天</strong>將到期刪除。客人匯款 ≠ 自動成立。</div>
+    <div class="steps">
+      <div><strong>①</strong> 客人取得訂單編號（待報價／未成立）</div>
+      <div><strong>②</strong> 員工報運費／總額 → 寄匯款說明</div>
+      <div><strong>③</strong> 確認入帳 →「標記已付款／訂單成立」</div>
+    </div>
+    <div id="status">載入中…</div>
+    <div id="list"></div>
+  </div>
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.CONFIG = CONFIG;
+    window.dispatchEvent(new Event('shop-config-ready'));
+  </script>
+  <script src="../../shared/js/shop_api.js?v=26.11.13.4"></script>
+  <script>
+    function money(n) {
+      if (n == null || n === '') return '—';
+      return 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
+    }
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+    function stageOf(o) {
+      if (o.status === 'paid' || o.established || o.stage === 'established') return 'established';
+      if (o.quoted || o.status === 'awaiting_transfer' || o.stage === 'awaiting_transfer') {
+        return 'awaiting_transfer';
+      }
+      return 'awaiting_quote';
+    }
+    function stageLabel(stage) {
+      if (stage === 'established') return '已成立（已付款）';
+      if (stage === 'awaiting_transfer') return '待匯款（未成立）';
+      return '待報價（未成立）';
+    }
+    function fmtWhen(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleString('zh-TW', { hour12: false });
+    }
+    function whenShopReady(fn) {
+      if (window.CONFIG) fn();
+      else window.addEventListener('shop-config-ready', fn, { once: true });
+    }
+    function qsParam(name) {
+      try {
+        return new URLSearchParams(location.search).get(name) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+    /** 向 Hub 父層索取 LIFF id_token（與會計 iframe 相同） */
+    function requestHubLiffToken() {
+      return new Promise(function (resolve) {
+        if (window.parent === window) {
+          resolve('');
+          return;
+        }
+        var done = false;
+        function finish(tok) {
+          if (done) return;
+          done = true;
+          window.removeEventListener('message', onMsg);
+          resolve(tok || '');
+        }
+        function onMsg(e) {
+          if (!e.data || e.data.type !== 'hub_liff_token') return;
+          finish(e.data.token || '');
+        }
+        window.addEventListener('message', onMsg);
+        try {
+          window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+        } catch (err) {
+          finish('');
+          return;
+        }
+        setTimeout(function () {
+          finish('');
+        }, 8000);
+      });
+    }
+    function buildStaffAuth() {
+      return requestHubLiffToken().then(function (tok) {
+        var auth = {
+          liff_id_token: tok || '',
+          user_id: qsParam('uid') || '',
+          staff_name: qsParam('name') || 'hub_staff'
+        };
+        return auth;
+      });
+    }
+    /** Jetpack photon → 原站路徑，避免 LINE WebView 擋 i0.wp.com */
+    function normalizeShopImageUrl(url) {
+      url = String(url || '').trim();
+      if (!url) return '';
+      var m = url.match(/^https?:\/\/i\d+\.wp\.com\/([^/?#]+)(\/wp-content\/uploads\/[^?#]+)/i);
+      if (m) return 'https://' + m[1] + m[2];
+      // 去掉 ?w= / resize 參數，部分 WebView 對 CDN 查詢字串較挑
+      if (/\/wp-content\/uploads\//i.test(url) && url.indexOf('?') >= 0) {
+        return url.split('?')[0];
+      }
+      return url;
+    }
+    function itemImageUrl(it) {
+      if (!it) return '';
+      if (it.image_url) return normalizeShopImageUrl(it.image_url);
+      if (typeof it.image === 'string') return normalizeShopImageUrl(it.image);
+      if (it.image && it.image.src) return normalizeShopImageUrl(it.image.src);
+      return '';
+    }
+    function itemThumbHtml(it) {
+      var url = itemImageUrl(it);
+      if (url && /^https?:\/\//i.test(String(url))) {
+        return (
+          '<img class="item-thumb" src="' + esc(url) + '" alt="' + esc(it.name || '商品圖') +
+          '" width="56" height="56" loading="eager" decoding="async" ' +
+          'onerror="this.onerror=null;' +
+          'if(!this.dataset.retried){this.dataset.retried=1;this.src=this.src.split(\'?\')[0];}' +
+          'else{this.outerHTML=\'<div class=\\\'item-thumb-ph\\\'>無圖</div>\';}">'
+        );
+      }
+      return '<div class="item-thumb-ph" aria-hidden="true">無圖</div>';
+    }
+    function cardThumbsHtml(items) {
+      if (!items || !items.length) return '';
+      var html = items.slice(0, 4).map(itemThumbHtml).join('');
+      return '<div class="card-thumbs" aria-label="商品縮圖">' + html + '</div>';
+    }
+    function itemsRowsHtml(items) {
+      if (!items || !items.length) return '';
+      var rows = items.map(function (it) {
+        return (
+          '<tr><td class="thumb">' + itemThumbHtml(it) + '</td>' +
+          '<td><div class="item-name">' + esc(it.name || '品項') +
+          (it.sku ? '<span style="font-size:11px;color:#64748b">SKU ' + esc(it.sku) + '</span>' : '') +
+          '</div></td><td class="num">' + esc(it.quantity != null ? it.quantity : 1) +
+          '</td><td class="num">' + money(it.price) +
+          '</td><td class="num">' + money(it.total) + '</td></tr>'
+        );
+      }).join('');
+      return (
+        '<table class="items" aria-label="品項明細">' +
+        '<thead><tr><th></th><th>品項</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>'
+      );
+    }
+    function dlRows(rows) {
+      return rows.map(function (pair) {
+        return '<dt>' + esc(pair[0]) + '</dt><dd>' + esc(pair[1] == null || pair[1] === '' ? '—' : pair[1]) + '</dd>';
+      }).join('');
+    }
+    function shippingBlockHtml(o) {
+      var line2 = o.shipping_address_2 || '';
+      var cityBits = [o.shipping_postcode, o.shipping_city, o.shipping_state]
+        .filter(function (x) { return !!x; })
+        .join(' ');
+      var addrFull =
+        o.shipping_address ||
+        [o.shipping_address_1, line2, cityBits, o.shipping_country]
+          .filter(function (x) { return !!x; })
+          .join('、');
+      var rows = [
+        ['收件人', o.shipping_name || ''],
+        ['收件電話', o.shipping_phone || ''],
+        ['公司／抬頭', o.shipping_company || ''],
+        ['地址', addrFull],
+        ['地址一行', o.shipping_address_1 || ''],
+        ['地址二行', o.shipping_address_2 || ''],
+        ['郵遞區號', o.shipping_postcode || ''],
+        ['縣市／鄉鎮', o.shipping_city || ''],
+        ['縣／州', o.shipping_state || ''],
+        ['國家', o.shipping_country || '']
+      ];
+      if (o.shipping_source) {
+        rows.push(['資料來源', o.shipping_source === 'billing' ? '帳單地址（出貨地址空白）' : '出貨地址']);
+      }
+      // 有值的欄位全顯示；全空也至少顯示收件人／電話／地址三列
+      var hasAny = rows.some(function (r) { return !!r[1]; });
+      var shown = hasAny
+        ? rows.filter(function (r) {
+            return !!r[1] || r[0] === '收件人' || r[0] === '收件電話' || r[0] === '地址';
+          })
+        : [
+            ['收件人', ''],
+            ['收件電話', ''],
+            ['地址', '']
+          ];
+      return '<h3>寄送地址</h3><dl class="ship-dl">' + dlRows(shown) + '</dl>';
+    }
+    function orderMetaHtml(o) {
+      return dlRows([
+        ['狀態', stageLabel(stageOf(o)) + (o.woo_status ? '（Woo：' + o.woo_status + '）' : '')],
+        ['下單時間', fmtWhen(o.created_at)],
+        ['帳單聯絡人', o.customer_name || ''],
+        ['帳單電話', o.customer_phone || ''],
+        ['Email', o.customer_email || ''],
+        ['帳單地址', o.billing_address || ''],
+        ['客人備註', o.customer_note || ''],
+        ['商品合計', money(o.product_total != null ? o.product_total : o.total)],
+        ['運費', o.shipping_fee != null ? money(o.shipping_fee) : '尚未報價'],
+        ['應付總額', o.payable_total != null ? money(o.payable_total) : ''],
+        ['成立確認', o.marked_paid_by ? o.marked_paid_by + (o.paid_at ? ' · ' + fmtWhen(o.paid_at) : '') : '']
+      ]);
+    }
+    function fillDetail(panel, o, loadingText) {
+      var statusEl = panel.querySelector('.detail-status');
+      var body = panel.querySelector('.detail-body');
+      if (statusEl) statusEl.textContent = loadingText || '';
+      var itemsHtml = itemsRowsHtml(o.items);
+      var summaryFallback =
+        !itemsHtml && o.items_summary
+          ? '<p class="detail-empty">品項摘要：' + esc(o.items_summary) + '</p>'
+          : !itemsHtml
+            ? '<p class="detail-empty">尚無品項明細</p>'
+            : '';
+      body.innerHTML =
+        shippingBlockHtml(o) +
+        '<h3>品項</h3>' +
+        (itemsHtml || summaryFallback) +
+        '<h3>訂單資料</h3><dl>' +
+        orderMetaHtml(o) +
+        '</dl>';
+    }
+    function openDetail(el, o) {
+      var wasOpen = el.classList.contains('is-open');
+      document.querySelectorAll('.card.is-open').forEach(function (c) {
+        if (c !== el) {
+          c.classList.remove('is-open');
+          var th = c.querySelector('.toggle-hint');
+          if (th) th.textContent = '點此查看詳情';
+          var head = c.querySelector('.card-head');
+          if (head) head.setAttribute('aria-expanded', 'false');
+        }
+      });
+      if (wasOpen) {
+        el.classList.remove('is-open');
+        el.querySelector('.toggle-hint').textContent = '點此查看詳情';
+        el.querySelector('.card-head').setAttribute('aria-expanded', 'false');
+        return;
+      }
+      el.classList.add('is-open');
+      el.querySelector('.toggle-hint').textContent = '收合詳情';
+      el.querySelector('.card-head').setAttribute('aria-expanded', 'true');
+      var panel = el.querySelector('.detail');
+      fillDetail(panel, o, '更新詳情中…');
+      buildStaffAuth().then(function (auth) {
+        return ShopApi.getOrder(auth, o.order_number);
+      }).then(function (res) {
+        if (!el.classList.contains('is-open')) return;
+        if (res && res.success && res.data && res.data.order) {
+          fillDetail(panel, res.data.order, res.mock ? '示意詳情' : '');
+        } else {
+          fillDetail(panel, o, (res && res.message) || '無法更新詳情，顯示列表資料');
+        }
+      }).catch(function () {
+        if (!el.classList.contains('is-open')) return;
+        fillDetail(panel, o, '無法更新詳情，顯示列表資料');
+      });
+    }
+    function render() {
+      var status = document.getElementById('status');
+      var list = document.getElementById('list');
+      status.textContent = '載入訂單中…';
+      buildStaffAuth().then(function (auth) {
+        window.__shopStaffAuth = auth;
+        if (!auth.liff_id_token && !qsParam('shop_mock')) {
+          status.textContent = '請從主控台開啟（需已登入且權限 ≥3；若已在主控台請重新從 LINE 開一次）';
+          return null;
+        }
+        return ShopApi.listOrdersStaff(auth);
+      }).then(function (res) {
+        if (!res) return;
+        if (!res.success) {
+          var msg = res.message || res.code || '讀取失敗';
+          if (res.code === 'forbidden') msg = res.message || '權限不足（需 ≥3）';
+          if (res.code === 'auth_required') msg = '請從主控台開啟（需已登入且權限 ≥3）';
+          if (res.code === 'employee_lookup_failed') msg = res.message || '員工身分查詢失敗，請稍後再試';
+          if (res.code === 'auth_failed') msg = '登入已過期，請關閉後從 LINE 主控台重新開啟';
+          status.textContent = msg;
+          return;
+        }
+        var orders = (res.data && res.data.orders) || [];
+        var buildMeta = document.querySelector('meta[name="shop-orders-build"]');
+        var buildId = (buildMeta && buildMeta.getAttribute('content')) || '';
+        status.textContent =
+          (res.mock ? '示意資料（兩段報價／匯款）· ' : '已連線官網商店 GAS · ') +
+          '共 ' + orders.length + ' 筆 · 點訂單可看詳情' +
+          (buildId ? ' · build ' + buildId : '');
+        list.innerHTML = '';
+        orders.forEach(function (o) {
+          var stage = stageOf(o);
+          var ex = ShopApi.expireInfo(o);
+          var el = document.createElement('div');
+          el.className = 'card';
+          el.setAttribute('data-stage', stage);
+          el.setAttribute('data-order', o.order_number);
+          var shipLine =
+            o.shipping_fee != null
+              ? '<br>運費 ' + money(o.shipping_fee) +
+                (o.payable_total != null ? ' · 應付 ' + money(o.payable_total) : '')
+              : '<br>運費：尚未報價';
+          el.innerHTML =
+            '<button type="button" class="card-head" aria-expanded="false" aria-controls="detail-' + esc(o.order_number) + '">' +
+            '<div class="row"><span class="ono">訂單編號 ' + esc(o.order_number) + '</span>' +
+            '<span class="st ' + stage + '">' + stageLabel(stage) + '</span></div>' +
+            cardThumbsHtml(o.items) +
+            '<div class="meta">' + esc(o.items_summary || '') +
+            (o.shipping_name
+              ? '<br>收件：' + esc(o.shipping_name) +
+                (o.shipping_phone ? ' · ' + esc(o.shipping_phone) : '')
+              : '') +
+            (o.shipping_address ? '<br>寄送：' + esc(o.shipping_address) : '') +
+            '<br>商品合計 ' + money(o.product_total != null ? o.product_total : o.total) +
+            shipLine +
+            (o.marked_paid_by ? '<br>成立確認：' + esc(o.marked_paid_by) : '') + '</div>' +
+            '<div class="toggle-hint">點此查看詳情</div>' +
+            '</button>' +
+            (ex.expires && stage !== 'established' ? '<div class="expire">' + esc(ex.message) + '</div>' : '') +
+            '<div class="detail" id="detail-' + esc(o.order_number) + '">' +
+            '<div class="detail-status"></div><div class="detail-body"></div></div>' +
+            '<div class="quote-box" style="display:none"></div>' +
+            '<div class="actions"></div>' +
+            '<p class="hint">匯款說明僅在報價後寄出；確認收款後才標記已付款／訂單成立。</p>';
+
+          var head = el.querySelector('.card-head');
+          head.addEventListener('click', function () {
+            openDetail(el, o);
+          });
+
+          var actions = el.querySelector('.actions');
+          var quoteBox = el.querySelector('.quote-box');
+
+          if (stage === 'awaiting_quote') {
+            quoteBox.style.display = 'block';
+            quoteBox.innerHTML =
+              '<label>運費（NT$）</label>' +
+              '<input type="number" min="0" step="1" class="ship-input" value="300" />';
+            var btnQuote = document.createElement('button');
+            btnQuote.className = 'quote';
+            btnQuote.textContent = '報價並寄匯款說明';
+            btnQuote.onclick = function () {
+              var fee = Number(quoteBox.querySelector('.ship-input').value);
+              if (isNaN(fee) || fee < 0) {
+                alert('請輸入有效運費');
+                return;
+              }
+              if (!confirm('確認報價運費 ' + money(fee) + ' 並寄出匯款說明給客人？')) return;
+              var fn = ShopApi.quoteAndNotifyTransfer || function () {
+                return Promise.resolve({ success: true, mock: true, message: '已報價（示意）' });
+              };
+              buildStaffAuth().then(function (auth) {
+                return fn.call(ShopApi, auth, o.order_number, { shipping_fee: fee });
+              }).then(function (r) {
+                alert(r.success ? (r.message || '已報價並寄匯款說明（訂單尚未成立）') : (r.message || '失敗'));
+                render();
+              });
+            };
+            actions.appendChild(btnQuote);
+          }
+
+          if (stage === 'awaiting_transfer') {
+            var btnPay = document.createElement('button');
+            btnPay.className = 'primary';
+            btnPay.textContent = '確認收款／訂單成立';
+            btnPay.onclick = function () {
+              if (!confirm('確認已收到匯款，將訂單 ' + o.order_number + ' 標記為已付款（訂單成立）？')) return;
+              buildStaffAuth().then(function (auth) {
+                return ShopApi.markPaid(auth, o.order_number);
+              }).then(function (r) {
+                alert(r.success ? '訂單已成立（已付款）' : (r.message || '失敗'));
+                render();
+              });
+            };
+            actions.appendChild(btnPay);
+            var btnResend = document.createElement('button');
+            btnResend.textContent = '重送匯款說明';
+            btnResend.onclick = function () {
+              buildStaffAuth().then(function (auth) {
+                return ShopApi.resendPayNotify(auth, o.order_number);
+              }).then(function (r) {
+                alert((r.data && r.data.line_notify) || r.message || '已送出');
+              });
+            };
+            actions.appendChild(btnResend);
+          }
+
+          list.appendChild(el);
+        });
+      });
+    }
+    whenShopReady(render);
+  </script>
+</body>
+</html>
