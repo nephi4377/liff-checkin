@@ -134,10 +134,11 @@
             </div>
         </div>
 
-        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6" style="display: none;">
-            <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。</p>
+        <div id="summary-section" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4 mb-6" style="display: none;">
+            <p id="summary-scope-hint" class="col-span-full text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-md px-3 py-2 mb-1" style="display:none;">以下為<strong>該員工</strong>於查詢區間的統計。加班以已核准時段計（不是用下班打卡時間自動算）。</p>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">標準工作日(天)</div><div id="total-workdays" class="mt-1 text-3xl font-semibold text-gray-700">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">實際出勤(天)</div><div id="total-attended" class="mt-1 text-3xl font-semibold text-green-600">0</div></div>
+            <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">加班(天)</div><div id="total-overtime" class="mt-1 text-3xl font-semibold text-orange-600" title="">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總遲到(分)</div><div id="total-late" class="mt-1 text-3xl font-semibold text-orange-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總早退(分)</div><div id="total-early" class="mt-1 text-3xl font-semibold text-blue-500">0</div></div>
             <div class="bg-white p-4 rounded-lg shadow summary-card"><div class="text-sm font-medium text-gray-500">總缺勤(天)</div><div id="total-absent" class="mt-1 text-3xl font-semibold text-red-600">0</div></div>
@@ -1521,6 +1522,11 @@
         hint.style.display = 'block';
         document.getElementById('total-workdays').textContent = st.workDays;
         document.getElementById('total-attended').textContent = st.checkInDays ?? st.attended;
+        const otEl = document.getElementById('total-overtime');
+        if (otEl) {
+            otEl.textContent = formatDayAccounting(st.overtimeDays);
+            otEl.title = dayAccountingTitle(st.overtimeDays) || '尚無已核准加班時段';
+        }
         document.getElementById('total-late').textContent = st.lateMinutes;
         document.getElementById('total-early').textContent = st.earlyMinutes;
         document.getElementById('total-absent').textContent = formatDayAccounting(st.absent);
@@ -1550,6 +1556,7 @@
         const rawStatus = day.status;
         const s = String(dispStr ?? '');
         if (s === '未到職' || s === '已離職' || rawStatus === '未到職' || rawStatus === '已離職') return 'text-gray-400';
+        if (s === '未排班' || rawStatus === '未排班') return 'text-gray-400';
         if (s === '缺勤' || s.startsWith('缺勤') || String(rawStatus).startsWith('異常')) return 'text-red-600 font-bold';
         if (rawStatus === '僅單次打卡') return 'text-purple-600 font-bold';
         if (s.includes('加班')) return 'text-orange-600 font-bold';
@@ -1639,7 +1646,7 @@
 
         const anomalyTotal = lastGlobalSummary.totalAnomalyDays ?? userIds.reduce((n, id) => n + countAnomalyDays(recordsByUser[id]), 0);
         const offSiteMissing = lastGlobalSummary.offSiteMissingExplanationCount || 0;
-        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>標準工作日(天)</strong>＝查詢區間應班母數（標準制：平日−國定假；排班制：區間−國定假，個人排休不扣母數）。<strong>排班制</strong>逐日狀態依個人班表（週末可正常出勤）；僅<strong>標準制</strong>週末／國定假無打卡顯示<strong>應休</strong>。排班制若當月 <strong>休假</strong> 超過可排休（＝國定假天數），超出且未到者算<strong>缺勤(超休)</strong>。國定假或班表排休日打卡不計遲早退。假別／缺勤可為小數，<strong>不可</strong>加總對母數。預設隱藏全期缺勤。</p>';
+        let footnote = '<p class="text-xs text-gray-500 mt-3">點擊姓名展開逐日。<strong>標準工作日(天)</strong>＝查詢區間應班母數（標準制：平日−國定假；排班制：區間−國定假，個人排休不扣母數）。<strong>排班制</strong>逐日狀態依個人班表（週末可正常出勤）；僅<strong>標準制</strong>週末／國定假無打卡顯示<strong>應休</strong>。排班制<strong>未排班</strong>（班表空白且未打卡）與<strong>未來日</strong>不算缺勤；當月 <strong>休假</strong> 超過可排休（＝國定假天數）且未到者仍算<strong>缺勤(超休)</strong>。國定假或班表排休日打卡不計遲早退。假別／缺勤可為小數，<strong>不可</strong>加總對母數。預設隱藏全期缺勤。</p>';
         if (hiddenAbsentCount > 0 && !document.getElementById('show-all-absent-checkbox')?.checked) {
             footnote += `<p class="text-xs text-gray-500 mt-1">已隱藏 <strong>${hiddenAbsentCount}</strong> 位全期缺勤（可勾選「顯示全期缺勤」）。</p>`;
         }

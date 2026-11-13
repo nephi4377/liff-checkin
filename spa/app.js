@@ -312,6 +312,7 @@ const App = {
             // [v413.0 SPA化] 擴充路由表，將更多獨立頁面以 iframe 方式整合進來
             '#/new-site': { name: 'iframe', src: 'modules/projects/NewSiteForm.html?v=26.10.26.6', title: '新增／修改案場資料' }, // Hub F4：先吃 HubRefCache
             '#/faq': { name: 'iframe', src: 'modules/info/SQAQ2.html', title: '客戶常見問答' },
+            '#/fb-human-desk': { name: 'iframe', src: 'modules/info/fb-human-desk.html?v=26.11.12.2', title: 'Messenger 真人客服' },
             '#/daily-report': { name: 'iframe', src: 'modules/projects/daily_report.html?v=26.10.30.5', title: '團隊工作總覽' }, // Hub F8：快取排除離職＋權限字串正規化
             '#/onboarding-flow': { name: 'iframe', src: 'modules/info/onboardingflow.html', title: '客戶接洽流程' }, // [v518.0 修正]
             '#/attendance-report': { name: 'iframe', src: 'modules/attendance/attendance_report.html?v=26.10.30.3', title: '出勤儀表板' }, // 員工名單一律 get_employees 確認
@@ -329,6 +330,7 @@ const App = {
             '#/floorplan-straightener': { name: 'iframe', src: 'modules/InteriorDesigned/floorplan-straightener.html', title: '平面圖校正工具' },
             // 【您的要求】新增報價單工具整合路由
             '#/budget-web': { name: 'iframe', src: 'tools/BudgetWeb_Standalone.html', title: '報價單解析器' },
+            '#/quote-editor': { name: 'iframe', src: 'modules/projects/quote-editor.html?v=quote-hub-auth-1', title: '線上報價編輯' },
             '#/budget-audit': { name: 'iframe', src: 'tools/BudgetAuditor_Standalone_V2.html', title: '案場驗收表' },
             '#/accounting-ingest': { name: 'iframe', src: 'modules/accounting/index.html', title: '收支登錄', params: '&route=accounting_ingest.html' },
             '#/accounting': { name: 'iframe', src: 'modules/accounting/index.html', title: '會計系統' },
@@ -338,9 +340,11 @@ const App = {
             '#/accounting/payroll-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '薪資待匯款', params: '&route=payroll_finance.html' },
             '#/accounting/payment-request': { name: 'iframe', src: 'modules/accounting/index.html', title: '待付款請款', params: '&route=payment_request.html' },
             '#/accounting/submit-records': { name: 'iframe', src: 'modules/accounting/index.html', title: '送出紀錄', params: '&route=submit_records.html' },
-            '#/accounting/vendor-docs': { name: 'iframe', src: 'modules/accounting/index.html', title: '單據與存檔', params: '&route=quick_review.html&tab=archive' },
-            '#/accounting/quick-review': { name: 'iframe', src: 'modules/accounting/index.html', title: '單據與存檔', params: '&route=quick_review.html' },
+            '#/accounting/vendor-docs': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html&tab=archive' },
+            '#/accounting/quick-review': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html' },
             '#/accounting/customer-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '追加減與收款', params: '&route=designer-customer-finance.html' },
+            // 新檔名 orders-hub.html：LINE 對同路徑 HTML 常忽略 ?v= 快取戳
+            '#/shop/orders': { name: 'iframe', src: 'modules/shop/orders-hub.html', title: '官網商店訂單' },
             '#/help': { name: 'iframe', src: 'modules/help/index.html', title: '使用教學' },
             '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/accounting-ingest.html', title: '收支登錄說明' },
             '#/help/payroll': { name: 'iframe', src: 'modules/help/payroll.html', title: '薪資說明' },
@@ -361,13 +365,6 @@ const App = {
         routes['#/employee-editor'] = { name: 'iframe', src: 'modules/attendance/employee_editor.html', title: '員工資料編輯' }; // [v515.0 修正] 改為絕對路徑
         // 公司知識庫（注意：#/knowledge 已被 index.html 轉去公開 FAQ 頁，故用 #/kb）
         routes['#/kb'] = { name: 'iframe', src: 'modules/kb/index.html', title: '公司知識庫' };
-        routes['#/director-hr-notes'] = { name: 'iframe', src: 'modules/attendance/director_hr_notes.html?v=26.10.30.8', title: '總監人事筆記' }; // Hub F7：快取排除廠商；本頁不寫回共用 key
-        routes['#/director-project-notes'] = { name: 'iframe', src: 'modules/attendance/director_project_notes.html?v=26.10.30.5', title: '專案／工地備忘' };
-        routes['#/director-party-notes'] = { name: 'iframe', src: 'modules/attendance/director_party_notes.html?v=26.10.30.4', title: '客戶／廠商觀察' };
-        routes['#/director-decision-notes'] = { name: 'iframe', src: 'modules/attendance/director_decision_notes.html?v=26.10.30.3', title: '決策紀錄' };
-        routes['#/director-followup-notes'] = { name: 'iframe', src: 'modules/attendance/director_followup_notes.html?v=26.10.30.3', title: '待跟進' };
-        routes['#/director-transcript-notes'] = { name: 'iframe', src: 'modules/attendance/director_transcript_notes.html?v=26.10.30.2', title: '對話摘記' };
-
         const handleRouteChange = () => {
             const hash = window.location.hash || '#';
             // [v425.0 架構優化] 處理帶有查詢參數的 hash 路由
@@ -375,9 +372,15 @@ const App = {
             const route = routes[path] || routes['#'];
             const hashParams = queryString ? `&${queryString}` : '';
             const routeParams = route.params || '';
+            // 商店訂單：每次進入都換新檔路徑＋時間戳，逼 LINE WebView 重抓 HTML
+            let src = route.src;
+            if (path === '#/shop/orders') {
+                src = 'modules/shop/orders-hub.html?v=26.11.13.4&_cb=' + Date.now();
+            }
 
             currentView.value = {
                 ...route,
+                src: src || route.src,
                 params: hashParams + routeParams
             };
             if (path === '#/attendance-report' && Number(currentUser.value?.permission || 0) > 0
@@ -386,6 +389,11 @@ const App = {
                 return;
             }
             if (path === '#/kb' && Number(currentUser.value?.permission || 0) > 0
+                && Number(currentUser.value?.permission || 0) < 2) {
+                window.location.replace('#/dashboard');
+                return;
+            }
+            if (path === '#/fb-human-desk' && Number(currentUser.value?.permission || 0) > 0
                 && Number(currentUser.value?.permission || 0) < 2) {
                 window.location.replace('#/dashboard');
                 return;
@@ -1006,6 +1014,15 @@ const App = {
             try {
                 if (isLocalTest) {
                     userProfile.value = { userId: 'Ud58333430513b7527106fa71d2e30151', displayName: '俊豪 (本地測試)' };
+                    operatorProfile.value = {
+                        userId: 'Ud58333430513b7527106fa71d2e30151',
+                        userName: '俊豪 (本地測試)',
+                        permission: 3,
+                        group: '設計',
+                        shiftStart: '08:30',
+                        shiftEnd: '17:30'
+                    };
+                    syncHubOperatorSession();
                 } else {
                     await liff.init({ liffId: CONFIG.HUB_LIFF_ID }); // 使用專屬於主控台的 LIFF ID
                     if (!liff.isLoggedIn()) {

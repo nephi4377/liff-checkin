@@ -277,6 +277,27 @@
         let standardEmployees = [];
         let allEmployees = []; // Moved here to be initialized after other states
         let displayedShiftTypes = new Set(); // NEW: 快取的顯示班別
+
+        /** 班表片段基本類型（如「颱風假」「加班」「事假」） */
+        function shiftBaseType(segment) {
+            const s = String(segment || '').trim();
+            if (!s) return '';
+            const m = s.match(/^[^\[\(]+/);
+            return m ? m[0].trim() : s;
+        }
+
+        /** 是否為請假／排休類（不含加班）——用於「顯示上班／排休」與統計 */
+        function isLeaveBaseType(baseType) {
+            const t = String(baseType || '').trim();
+            if (!t || t === '加班') return false;
+            return t === '休假' || t.includes('假') || t.includes('休');
+        }
+
+        /** 當日班表是否視為「排休／請假日」（可與加班並存，如 休假;加班[...]） */
+        function isScheduledOffDay(shift) {
+            if (!shift) return false;
+            return String(shift).split(';').some((part) => isLeaveBaseType(shiftBaseType(part)));
+        }
         let currentUser = null; // [架構改造] 用來儲存從 URL 取得的使用者資訊
         let fetchDebounceTimer = null; // [核心新增] 用於延遲後端請求的計時器
         let currentViewMode = DEFAULT_VIEW_MODE;
@@ -886,9 +907,8 @@
                     // -----------------------------------------------------------------
                     // A-2-i. 如果是「顯示上班」模式 (show_on)
                     if (currentViewMode === 'show_on') { // 顯示上班模式
-                        // 【v222.0 核心修正】還原並簡化判斷邏輯，解決 v221.0 修正引入的新問題。
-                        // 1. 判斷今天是否為「純休假日」。'特休' 不會被誤判。
-                        const isOff = shifts.some(s => s.includes('休假'));
+                        // 請假／颱風假／特休等皆視為當日非「班」（可與加班並存）。
+                        const isOff = isScheduledOffDay(shift);
 
                         // 如果是上班日，就顯示一個綠色的「班」標籤。
                         if (!isOff) {
@@ -899,7 +919,7 @@
                         }
                         // 遍歷今天的所有班表狀態 (可能是多個)，為「非排休」的狀態附加額外標籤。
                         shifts.forEach(s => {
-                            const baseType = s.match(/^[^\[\(]+/)[0];
+                            const baseType = shiftBaseType(s);
                             // 【您的要求】如果假別包含時間，則解析並顯示時間
                             const timeMatch = s.match(/\[(.*?)\]/);
 
@@ -927,7 +947,7 @@
                         // 遍歷今天的所有班表狀態。
                         shifts.forEach(s => {
                             // 提取假別/狀態的基本類型。
-                            const baseType = s.match(/^[^\[\(]+/)[0];
+                            const baseType = shiftBaseType(s);
                             // 【您的要求】如果假別包含時間，則解析並顯示時間
                             const timeMatch = s.match(/\[(.*?)\]/);
 
@@ -956,32 +976,7 @@
                         });
                     }
 
-                    // A-3. 渲染「其他同事」的狀態 (格子下方的小字)。
-                    //      篩選出除了自己以外、且符合當前篩選條件 (組別/班別) 的員工。
-                    const otherEmployeesToShow = allEmployees.filter(emp => {
-                        if (emp.userId === selectedUserId) return false; // 1. 跳過自己
-                        if (emp.permission >= 5) return false; // [核心改造] 同時過濾掉不參與排班的最高管理者
-                        const inSelectedGroup = displayedGroups.has(emp.group || '未分類');
-                        const inSelectedShiftType = displayedShiftTypes.has(emp.shiftType);
-                        return inSelectedGroup && inSelectedShiftType; // 2. 符合篩選條件
-                    });
-
-                    // 將符合條件的其他同事狀態組合成 HTML 字串。
-                    const otherStatusesHtml = otherEmployeesToShow.map(emp => {
-                        const otherShift = scheduleData[emp.userId]?.[dateStr];
-                        // 【您的要求】修正：只要包含 "休假" 就視為 isOff。
-                        const isOff = otherShift && otherShift.includes('休假');
-
-                        // 根據當前檢視模式，決定是否要顯示這位同事的名字。
-                        if ((currentViewMode === 'show_on' && !isOff) || (currentViewMode === 'show_off' && isOff)) {
-                            const textColorClass = isOff ? 'text-red-600 font-bold' : 'text-gray-800';
-                            return `<div class="text-xs ${textColorClass} opacity-80 truncate">${emp.userName.substring(0, 3)}</div>`;
-                        }
-                        return null;
-                    }).filter(Boolean).join('');
-
-                    // 將組合好的 HTML 填入內容區塊。
-                    dayContentEl.innerHTML = otherStatusesHtml;
+                    // 選單人時只顯示本人班表，不再把同事名字蓋進格子（會蓋掉本人時段說明）。
 
                     // 邏輯分支 B：如果沒有選擇特定員工 (進入「全員檢視」模式)
                 } else {
@@ -998,8 +993,8 @@
                     let shiftsHtml = '';
                     employeesToShow.forEach(emp => {
                         const shift = scheduleData[emp.userId]?.[dateStr];
-                        // 【您的要求】統一為二元對立邏輯：
-                        const isOff = shift && shift.includes('休假');
+                        // 請假／颱風假／特休等皆視為當日排休（不只認「休假」二字）。
+                        const isOff = isScheduledOffDay(shift);
 
                         // B-4. 根據當前檢視模式，決定是否要顯示這位員工的名字。
                         if ((currentViewMode === 'show_off' && isOff) || (currentViewMode === 'show_on' && !isOff)) {
@@ -1012,7 +1007,7 @@
                                 const shifts = shift.split(';');
                                 shifts.forEach(s => {
                                     // 提取基本類型。
-                                    const baseType = s.match(/^[^[\(]+/)[0]; // 提取 "加班", "事假" 等
+                                    const baseType = shiftBaseType(s); // 提取 "加班", "事假" 等
                                     // 【您的要求】不考慮加班。只為「非排休」且「非加班」的狀態產生標籤。
                                     if (baseType !== '休假' && baseType !== '加班') {
                                         tagHtml += `<span class="shift-tag shift-${baseType} !text-[10px] !px-1 !py-0">${baseType.charAt(0)}</span>`;
@@ -1151,15 +1146,16 @@
                 const dateStr = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
                 const shift = scheduleData[selectedUserId]?.[dateStr] || '';
                 const isHoliday = holidays.has(dateStr);
+                const isOff = isScheduledOffDay(shift);
 
-                // 【您的要求】統一為二元對立邏輯：只用 isOff 判斷。
-                // 只要班表註記中不包含 "休假"，就計為一個已排班日。
-                if (!shift.includes('休假')) {
+                // 「已排」對齊應上班母數：只算非假日、且當日非請假／排休。
+                // （空白對標準制＝預設上班；颱風假／特休等不再誤算成已排上班。）
+                if (!isHoliday && !isOff) {
                     scheduledOnDays++;
                 }
 
-                // 3. 計算「已排休天數」：只有單純的「休假」才計入。
-                if (shift === '休假') {
+                // 「已排休」：任何請假／排休標記（含颱風假、特休），不含純加班。
+                if (isOff) {
                     scheduledOffDays++;
                 }
             }

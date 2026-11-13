@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>添心設計 · Messenger 真人客服</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet" />
+  <script defer src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5c6b7a;
+      --line: #d5dde6;
+      --bg: #f0f4f7;
+      --panel: #ffffff;
+      --accent: #1f6b5c;
+      --accent-ink: #fff;
+      --warn: #8a5a12;
+      --warn-bg: #fff6e8;
+      --danger: #9b2c2c;
+      --danger-bg: #fdecec;
+      --ok: #1b6b3a;
+      --ok-bg: #e8f6ee;
+      --shadow: 0 10px 28px rgba(26, 35, 50, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #dce9e4 0%, transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, #e7eef5 0%, transparent 50%),
+        var(--bg);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 20px 16px 48px; }
+    .brand {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 700;
+      margin: 0 0 4px;
+    }
+    .sub { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .status {
+      margin: 12px 0 16px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .status.ok { background: var(--ok-bg); color: var(--ok); border-color: #b7e0c5; }
+    .status.err { background: var(--danger-bg); color: var(--danger); border-color: #f0b4b4; }
+    .layout { display: grid; gap: 14px; grid-template-columns: 1fr; }
+    @media (min-width: 860px) {
+      .layout { grid-template-columns: 300px 1fr; align-items: start; }
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0;
+      padding: 12px 14px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafb;
+    }
+    .list { max-height: 70vh; overflow: auto; }
+    .conv {
+      width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line);
+      background: transparent; padding: 12px 14px; cursor: pointer; font: inherit; color: inherit;
+    }
+    .conv:hover { background: #f5f9f8; }
+    .conv.is-active { background: #e8f3ef; box-shadow: inset 3px 0 0 var(--accent); }
+    .conv .name { font-weight: 700; font-size: 14px; }
+    .conv .meta { margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .badge {
+      display: inline-block; margin-top: 6px; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 999px; background: #eef2f6; color: var(--muted);
+    }
+    .badge.response { background: var(--ok-bg); color: var(--ok); }
+    .badge.human_agent { background: var(--warn-bg); color: var(--warn); }
+    .badge.expired, .badge.unknown { background: var(--danger-bg); color: var(--danger); }
+    .detail { padding: 14px; }
+    .detail.empty { color: var(--muted); font-size: 14px; padding: 24px 14px; }
+    .when { font-size: 13px; color: var(--muted); margin: 0 0 10px; line-height: 1.45; }
+    .hint {
+      font-size: 13px; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px;
+      line-height: 1.45; background: #f4f7fa; border: 1px solid var(--line);
+    }
+    .hint.human_agent { background: var(--warn-bg); border-color: #f0d5a4; color: var(--warn); }
+    .hint.expired, .hint.unknown { background: var(--danger-bg); border-color: #f0b4b4; color: var(--danger); }
+    .hint.response { background: var(--ok-bg); border-color: #b7e0c5; color: var(--ok); }
+    .thread {
+      border: 1px solid var(--line); border-radius: 10px; background: #f7fafb;
+      max-height: 240px; overflow: auto; padding: 10px; margin-bottom: 12px;
+    }
+    .thread .msg { margin: 0 0 10px; font-size: 13px; line-height: 1.45; }
+    .thread .msg:last-child { margin-bottom: 0; }
+    .thread .msg .who { font-weight: 700; font-size: 12px; }
+    .thread .msg.inbound .who { color: #245b8a; }
+    .thread .msg.outbound .who { color: var(--accent); }
+    .thread .msg .t { color: var(--muted); font-size: 11px; margin-left: 6px; }
+    .thread .empty { color: var(--muted); font-size: 13px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    textarea {
+      width: 100%; min-height: 110px; resize: vertical; border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 15px; line-height: 1.45;
+    }
+    textarea:disabled { background: #f3f5f7; }
+    .confirm-row {
+      display: flex; gap: 8px; align-items: flex-start; margin: 10px 0;
+      font-size: 13px; line-height: 1.4;
+    }
+    .confirm-row input { margin-top: 3px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    button.primary {
+      border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 10px;
+      padding: 10px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+    }
+    button.primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost {
+      border: 1px solid var(--line); background: #fff; border-radius: 10px;
+      padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .result { margin-top: 12px; font-size: 14px; line-height: 1.45; min-height: 1.3em; }
+    .result.ok { color: var(--ok); font-weight: 600; }
+    .result.err { color: var(--danger); font-weight: 600; }
+    .result.warn { color: var(--warn); font-weight: 600; }
+    .rules { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 class="brand">添心設計</h1>
+      <p class="sub">Messenger 真人客服 · 選對話後可看最近來訊與回覆。24 小時內一般回覆；逾 24 小時須確認未解決問題才帶 HUMAN_AGENT；超過七天停用。此頁不自動對真實客戶送訊，除非你在已部署測試環境手動送出。</p>
+    </header>
+    <div id="status" class="status" role="status">載入中…</div>
+    <div class="layout">
+      <section class="panel" aria-label="對話列表">
+        <h2>對話</h2>
+        <div id="list" class="list"></div>
+      </section>
+      <section class="panel" aria-label="回覆區">
+        <h2>回覆</h2>
+        <div id="detail" class="detail empty">請先選左側對話。</div>
+      </section>
+    </div>
+    <p class="rules">授權：員工 LINE 登入且權限 ≥ 2。送出意圖綁定操作者／對話／內容；結果不明時請先查對話再決定是否重試。正式部署與 Meta 送審另待確認。</p>
+  </div>
+
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.FB_HUMAN_CONFIG = CONFIG;
+    window.dispatchEvent(new Event('fb-human-config-ready'));
+  </script>
+  <script>
+    (function () {
+      var state = {
+        token: '',
+        actorId: '',
+        actorName: '',
+        conversations: [],
+        selected: null,
+        messages: [],
+        sending: false,
+        sendSeq: 0,
+        sendForPsid: '',
+        intentByKey: {},
+        unknownIntents: {},
+        mock: false
+      };
+
+      var statusEl = document.getElementById('status');
+      var listEl = document.getElementById('list');
+      var detailEl = document.getElementById('detail');
+
+      function qs(name) {
+        try { return new URLSearchParams(location.search).get(name) || ''; }
+        catch (e) { return ''; }
+      }
+
+      function esc(s) {
+        return String(s == null ? '' : s)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'status' + (kind ? ' ' + kind : '');
+      }
+
+      function fmtWhen(msOrIso) {
+        if (!msOrIso) return '（無紀錄）';
+        var d = typeof msOrIso === 'number' ? new Date(msOrIso) : new Date(msOrIso);
+        if (isNaN(d.getTime())) return String(msOrIso);
+        return d.toLocaleString('zh-TW', { hour12: false });
+      }
+
+      function windowLabel(w) {
+        if (w === 'response') return '24 小時內 · 一般回覆';
+        if (w === 'human_agent') return '超過 24 小時 · 須確認後帶 HUMAN_AGENT';
+        if (w === 'expired') return '超過七天 · 已停用';
+        return '無法判定視窗';
+      }
+
+      function gasUrl() {
+        var cfg = window.FB_HUMAN_CONFIG || {};
+        return cfg.GAS_WEB_APP_URL || '';
+      }
+
+      function postAction(action, body) {
+        var url = gasUrl();
+        if (!url) return Promise.reject(new Error('尚未載入後端網址'));
+        var payload = Object.assign({ action: action, liff_id_token: state.token }, body || {});
+        return fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(payload)
+        }).then(function (res) { return res.json(); });
+      }
+
+      function requestHubToken() {
+        return new Promise(function (resolve) {
+          if (window.parent === window) {
+            resolve('');
+            return;
+          }
+          var done = false;
+          function finish(tok) {
+            if (done) return;
+            done = true;
+            window.removeEventListener('message', onMsg);
+            resolve(tok || '');
+          }
+          function onMsg(e) {
+            if (!e.data || e.data.type !== 'hub_liff_token') return;
+            finish(e.data.token || '');
+          }
+          window.addEventListener('message', onMsg);
+          try {
+            window.parent.postMessage({ type: 'request_hub_liff_token' }, '*');
+          } catch (err) {
+            finish('');
+            return;
+          }
+          setTimeout(function () { finish(''); }, 8000);
+        });
+      }
+
+      function initLiffToken() {
+        if (state.mock) {
+          state.token = 'mock-token';
+          state.actorId = 'U_mock';
+          state.actorName = '本地模擬同事';
+          return Promise.resolve();
+        }
+        return requestHubToken().then(function (hubTok) {
+          if (hubTok) {
+            state.token = hubTok;
+            return;
+          }
+          var cfg = window.FB_HUMAN_CONFIG || {};
+          var liffId = cfg.HUB_LIFF_ID || cfg.PROJECT_CONSOLE_LIFF_ID || '';
+          if (!liffId || typeof liff === 'undefined') {
+            throw new Error('請從主控台開啟本頁，或設定 LIFF 後再試');
+          }
+          return liff.init({ liffId: liffId }).then(function () {
+            if (!liff.isLoggedIn()) {
+              liff.login({ redirectUri: location.href });
+              return;
+            }
+            state.token = liff.getIDToken() || '';
+            return liff.getProfile().then(function (p) {
+              state.actorName = (p && p.displayName) || '';
+              state.actorId = (p && p.userId) || '';
+            });
+          });
+        });
+      }
+
+      function mockConversations() {
+        var now = Date.now();
+        return [
+          {
+            psid: 'mock-within-24h',
+            display_name: '測試客・24小時內',
+            last_inbound_ms: now - 2 * 3600000,
+            last_inbound_at: new Date(now - 2 * 3600000).toISOString(),
+            window: 'response',
+            can_send: true,
+            tag_if_send: '',
+            requires_unresolved_confirm: false,
+            window_message: '24 小時內：一般回覆（不帶 HUMAN_AGENT）'
+          },
+          {
+            psid: 'mock-human-agent',
+            display_name: '測試客・逾24h未滿7天',
+            last_inbound_ms: now - 36 * 3600000,
+            last_inbound_at: new Date(now - 36 * 3600000).toISOString(),
+            window: 'human_agent',
+            can_send: true,
+            tag_if_send: 'HUMAN_AGENT',
+            requires_unresolved_confirm: true,
+            window_message: '超過 24 小時、仍在七天內：須確認為既有未解決客服問題後才帶 HUMAN_AGENT'
+          },
+          {
+            psid: 'mock-expired',
+            display_name: '測試客・超過七天',
+            last_inbound_ms: now - 8 * 24 * 3600000,
+            last_inbound_at: new Date(now - 8 * 24 * 3600000).toISOString(),
+            window: 'expired',
+            can_send: false,
+            tag_if_send: '',
+            requires_unresolved_confirm: false,
+            window_message: '超過七天訊息視窗，此發送入口已停用'
+          }
+        ];
+      }
+
+      function mockMessages(psid) {
+        var now = Date.now();
+        if (psid === 'mock-human-agent') {
+          return [
+            { direction: 'inbound', text: '客人：材質樣品還沒回，這是未解決問題', at: now - 40 * 3600000 },
+            { direction: 'outbound', text: '收到，我們會再確認', at: now - 38 * 3600000 },
+            { direction: 'inbound', text: '客人：週末有結果嗎？', at: now - 36 * 3600000 }
+          ];
+        }
+        if (psid === 'mock-expired') {
+          return [
+            { direction: 'inbound', text: '很久以前的詢問', at: now - 8 * 24 * 3600000 }
+          ];
+        }
+        return [
+          { direction: 'inbound', text: '客人問：報價怎麼算？', at: now - 3 * 3600000 },
+          { direction: 'outbound', text: '請稍候專人回覆', at: now - 2.5 * 3600000 },
+          { direction: 'inbound', text: '客人問：週末有人嗎？', at: now - 2 * 3600000 }
+        ];
+      }
+
+      function intentKey(psid, text) {
+        return String(state.actorId || 'anon') + '\n' + String(psid) + '\n' + String(text || '').trim();
+      }
+
+      function hashIntent(psid, text) {
+        var raw = intentKey(psid, text);
+        var cached = state.intentByKey[raw];
+        if (cached) return Promise.resolve(cached);
+        if (window.crypto && crypto.subtle && window.TextEncoder) {
+          var data = new TextEncoder().encode(raw);
+          return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+            var bytes = new Uint8Array(buf);
+            var bin = '';
+            for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+            var b64 = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+            var id = 'i_' + b64.substring(0, 40);
+            state.intentByKey[raw] = id;
+            return id;
+          });
+        }
+        var h = 2166136261;
+        for (var i = 0; i < raw.length; i++) {
+          h ^= raw.charCodeAt(i);
+          h = Math.imul(h, 16777619);
+        }
+        var id2 = 'i_' + (h >>> 0).toString(16) + '_' + String(raw.length);
+        state.intentByKey[raw] = id2;
+        return Promise.resolve(id2);
+      }
+
+      function loadList() {
+        if (state.mock) {
+          state.conversations = mockConversations();
+          renderList();
+          setStatus('模擬模式（?mock=1）：合成對話，不打正式 Meta 送訊。', 'ok');
+          return Promise.resolve();
+        }
+        setStatus('載入對話中…');
+        return postAction('fb_human_list', { limit: 80 }).then(function (res) {
+          if (!res || !res.success) {
+            throw new Error((res && res.message) || '載入失敗');
+          }
+          state.conversations = res.conversations || [];
+          if (res.actor) {
+            if (res.actor.display_name) state.actorName = res.actor.display_name;
+            if (res.actor.user_id) state.actorId = res.actor.user_id;
+          }
+          renderList();
+          setStatus(
+            '已登入' + (state.actorName ? '：' + state.actorName : '') +
+            ' · 共 ' + state.conversations.length + ' 則 FB 對話',
+            'ok'
+          );
+        });
+      }
+
+      function loadThread(psid) {
+        if (state.mock) {
+          state.messages = mockMessages(psid);
+          var c = state.conversations.find(function (x) { return x.psid === psid; });
+          if (c) {
+            // 模擬「新來訊刷新」：?mock_refresh=1 時把 human_agent 改成 response
+            if (qs('mock_refresh') === '1' && c.window === 'human_agent') {
+              c.window = 'response';
+              c.can_send = true;
+              c.requires_unresolved_confirm = false;
+              c.tag_if_send = '';
+              c.last_inbound_ms = Date.now() - 10 * 60 * 1000;
+              c.window_message = '已收到新來訊：回到 24 小時內一般回覆';
+            }
+          }
+          return Promise.resolve();
+        }
+        return postAction('fb_human_thread', { psid: psid, limit: 20 }).then(function (res) {
+          if (!res || !res.success) {
+            throw new Error((res && res.message) || '讀取對話失敗');
+          }
+          state.messages = res.messages || [];
+          if (state.selected && state.selected.psid === psid) {
+            state.selected.window = res.window;
+            state.selected.can_send = !!res.can_send;
+            state.selected.tag_if_send = res.tag_if_send || '';
+            state.selected.requires_unresolved_confirm = !!res.requires_unresolved_confirm;
+            state.selected.window_message = res.window_message || '';
+            state.selected.last_inbound_ms = res.last_inbound_ms || state.selected.last_inbound_ms;
+            state.selected.last_inbound_at = res.last_inbound_at || state.selected.last_inbound_at;
+          }
+        });
+      }
+
+      function renderList() {
+        if (!state.conversations.length) {
+          listEl.innerHTML = '<div class="detail empty">目前沒有可顯示的 FB 對話。</div>';
+          return;
+        }
+        listEl.innerHTML = state.conversations.map(function (c) {
+          var active = state.selected && state.selected.psid === c.psid ? ' is-active' : '';
+          return (
+            '<button type="button" class="conv' + active + '" data-psid="' + esc(c.psid) + '">' +
+              '<div class="name">' + esc(c.display_name || c.psid) + '</div>' +
+              '<div class="meta">最後來訊：' + esc(fmtWhen(c.last_inbound_ms || c.last_inbound_at)) + '</div>' +
+              '<span class="badge ' + esc(c.window || '') + '">' + esc(windowLabel(c.window)) + '</span>' +
+            '</button>'
+          );
+        }).join('');
+        Array.prototype.forEach.call(listEl.querySelectorAll('.conv'), function (btn) {
+          btn.addEventListener('click', function () {
+            var psid = btn.getAttribute('data-psid');
+            // 送出途中切換：作廢進行中結果
+            state.sendSeq += 1;
+            state.sending = false;
+            state.selected = state.conversations.find(function (x) { return x.psid === psid; }) || null;
+            state.messages = [];
+            renderList();
+            renderDetail({ loadingThread: true });
+            loadThread(psid)
+              .then(function () {
+                if (!state.selected || state.selected.psid !== psid) return;
+                renderList();
+                renderDetail();
+              })
+              .catch(function (e) {
+                if (!state.selected || state.selected.psid !== psid) return;
+                setStatus(e.message || '讀取對話失敗', 'err');
+                renderDetail({ threadError: e.message || '讀取對話失敗' });
+              });
+          });
+        });
+      }
+
+      function renderThreadHtml() {
+        if (!state.messages.length) {
+          return '<div class="thread"><div class="empty">尚無文字來訊／回覆可顯示。</div></div>';
+        }
+        return (
+          '<div class="thread" aria-label="最近對話">' +
+          state.messages.map(function (m) {
+            var who = m.direction === 'outbound' ? '我們' : '顧客';
+            return (
+              '<div class="msg ' + esc(m.direction || '') + '">' +
+                '<span class="who">' + esc(who) + '</span>' +
+                '<span class="t">' + esc(fmtWhen(m.at || m.at_iso)) + '</span>' +
+                '<div>' + esc(m.text || '') + '</div>' +
+              '</div>'
+            );
+          }).join('') +
+          '</div>'
+        );
+      }
+
+      function renderDetail(opts) {
+        opts = opts || {};
+        var c = state.selected;
+        if (!c) {
+          detailEl.className = 'detail empty';
+          detailEl.textContent = '請先選左側對話。';
+          return;
+        }
+        detailEl.className = 'detail';
+        var can = !!c.can_send;
+        var needConfirm = !!c.requires_unresolved_confirm || c.window === 'human_agent';
+        var unknownKey = c.psid;
+        var hasUnknown = !!state.unknownIntents[unknownKey];
+
+        detailEl.innerHTML =
+          '<div style="font-weight:700;font-size:16px;margin-bottom:4px">' +
+            esc(c.display_name || c.psid) +
+          '</div>' +
+          '<p class="when">顧客最後來訊時間：<strong>' + esc(fmtWhen(c.last_inbound_ms || c.last_inbound_at)) +
+          '</strong></p>' +
+          '<div class="hint ' + esc(c.window || '') + '">' + esc(c.window_message || windowLabel(c.window)) + '</div>' +
+          (opts.loadingThread
+            ? '<div class="thread"><div class="empty">載入最近對話…</div></div>'
+            : (opts.threadError
+              ? '<div class="thread"><div class="empty">' + esc(opts.threadError) + '</div></div>'
+              : renderThreadHtml())) +
+          '<label for="replyText">回覆內容</label>' +
+          '<textarea id="replyText" placeholder="親自輸入回覆…" ' + (can ? '' : 'disabled') + '></textarea>' +
+          (needConfirm && can
+            ? '<label class="confirm-row">' +
+                '<input type="checkbox" id="confirmUnresolved" />' +
+                '<span>我確認這是既有、尚未解決的客服問題（逾 24 小時才可帶 HUMAN_AGENT）</span>' +
+              '</label>'
+            : '') +
+          '<div class="actions">' +
+            '<button type="button" class="primary" id="sendBtn" ' + (can ? '' : 'disabled') + '>' +
+              (can ? '送出回覆' : '已停用') +
+            '</button>' +
+            (hasUnknown
+              ? '<button type="button" class="ghost" id="forceRetryBtn">我已查過對話，確認要重試</button>'
+              : '') +
+            '<button type="button" class="ghost" id="refreshBtn">重新整理</button>' +
+          '</div>' +
+          '<div class="result" id="sendResult" role="status"></div>';
+
+        document.getElementById('refreshBtn').addEventListener('click', function () {
+          var psid = c.psid;
+          loadList()
+            .then(function () {
+              state.selected = state.conversations.find(function (x) { return x.psid === psid; }) || state.selected;
+              return loadThread(psid);
+            })
+            .then(function () {
+              renderList();
+              renderDetail();
+            })
+            .catch(function (e) {
+              setStatus(e.message || '重新整理失敗', 'err');
+            });
+        });
+
+        var sendBtn = document.getElementById('sendBtn');
+        if (sendBtn && can) {
+          sendBtn.addEventListener('click', function () { onSend(false); });
+        }
+        var forceBtn = document.getElementById('forceRetryBtn');
+        if (forceBtn) {
+          forceBtn.addEventListener('click', function () { onSend(true); });
+        }
+      }
+
+      function onSend(forceNew) {
+        if (state.sending || !state.selected) return;
+        var c = state.selected;
+        var textEl = document.getElementById('replyText');
+        var resultEl = document.getElementById('sendResult');
+        var sendBtn = document.getElementById('sendBtn');
+        var confirmEl = document.getElementById('confirmUnresolved');
+        var text = (textEl && textEl.value || '').trim();
+        if (!text) {
+          resultEl.className = 'result err';
+          resultEl.textContent = '請先輸入回覆內容。';
+          return;
+        }
+        if ((c.requires_unresolved_confirm || c.window === 'human_agent')
+          && (!confirmEl || !confirmEl.checked)) {
+          resultEl.className = 'result err';
+          resultEl.textContent = '請先勾選確認：這是既有未解決的客服問題。';
+          return;
+        }
+
+        var mySeq = ++state.sendSeq;
+        var myPsid = c.psid;
+        state.sending = true;
+        state.sendForPsid = myPsid;
+        if (sendBtn) sendBtn.disabled = true;
+        if (textEl) textEl.disabled = true;
+        resultEl.className = 'result';
+        resultEl.textContent = '送出中…';
+
+        hashIntent(myPsid, text).then(function (intentId) {
+          if (forceNew) {
+            delete state.unknownIntents[myPsid];
+          }
+          var run;
+          if (state.mock) {
+            run = Promise.resolve().then(function () {
+              if (c.window === 'expired') {
+                return { success: false, status: 'blocked', message: '超過七天訊息視窗，此發送入口已停用' };
+              }
+              if (qs('mock_unknown') === '1' && !forceNew) {
+                return {
+                  success: false,
+                  status: 'unknown',
+                  needs_manual_check: true,
+                  intent_id: intentId,
+                  message: '送出結果不明，請先查看對話是否已送達，再決定是否重試（系統不會自動重送）【模擬】'
+                };
+              }
+              if (qs('mock_fail') === '1') {
+                return { success: false, status: 'failed', message: '模擬發送失敗（mock_fail=1）' };
+              }
+              return {
+                success: true,
+                status: 'sent',
+                message: c.window === 'human_agent'
+                  ? '已送出（帶 HUMAN_AGENT）【模擬】'
+                  : '已送出（一般回覆）【模擬】',
+                intent_id: intentId,
+                tag_used: c.window === 'human_agent' ? 'HUMAN_AGENT' : ''
+              };
+            });
+          } else {
+            run = postAction('fb_human_reply', {
+              psid: myPsid,
+              text: text,
+              client_send_id: intentId,
+              confirm_unresolved: !!(confirmEl && confirmEl.checked),
+              force_new_intent: !!forceNew
+            });
+          }
+
+          return run.then(function (res) {
+            // 途中已切換對話：忽略結果，避免錯置狀態／洩露到別的對話畫面
+            if (mySeq !== state.sendSeq || !state.selected || state.selected.psid !== myPsid) {
+              return;
+            }
+            if (res && res.success) {
+              resultEl.className = 'result ok';
+              resultEl.textContent = (res.message || '送出成功') +
+                (res.deduped ? '（同意圖已防重複）' : '');
+              if (textEl) textEl.value = '';
+              delete state.unknownIntents[myPsid];
+              // 把剛送出的回覆加到畫面
+              state.messages = state.messages.concat([{
+                direction: 'outbound',
+                text: text,
+                at: Date.now()
+              }]);
+              renderDetail();
+              var keep = document.getElementById('sendResult');
+              if (keep) {
+                keep.className = 'result ok';
+                keep.textContent = (res.message || '送出成功') +
+                  (res.deduped ? '（同意圖已防重複）' : '');
+              }
+            } else if (res && (res.needs_manual_check || res.status === 'unknown')) {
+              state.unknownIntents[myPsid] = res.intent_id || intentId;
+              resultEl.className = 'result warn';
+              resultEl.textContent = res.message || '送出結果不明，請先查對話';
+              renderDetail();
+              var keep2 = document.getElementById('sendResult');
+              if (keep2) {
+                keep2.className = 'result warn';
+                keep2.textContent = res.message || '送出結果不明，請先查對話';
+              }
+            } else {
+              resultEl.className = 'result err';
+              resultEl.textContent = (res && res.message) || '送出失敗';
+            }
+          });
+        }).catch(function (e) {
+          if (mySeq !== state.sendSeq || !state.selected || state.selected.psid !== myPsid) return;
+          resultEl.className = 'result err';
+          resultEl.textContent = e.message || '連線失敗';
+        }).finally(function () {
+          if (mySeq !== state.sendSeq) return;
+          state.sending = false;
+          var still = state.selected && state.selected.psid === myPsid && state.selected.can_send;
+          var btn = document.getElementById('sendBtn');
+          var ta = document.getElementById('replyText');
+          if (btn) btn.disabled = !still;
+          if (ta) ta.disabled = !still;
+        });
+      }
+
+      function whenConfigReady(fn) {
+        if (window.FB_HUMAN_CONFIG) fn();
+        else window.addEventListener('fb-human-config-ready', fn, { once: true });
+      }
+
+      whenConfigReady(function () {
+        state.mock = qs('mock') === '1';
+        initLiffToken()
+          .then(function () {
+            if (!state.mock && !state.token) {
+              throw new Error('尚未取得員工登入憑證');
+            }
+            return loadList();
+          })
+          .catch(function (e) {
+            setStatus(e.message || '無法開啟真人客服頁', 'err');
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

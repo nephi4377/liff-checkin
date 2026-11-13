@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>官網商店訂單（員工）</title>
+  <style>
+    :root { --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --teal:#0f766e; --amber:#b45309; --bg:#f8fafc; --blue:#1d4ed8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Noto Sans TC", "PingFang TC", sans-serif; background: var(--bg); color: var(--ink); }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; line-height: 1.45; }
+    .banner { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; line-height: 1.45; }
+    .steps { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 14px; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+    .steps strong { color: var(--ink); }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+    .row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .ono { font-weight: 700; letter-spacing: 0.02em; }
+    .st { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #ecfdf5; color: var(--teal); }
+    .st.awaiting_quote { background: #eff6ff; color: var(--blue); }
+    .st.awaiting_transfer, .st.pending { background: #fff7ed; color: var(--amber); }
+    .st.established, .st.paid { background: #ecfdf5; color: var(--teal); }
+    .meta { font-size: 13px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+    .expire { font-size: 12px; color: #9a3412; margin-top: 8px; }
+    .quote-box { margin-top: 10px; padding: 10px; background: #f8fafc; border: 1px dashed var(--line); border-radius: 8px; }
+    .quote-box label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+    .quote-box input { width: 100%; max-width: 180px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    button { border: 1px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button.primary { background: var(--teal); color: #fff; border-color: var(--teal); }
+    button.quote { background: var(--blue); color: #fff; border-color: var(--blue); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    #status { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>官網商店訂單</h1>
+    <p class="sub">Hub 員工後台 · 官網 Woo 建單。標記已付款＝確認收款後訂單才<strong>成立</strong>。</p>
+    <div class="banner">未成立（未標記已付款）超過 <strong>7 天</strong>將到期刪除。客人匯款 ≠ 自動成立。</div>
+    <div class="steps">
+      <div><strong>①</strong> 客人取得訂單編號（待報價／未成立）</div>
+      <div><strong>②</strong> 員工報運費／總額 → 寄匯款說明</div>
+      <div><strong>③</strong> 確認入帳 →「標記已付款／訂單成立」</div>
+    </div>
+    <div id="status">載入中…</div>
+    <div id="list"></div>
+  </div>
+  <script type="module">
+    import { CONFIG } from '../../shared/js/config.js';
+    window.CONFIG = CONFIG;
+  </script>
+  <script src="../../shared/js/shop_api.js"></script>
+  <script>
+    function money(n) {
+      return 'NT$ ' + Number(n || 0).toLocaleString('zh-TW');
+    }
+    function stageOf(o) {
+      if (o.stage) return o.stage;
+      if (o.status === 'paid' || o.established) return 'established';
+      if (o.quoted || o.status === 'awaiting_transfer') return 'awaiting_transfer';
+      return 'awaiting_quote';
+    }
+    function stageLabel(stage) {
+      if (stage === 'established') return '已成立（已付款）';
+      if (stage === 'awaiting_transfer') return '待匯款（未成立）';
+      return '待報價（未成立）';
+    }
+    function render() {
+      var status = document.getElementById('status');
+      var list = document.getElementById('list');
+      status.textContent = '載入訂單中…';
+      ShopApi.listOrdersStaff({}).then(function (res) {
+        if (!res.success) {
+          status.textContent = res.message || res.code || '讀取失敗';
+          return;
+        }
+        var orders = (res.data && res.data.orders) || [];
+        status.textContent =
+          (res.mock ? '示意資料（兩段報價／匯款）· ' : '已連線官網商店 GAS · ') +
+          '共 ' + orders.length + ' 筆';
+        list.innerHTML = '';
+        orders.forEach(function (o) {
+          var stage = stageOf(o);
+          var ex = ShopApi.expireInfo(o);
+          var el = document.createElement('div');
+          el.className = 'card';
+          el.setAttribute('data-stage', stage);
+          el.setAttribute('data-order', o.order_number);
+          var shipLine =
+            o.shipping_fee != null
+              ? '<br>運費 ' + money(o.shipping_fee) +
+                (o.payable_total != null ? ' · 應付 ' + money(o.payable_total) : '')
+              : '<br>運費：尚未報價';
+          el.innerHTML =
+            '<div class="row"><span class="ono">訂單編號 ' + o.order_number + '</span>' +
+            '<span class="st ' + stage + '">' + stageLabel(stage) + '</span></div>' +
+            '<div class="meta">' + (o.items_summary || '') +
+            '<br>商品合計 ' + money(o.product_total != null ? o.product_total : o.total) +
+            shipLine +
+            (o.marked_paid_by ? '<br>成立確認：' + o.marked_paid_by : '') + '</div>' +
+            (ex.expires && stage !== 'established' ? '<div class="expire">' + ex.message + '</div>' : '') +
+            '<div class="quote-box" style="display:none"></div>' +
+            '<div class="actions"></div>' +
+            '<p class="hint">匯款說明僅在報價後寄出；確認收款後才標記已付款／訂單成立。</p>';
+
+          var actions = el.querySelector('.actions');
+          var quoteBox = el.querySelector('.quote-box');
+
+          if (stage === 'awaiting_quote') {
+            quoteBox.style.display = 'block';
+            quoteBox.innerHTML =
+              '<label>運費（NT$）</label>' +
+              '<input type="number" min="0" step="1" class="ship-input" value="300" />';
+            var btnQuote = document.createElement('button');
+            btnQuote.className = 'quote';
+            btnQuote.textContent = '報價並寄匯款說明';
+            btnQuote.onclick = function () {
+              var fee = Number(quoteBox.querySelector('.ship-input').value);
+              if (isNaN(fee) || fee < 0) {
+                alert('請輸入有效運費');
+                return;
+              }
+              if (!confirm('確認報價運費 ' + money(fee) + ' 並寄出匯款說明給客人？')) return;
+              var fn = ShopApi.quoteAndNotifyTransfer || function () {
+                return Promise.resolve({ success: true, mock: true, message: '已報價（示意）' });
+              };
+              fn.call(ShopApi, { staff_name: 'hub_staff' }, o.order_number, { shipping_fee: fee }).then(function (r) {
+                alert(r.success ? (r.message || '已報價並寄匯款說明（訂單尚未成立）') : (r.message || '失敗'));
+                render();
+              });
+            };
+            actions.appendChild(btnQuote);
+          }
+
+          if (stage === 'awaiting_transfer') {
+            var btnPay = document.createElement('button');
+            btnPay.className = 'primary';
+            btnPay.textContent = '確認收款／訂單成立';
+            btnPay.onclick = function () {
+              if (!confirm('確認已收到匯款，將訂單 ' + o.order_number + ' 標記為已付款（訂單成立）？')) return;
+              ShopApi.markPaid({ staff_name: 'hub_staff' }, o.order_number).then(function (r) {
+                alert(r.success ? '訂單已成立（已付款）' : (r.message || '失敗'));
+                render();
+              });
+            };
+            actions.appendChild(btnPay);
+            var btnResend = document.createElement('button');
+            btnResend.textContent = '重送匯款說明';
+            btnResend.onclick = function () {
+              ShopApi.resendPayNotify({}, o.order_number).then(function (r) {
+                alert((r.data && r.data.line_notify) || r.message || '已送出');
+              });
+            };
+            actions.appendChild(btnResend);
+          }
+
+          list.appendChild(el);
+        });
+      });
+    }
+    render();
+  </script>
+</body>
+</html>

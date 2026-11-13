@@ -11,7 +11,7 @@ var fixtures = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
 var LedgerEntryMap = require(path.join(__dirname, '../../../shared/js/ledger_entry_map.js'));
 var api = fs.readFileSync(path.join(__dirname, '../../../shared/js/accounting_api.js'), 'utf8');
 
-assert.strictEqual(fixtures.view_all_min_perm, 5, 'view_all_min_perm');
+assert.strictEqual(fixtures.view_all_min_perm, 3, 'view_all_min_perm');
 assert.strictEqual(fixtures.actions.void, 'accounting_ledger_void', 'void action');
 assert.strictEqual(
   fixtures.actions.dup_review_clear,
@@ -31,7 +31,7 @@ assert(api.indexOf('accounting_ledger_duplicate_review') < 0, 'no legacy dup rev
 
 var recent = fixtures.examples.ledger_recent_mine_only;
 assert(recent.success && recent.mine_only === true, 'recent mine_only example');
-assert.strictEqual(recent.view_all_min_perm, 5, 'recent view_all_min_perm');
+assert.strictEqual(recent.view_all_min_perm, 3, 'recent view_all_min_perm');
 var row = recent.items[0];
 assert.strictEqual(LedgerEntryMap.recorderUserId(row), 'U_OWNER_DEMO', 'recorderUserId');
 assert.strictEqual(row.recorder_user_id, 'U_OWNER_DEMO', 'recorder_user_id on row');

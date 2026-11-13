@@ -941,7 +941,22 @@
         if (!window.confirm(confirmMsg)) return;
         AccountingUi.runAsync(btn, { busyLabel: '補通知中…', clear: false }, async function () {
           var data = await AccountingApi.vendorPaymentResendNotify(session, [it.payment_request_id]);
-          if (!data || !data.success) throw new Error((data && data.message) || '補通知失敗');
+          if (!data) throw new Error('補通知失敗');
+          if (!data.success) {
+            setMsg((data.message || '匯款通知沒送到') +
+              (summarizeResendNotify(data) ? '\n' + summarizeResendNotify(data) : ''));
+            var failDrafts = data.email_drafts || [];
+            if (failDrafts.length) {
+              var failBox = $('payHistoryList');
+              var failNote = document.createElement('div');
+              failNote.className = 'pay-notify-email';
+              failNote.style.marginTop = '10px';
+              failNote.innerHTML = '<strong>EMAIL 備援草稿</strong>';
+              failBox.insertBefore(failNote, failBox.firstChild);
+              renderPayEmailDrafts(failDrafts, failBox);
+            }
+            return;
+          }
           setOk(summarizeResendNotify(data));
           await loadPayHistory($('editId').value, true);
           var drafts = data.email_drafts || [];
@@ -1507,8 +1522,14 @@
           btn.addEventListener('click', async function () {
             if (!confirm('移除此 LINE 綁定？\n（廠商暫停合作請改合作狀態，不必在此一個個關。）')) return;
             await AccountingUi.runAsync(btn, { busyLabel: '處理中…', clear: false }, async function () {
+              // 立刻打 API，不必再按下方「更新」
               var data = await AccountingApi.crudUpdate(session, 'vendor_line_binding', b.binding_id, { is_active: '否' });
               if (!data.success) { setMsg(data.message); return; }
+              // 雙保險：舊後端若仍回「有效」列，前端也從快取刪掉，避免畫面以為沒移掉
+              if (typeof AccountingCache !== 'undefined' && AccountingCache.removeMasterRow) {
+                AccountingCache.removeMasterRow(session, 'vendor_line_binding', b.binding_id);
+              }
+              setOk('已移除 LINE 綁定');
               refreshVendors(true);
               renderBindings(vendorId);
             });

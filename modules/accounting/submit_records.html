@@ -7,12 +7,12 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <title>送出紀錄</title>
   <!-- 新介面（請款管線第 2 站）：主職＝修改已送審請款資料並同步審核／匯款。非歷史記帳改名；收支查詢見 ledger_history.html -->
-  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
+  <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=9" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/ledger_entry_map.js?v=5"></script>
-  <script src="../../shared/js/accounting_api.js?v=111"></script>
+  <script src="../../shared/js/ledger_entry_map.js?v=6"></script>
+  <script src="../../shared/js/accounting_api.js?v=112"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_lightbox.js?v=20"></script>
@@ -23,9 +23,10 @@
     h2 { margin: 0 0 4px; }
     .sub { color: #555; font-size: 14px; margin: 0 0 12px; line-height: 1.45; }
     .card {
-      background: #fff; border-radius: 12px; padding: 14px;
+      background: #fff; border-radius: 12px; padding: 16px;
       margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
       box-sizing: border-box; min-width: 0;
+      height: auto; max-height: none; overflow: visible;
     }
     label { display: block; margin-top: 0; font-weight: 600; font-size: 13px; }
     .hidden { display: none !important; }
@@ -34,14 +35,15 @@
     .hint { font-size: 12px; color: #777; margin-top: 4px; line-height: 1.4; }
     .sr-head {
       display: flex; justify-content: space-between; align-items: center;
-      gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+      gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
     }
     .sr-head strong { font-size: 15px; }
     #srFilters {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px 12px;
-      margin: 0 0 10px;
+      gap: 12px 14px;
+      margin: 0 0 4px;
+      min-width: 0;
     }
     #srFilters > * { min-width: 0; }
     #srFilters .full { grid-column: 1 / -1; }
@@ -64,10 +66,10 @@
     .btn-save:disabled { opacity: .5; cursor: default; }
     .sr-status-tabs {
       grid-column: 1 / -1;
-      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 2px;
+      display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 4px;
     }
     .sr-status-tab {
-      flex: 1 1 auto; min-width: 4.5em; padding: 10px 12px;
+      flex: 0 1 auto; min-width: 4.5em; padding: 10px 14px;
       border: 1px solid #dadce0; border-radius: 10px; background: #fff;
       font-size: 14px; font-weight: 700; color: #3c4043; cursor: pointer;
       font-family: inherit; text-align: center;
@@ -191,7 +193,7 @@
 <body class="acct-page acct-page-form acct-page-browse">
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
-    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><a href="payment_request.html" id="navPaymentRequestLink">待付款請款</a> · <a href="ledger_history.html" id="navLedgerHistoryLink">歷史記帳</a></p>
+    <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><span class="acct-nav-current" aria-current="page">送出紀錄</span> · <a href="payment_request.html" id="navPaymentRequestLink">待付款請款</a> · <a href="ledger_history.html" id="navLedgerHistoryLink">歷史記帳</a></p>
     <h2>送出紀錄</h2>
     <p class="sub" id="userLine">—</p>
     <p class="sub" id="pageModeHint">請款管線第 2 站（<strong>新介面</strong>）：主職是<strong>修改已送出的送審資料</strong>（廠商／分攤／事由／備註）。點一筆 → 改 → 儲存，寫回同一請款主檔（審核／匯款會看到）。可改：<strong>待審／退回／待匯</strong>；<strong>已匯款鎖定</strong>。不是歷史記帳；收支查詢用「歷史記帳紀錄」。</p>
@@ -211,7 +213,7 @@
         </div>
         <input type="hidden" id="srStatusScope" value="pending" />
         <button type="button" class="sr-mine-toggle" id="srMineToggle"
-          aria-pressed="false" title="選用：只顯示本人送出（權限 5 才可看全部）">
+          aria-pressed="false" title="選用：只顯示本人送出（權限 ≥3 可看全部）">
           <span>
             <span class="sr-mine-title">只看我送的（選用）</span>
             <span class="sr-mine-sub" id="srMineSub">關閉中：顯示區間內全部人的送出紀錄。</span>
@@ -227,7 +229,7 @@
           <label for="srDateTo">送出時間迄</label>
           <input id="srDateTo" type="date" />
         </div>
-        <div>
+        <div class="full">
           <label for="srAmount">金額（選填）</label>
           <input id="srAmount" type="number" inputmode="numeric" placeholder="完全相符" />
         </div>
@@ -388,7 +390,7 @@
         if (hint && !canAll) {
           hint.innerHTML =
             '請款管線第 2 站：主職是<strong>修改已送出的送審資料</strong>。' +
-            '權限 5 以下<strong>只會看到本人送出的請款</strong>（列表依伺服器回傳）。' +
+            '權限 1～2<strong>只會看到本人送出的請款</strong>（列表依伺服器回傳）。' +
             '可改：待審／退回／待匯；已匯款鎖定。收支查詢用「歷史記帳紀錄」。';
         }
         syncMineUi();
@@ -410,11 +412,11 @@
         if (state) state.textContent = on ? '開' : '關';
         if (sub) {
           if (!canAll) {
-            sub.textContent = '僅顯示本人送出的請款（權限 5 才可看全部人）。';
+            sub.textContent = '僅顯示本人送出的請款（權限 ≥3 可看全部人）。';
           } else {
             sub.textContent = on
               ? '開啟中：只顯示登入帳號本人送出的請款。'
-              : '關閉中：顯示區間內全部人的送出紀錄（權限 5）。';
+              : '關閉中：顯示區間內全部人的送出紀錄（權限 ≥3）。';
           }
         }
       }

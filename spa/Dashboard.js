@@ -24,6 +24,9 @@ export default {
         const projectIdInput = ref('');
         const PROJECT_CONSOLE_LIFF_ID = '2007974938-7yKM9EqL';
 
+        /** 線上報價編輯：前端只開測案 999（與後端 project_allowed 一致） */
+        const QUOTE_EDITOR_ROLLOUT_PROJECT = '999';
+
         const openProjectConsole = () => {
             const projectId = projectIdInput.value.trim();
             if (!projectId || !/^\d+$/.test(projectId)) {
@@ -37,6 +40,29 @@ export default {
             window.location.hash = `#/project-console?id=${projectId}`;
         };
 
+        const openQuoteEditor = () => {
+            const projectId = projectIdInput.value.trim();
+            if (!projectId || !/^\d+$/.test(projectId)) {
+                alert('請先在上方輸入案號（例：999）！');
+                return;
+            }
+            if (projectId !== QUOTE_EDITOR_ROLLOUT_PROJECT) {
+                return;
+            }
+            if (!props.userProfile?.userId) {
+                alert('無法取得您的使用者資訊，請重新載入頁面。');
+                return;
+            }
+            window.location.hash = `#/quote-editor?project_no=${encodeURIComponent(projectId)}`;
+        };
+
+        const quoteEditorCardVisible = computed(() => {
+            const p = Number(props.currentUser?.permission || 0);
+            if (p < 2) return false;
+            const id = projectIdInput.value.trim();
+            return id === QUOTE_EDITOR_ROLLOUT_PROJECT;
+        });
+
         // [v426.0 SPA化] 統一所有內部連結為 hash 路由
         const addSiteUrl = computed(() => `#/new-site`);
         const approvalDashboardUrl = computed(() => `#/approval-dashboard`);
@@ -46,18 +72,13 @@ export default {
         const myPersonalUrl = computed(() => `#/my-personal`);
         const staffStatusBoardUrl = computed(() => `#/staff-status-board`);
         const employeeEditorUrl = computed(() => `#/employee-editor`);
-        const directorHrNotesUrl = computed(() => `#/director-hr-notes`);
-        const directorProjectNotesUrl = computed(() => `#/director-project-notes`);
-        const directorPartyNotesUrl = computed(() => `#/director-party-notes`);
-        const directorDecisionNotesUrl = computed(() => `#/director-decision-notes`);
-        const directorFollowupNotesUrl = computed(() => `#/director-followup-notes`);
-        const directorTranscriptNotesUrl = computed(() => `#/director-transcript-notes`);
         const reportUrl = computed(() => `#/report`);
         const layoutPlannerUrl = computed(() => `#/layout-planner`);
         const floorplanStraightenerUrl = computed(() => `#/floorplan-straightener`);
         const budgetWebUrl = computed(() => `#/budget-web`);
         const budgetAuditUrl = computed(() => `#/budget-audit`);
         const accountingHubUrl = computed(() => '#/accounting');
+        const shopOrdersUrl = computed(() => '#/shop/orders');
         const materialSelectionUrl = computed(() => '#/material-selection');
 
         /** 副本文字冒險：外部靜態站（非 iframe）；完整 URL 供開啟／複製 */
@@ -436,6 +457,8 @@ export default {
         return {
             projectIdInput,
             openProjectConsole,
+            openQuoteEditor,
+            quoteEditorCardVisible,
             addSiteUrl,
             approvalDashboardUrl,
             leaveRequestUrl,
@@ -446,12 +469,6 @@ export default {
             presenceTitle,
             presenceDotClass,
             employeeEditorUrl,
-            directorHrNotesUrl,
-            directorProjectNotesUrl,
-            directorPartyNotesUrl,
-            directorDecisionNotesUrl,
-            directorFollowupNotesUrl,
-            directorTranscriptNotesUrl,
             reportUrl,
             materialSelectionUrl,
             layoutPlannerUrl,
@@ -459,6 +476,7 @@ export default {
             budgetWebUrl,
             budgetAuditUrl,
             accountingHubUrl,
+            shopOrdersUrl,
             storyAdventurePublicUrl,
             storyAdventureUrlCopied,
             copyStoryAdventureUrl,
@@ -638,6 +656,16 @@ export default {
                     </div>
                 </a>
 
+                <!-- 2b. 官網商店訂單（員工標記已付款；非自動改狀態） -->
+                <a v-if="currentUser && currentUser.permission >= 3" :href="shopOrdersUrl"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-amber-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center text-xl">🛒</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">官網商店訂單</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">查 Woo 訂單、重送需付款；客人 LINE 付完後在此「標記已付款」。</p>
+                    </div>
+                </a>
+
                 <!-- 3. 施工回報 -->
                 <a :href="reportUrl"
                     class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
@@ -678,15 +706,26 @@ export default {
                     </div>
                 </a>
 
-                <!-- 4. 報價單解析器 -->
-                <a :href="budgetWebUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🧾</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">報價單解析器</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 Excel 並自動解析工項分區。</p>
-                    </div>
-                </a>
+                <!-- 4. 報價單解析器 ＋ 4a. 線上報價編輯（豪哥：編輯入口緊接在解析器正下方） -->
+                <div class="md:col-span-2 flex flex-col gap-3">
+                    <a :href="budgetWebUrl"
+                        class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-indigo-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">🧾</div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-base font-bold text-gray-800 leading-tight">報價單解析器</h2>
+                            <p class="text-xs text-gray-500 mt-1 leading-snug">上傳 Excel 並自動解析工項分區。</p>
+                        </div>
+                    </a>
+                    <a v-if="quoteEditorCardVisible" href="#"
+                        @click.prevent="openQuoteEditor"
+                        class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-emerald-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                        <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl">📋</div>
+                        <div class="min-w-0 flex-1">
+                            <h2 class="text-base font-bold text-gray-800 leading-tight">報價編輯</h2>
+                            <p class="text-xs text-gray-500 mt-1 leading-snug">依案號編輯線上報價單（Hub 同分頁；目前開放測試案 999）。</p>
+                        </div>
+                    </a>
+                </div>
 
                 <!-- 4b. 副本文字冒險（實驗中：須權限 ≥ 5；外部網站：開啟＋複製連結，非 iframe） -->
                 <div v-if="currentUser && Number(currentUser.permission) >= 5"
@@ -706,7 +745,17 @@ export default {
                     </div>
                 </div>
 
-                <!-- 4c. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
+                <!-- 4c. Messenger 真人客服（權限 ≥ 2；HUMAN_AGENT 手動回覆） -->
+                <a v-if="currentUser && Number(currentUser.permission) >= 2" href="#/fb-human-desk"
+                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-teal-50 text-teal-700 flex items-center justify-center text-xl">💬</div>
+                    <div class="min-w-0 flex-1">
+                        <h2 class="text-base font-bold text-gray-800 leading-tight">Messenger 真人客服</h2>
+                        <p class="text-xs text-gray-500 mt-1 leading-snug">選對話、看最後來訊時間、親自回覆；逾 24 小時且未滿七天才帶 HUMAN_AGENT。</p>
+                    </div>
+                </a>
+
+                <!-- 4c2. FB 發文工作室（暫不顯示；tools/fb-post-studio/ 與後端保留，勿刪） -->
                 <div v-if="false"
                     class="bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-sky-500 p-4 flex items-start gap-3">
                     <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center text-xl">📣</div>
@@ -842,66 +891,6 @@ export default {
                     <div class="min-w-0 flex-1">
                         <h2 class="text-base font-bold text-gray-800 leading-tight">員工資料編輯</h2>
                         <p class="text-xs text-gray-500 mt-1 leading-snug">管理基本資料、權限與班表。</p>
-                    </div>
-                </a>
-
-                <!-- 12b. 總監人事筆記（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorHrNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">📓</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">總監人事筆記</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">私人人事紀錄：事件、觀察、面談，可改可分類。</p>
-                    </div>
-                </a>
-
-                <!-- 12c. 專案／工地備忘（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorProjectNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🏗️</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">專案／工地備忘</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">依案場記一行摘要；點開看細節，可改可刪。</p>
-                    </div>
-                </a>
-
-                <!-- 12d. 客戶／廠商觀察（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorPartyNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">👁️</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">客戶／廠商觀察</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">依對象記觀察與雷點；時間線可篩只看雷點。</p>
-                    </div>
-                </a>
-
-                <!-- 12e. 決策紀錄（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorDecisionNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">⚖️</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">決策紀錄</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">題目、定論、為何與日期；之後可查上次怎麼定。</p>
-                    </div>
-                </a>
-
-                <!-- 12f. 待跟進 inbox（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorFollowupNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">📌</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">待跟進</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">一句話＋可選到期；勾做完可還原，過期醒目。</p>
-                    </div>
-                </a>
-
-                <!-- 12g. 對話摘記（權限 ≥ 5） -->
-                <a v-if="currentUser && currentUser.permission >= 5" :href="directorTranscriptNotesUrl"
-                    class="group bg-white rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-500 p-4 flex items-start gap-3 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center text-xl">🗣️</div>
-                    <div class="min-w-0 flex-1">
-                        <h2 class="text-base font-bold text-gray-800 leading-tight">對話摘記</h2>
-                        <p class="text-xs text-gray-500 mt-1 leading-snug">貼對話產生一行摘要，可改後存；可展開原文。</p>
                     </div>
                 </a>
 

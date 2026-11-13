@@ -9,8 +9,8 @@ var root = path.join(__dirname, '..');
 var html = fs.readFileSync(path.join(root, 'ledger_history.html'), 'utf8');
 var api = fs.readFileSync(path.join(root, '../../shared/js/accounting_api.js'), 'utf8');
 
-assert(html.indexOf('accounting_api.js?v=111') >= 0, 'cache bust v=111');
-assert(html.indexOf('ledger_entry_map.js?v=5') >= 0, 'ledger map');
+assert(html.indexOf('accounting_api.js?v=112') >= 0, 'cache bust v=111');
+assert(html.indexOf('ledger_entry_map.js?v=6') >= 0, 'ledger map');
 assert(html.indexOf('parseHistoryAmountQuery') >= 0, 'amount query normalizer');
 assert(html.indexOf('id="histScope"') >= 0, 'scope select for boss');
 assert(html.indexOf('>全部</option>') >= 0, 'all scope option');
@@ -19,7 +19,7 @@ assert(html.indexOf('authSessionPerm()') >= 0, 'all-scope uses auth permission o
 assert(html.indexOf('權限更新中，請重新整理') >= 0, 'hub-ahead refresh hint');
 assert(html.indexOf('readHistoryMineOnlyFlag') >= 0, 'mine_only from scope');
 assert(html.indexOf('LedgerEntryMap.canViewAllLedger') >= 0, 'view-all via map');
-assert(api.indexOf('authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'api mine_only below 5');
+assert(api.indexOf('authPerm < LEDGER_VIEW_ALL_MIN_PERMISSION') >= 0, 'api mine_only below view-all min');
 assert(html.indexOf('historyTotals') >= 0, 'totals element');
 assert(html.indexOf('attRef.payment_request_id') >= 0 ||
   html.indexOf('payment_request_id = pid') >= 0, 'payment attachments via payment_request_id');

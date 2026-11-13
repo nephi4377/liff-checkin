@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>工程報價單</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script>
+    var QUOTE_VIEW_LIFF_ID = '2007974938-d2y1uA1G';
+  </script>
+  <script src="/shared/js/operator_context.js?v=3"></script>
+  <!-- 勿載 shared/js/config.js（ES module）；AccountingApi 已內建 GAS URL -->
+  <script src="/shared/js/accounting_api.js?v=quote-hub-auth-1"></script>
+  <script src="/modules/projects/js/quote-editor-sanitize.js?v=quote-editor-3"></script>
+  <script src="/modules/projects/js/quote-editor-local.js?v=quote-editor-3"></script>
+  <style>
+    :root {
+      --ink: #1c2430;
+      --muted: #5b6675;
+      --line: #d7dde6;
+      --accent: #2f6f7e;
+    }
+    body {
+      margin: 0;
+      font-family: "Noto Sans TC", "PingFang TC", "Hiragino Sans GB", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(165deg, #eef2f6 0%, #e7edf3 100%);
+      min-height: 100vh;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+    h1 { font-size: 1.3rem; margin: 0 0 0.4rem; }
+    .sub, .status { color: var(--muted); font-size: 0.92rem; }
+    .status.err { color: #a33b32; }
+    .card {
+      background: #fff; border: 1px solid var(--line); border-radius: 0.75rem;
+      padding: 0.85rem 1rem; margin: 0 0 0.75rem;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    tr.addon td:first-child { padding-left: 1.1rem; }
+    tr.trade-head td { background: #f4f7f9; font-size: 0.88rem; border-bottom-color: #c9d3de; }
+    .hint { font-size: 0.82rem; color: var(--muted); }
+    button {
+      font: inherit; border: 0; border-radius: 0.45rem; padding: 0.5rem 0.85rem;
+      background: var(--accent); color: #fff; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>工程報價單</h1>
+    <p class="sub" id="headerSub">載入中…</p>
+    <p class="status" id="statusLine" aria-live="polite"></p>
+    <div id="content"></div>
+    <p>
+      <button type="button" id="btnConfirm" hidden>我確認這份報價</button>
+      <button type="button" id="btnPrint">列印／存檔</button>
+    </p>
+  </div>
+  <script>
+  (function () {
+    function qs(n) {
+      try { return new URLSearchParams(location.search).get(n) || ''; } catch (e) { return ''; }
+    }
+    function money(n) { return (Number(n) || 0).toLocaleString('zh-TW'); }
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    var projectNo = qs('project_no') || qs('projectNo');
+    var staffPreview = qs('staff_preview') === '1' || qs('staff_preview') === 'true' || qs('dev') === '1';
+    var session = null;
+    var quote = null;
+    var statusEl = document.getElementById('statusLine');
+    function setStatus(t, err) {
+      statusEl.textContent = t || '';
+      statusEl.className = 'status' + (err ? ' err' : '');
+    }
+    function ensureAccountingApi_() {
+      if (typeof AccountingApi === 'undefined') {
+        throw new Error('AccountingApi 未載入：請從 repo 根目錄 serve，並確認 /shared/js/accounting_api.js');
+      }
+    }
+    function localHelper_() {
+      return (typeof QuoteEditorLocal !== 'undefined') ? QuoteEditorLocal : null;
+    }
+    function render() {
+      var box = document.getElementById('content');
+      if (!quote) { box.innerHTML = ''; return; }
+      var stMap = { draft: '草稿（尚未送出）', sent: '待您確認', confirmed: '已確認' };
+      document.getElementById('headerSub').textContent =
+        '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1) +
+        '｜' + (stMap[quote.status] || quote.status || '');
+      function lineRows(list, indent) {
+        return (list || []).map(function (ln) {
+          var note = ln.note ? '<div class="hint">' + esc(ln.note) + '</div>' : '';
+          var bundle = (ln.addons && ln.addons.length)
+            ? '<div class="hint">含附加小計 ' + money(ln.line_subtotal) + '</div>' : '';
+          var row = '<tr' + (indent ? ' class="addon"' : '') + '><td>' + esc(ln.item) + note + bundle +
+            '</td><td>' + esc(ln.unit) + '</td><td>' + esc(String(ln.qty)) +
+            '</td><td>' + money(ln.amount) + '</td></tr>';
+          return row + lineRows(ln.addons || [], true);
+        }).join('');
+      }
+      function linesByTrade(zone) {
+        var order = [];
+        var map = {};
+        var subMap = {};
+        (zone.trade_groups || []).forEach(function (g) { subMap[g.tab] = g.subtotal; });
+        (zone.lines || []).forEach(function (ln) {
+          var tab = String(ln.tab || '其他').trim() || '其他';
+          if (!map[tab]) { map[tab] = []; order.push(tab); }
+          map[tab].push(ln);
+        });
+        if (!order.length) return '<tr><td colspan="4">（無項目）</td></tr>';
+        return order.map(function (tab) {
+          return '<tr class="trade-head"><td colspan="4"><strong>' + esc(tab) +
+            '</strong> <span class="sub">小計 ' + money(subMap[tab]) + '</span></td></tr>' +
+            lineRows(map[tab]);
+        }).join('');
+      }
+      var zones = (quote.zones || []).map(function (z) {
+        var rows = linesByTrade(z);
+        var trade = (z.trade_groups || []).map(function (g) {
+          return esc(g.tab) + ' ' + money(g.subtotal);
+        }).join('／');
+        var subLabel = z.zone_subtotal != null ? z.zone_subtotal : 0;
+        return '<div class="card"><strong>' + esc(z.name) + '</strong>' +
+          ' <span class="sub">小計 ' + money(subLabel) +
+          (trade ? '｜' + trade : '') + '</span><table><thead><tr>' +
+          '<th>項目</th><th>單位</th><th>數量</th><th>金額</th></tr></thead><tbody>' +
+          rows + '</tbody></table></div>';
+      }).join('');
+      var t = quote.totals || {};
+      var f = quote.fees_received || {};
+      box.innerHTML = zones + '<div class="card">未稅 ' + money(t.pretax) +
+        '｜稅 ' + money(t.tax) + '｜含稅 ' + money(t.with_tax) +
+        '<br/>已收丈量費 ' + money(f.measure) + '／啟動金 ' + money(f.startup) +
+        '／規劃費 ' + money(f.planning) +
+        '<br/>已扣 ' + money(t.deducted) + '｜應付 ' + money(t.payable) +
+        (quote.confirmed_at ? '<br/>確認時間：' + esc(quote.confirmed_at) : '') +
+        '</div>';
+      var btn = document.getElementById('btnConfirm');
+      if (btn) btn.hidden = !quote.can_confirm;
+    }
+    async function load() {
+      if (!projectNo) {
+        setStatus('缺少案號', true);
+        return;
+      }
+      setStatus('更新中…');
+      try {
+        ensureAccountingApi_();
+        var local = localHelper_();
+        var usedFixture = false;
+        if (local && local.isLocalStaffPreview()) {
+          session = local.buildLocalCustomerSession();
+        } else {
+          session = await AccountingApi.initCustomerPortalSession({
+            liffId: QUOTE_VIEW_LIFF_ID,
+            projectNo: projectNo
+          });
+        }
+        if (!session) throw new Error('登入失敗');
+        var res = null;
+        if (local && local.canUseLocalFixture(projectNo) && qs('fixture') === '1') {
+          res = local.fixtureCustomerPayload(projectNo);
+          usedFixture = true;
+        } else {
+          try {
+            res = await AccountingApi.quoteEditorCustomerView(session, projectNo, {
+              staffPreview: staffPreview
+            });
+          } catch (eApi) {
+            if (local && local.canUseLocalFixture(projectNo)) {
+              res = local.fixtureCustomerPayload(projectNo);
+              usedFixture = true;
+            } else {
+              throw eApi;
+            }
+          }
+          if ((!res || !res.success) && local && local.canUseLocalFixture(projectNo)) {
+            res = local.fixtureCustomerPayload(projectNo);
+            usedFixture = true;
+          }
+        }
+        if (!res || !res.success) throw new Error((res && res.message) || '讀取失敗');
+        quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
+        quote.can_confirm = !!(res.quote && res.quote.can_confirm);
+        quote.confirmed_at = (res.quote && res.quote.confirmed_at) || '';
+        quote.status = (res.quote && res.quote.status) || quote.status;
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+        if (leaked) throw new Error('資料含不該出現的欄位，已擋下');
+        render();
+        setStatus(usedFixture ? '本機假資料（測案 999；後端未部署時）' : '');
+      } catch (e) {
+        setStatus((e && e.message) || '載入失敗', true);
+      }
+    }
+    document.getElementById('btnPrint').onclick = function () {
+      if (!quote) return;
+      var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+      if (leaked) { setStatus('列印資料異常，已擋下', true); return; }
+      window.print();
+    };
+    document.getElementById('btnConfirm').onclick = async function () {
+      if (!quote || !quote.can_confirm) return;
+      if (!window.confirm('確認這份報價的內容與金額？確認後公司會依此進行後續合約。')) return;
+      setStatus('送出確認中…');
+      try {
+        var res = await AccountingApi.quoteEditorConfirm(session, projectNo, {
+          staffPreview: staffPreview
+        });
+        if (!res || !res.success) throw new Error((res && res.message) || '確認失敗');
+        quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});
+        quote.can_confirm = false;
+        quote.confirmed_at = (res.quote && res.quote.confirmed_at) || '';
+        quote.status = (res.quote && res.quote.status) || 'confirmed';
+        var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(quote);
+        if (leaked) throw new Error('確認回傳含禁止欄位');
+        render();
+        setStatus('已確認這份報價');
+      } catch (e) {
+        setStatus((e && e.message) || '確認失敗', true);
+      }
+    };
+    load();
+  })();
+  </script>
+</body>
+</html>

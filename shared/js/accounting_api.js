@@ -15,9 +15,9 @@ var AccountingApi = (function () {
   var CUSTOMER_FINANCE_MIN_PERMISSION = 2;
   var SUPERVISOR_MIN_PERMISSION = 3;
   var VENDOR_PAYMENT_APPROVE_MIN_PERMISSION = 5;
-  /** LEDGER-PERM-2：歷史記帳查「全部人」與老闆級審核（對齊 Backend_GAS #218） */
-  var LEDGER_VIEW_ALL_MIN_PERMISSION = 5;
-  /** 歷史記帳：權限 ≥1 可查／作廢本人；≥5 看全部 */
+  /** LEDGER-PERM-2：歷史記帳查「全部人」（≥3；對齊 Backend_GAS LEDGER_HISTORY_VIEW_ALL_MIN_PERM_） */
+  var LEDGER_VIEW_ALL_MIN_PERMISSION = 3;
+  /** 歷史記帳：權限 ≥1 可查／作廢本人；≥3 看全部；改帳／作廢他人仍 ≥5 */
   var LEDGER_MIN_VIEW_PERMISSION = 1;
   var LEDGER_VIEW_DENIED_MSG = '權限不足（歷史記帳需權限 ≥ 1）';
   /** 匯款請款／款項進度：在職員工即可（對齊「登入即可送審」） */
@@ -1170,6 +1170,7 @@ var AccountingApi = (function () {
         doc_type: payload.doc_type,
         order_no: payload.order_no,
         txn_date: payload.txn_date,
+        doc_date: payload.doc_date || payload.txn_date,
         note: payload.note,
         bank_code: payload.bank_code,
         account_no: payload.account_no,
@@ -1190,6 +1191,7 @@ var AccountingApi = (function () {
         project_no: patch.project_no,
         item_desc: patch.item_desc,
         txn_date: patch.txn_date,
+        doc_date: patch.doc_date != null ? patch.doc_date : patch.txn_date,
         note: patch.note,
         bank_code: patch.bank_code,
         branch_name: patch.branch_name,
@@ -1241,8 +1243,8 @@ var AccountingApi = (function () {
         deferred_token: deferredToken || ''
       }, 120000);
     },
-    /** 歷史記帳紀錄查詢（權限 ≥1 本人；≥5 可選全部；日期窗＝記帳時間／送出時間，不是交易日）
-     * LEDGER-PERM-2／#218：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(5) 一律 mine_only；≥5 可選全部、可選本人。
+    /** 歷史記帳紀錄查詢（權限 ≥1 本人；≥3 可選全部；日期窗＝記帳時間／送出時間，不是交易日）
+     * LEDGER-PERM-2：permission < LEDGER_VIEW_ALL_MIN_PERMISSION(3) 一律 mine_only；≥3 可選全部、可選本人。
      * 預設近 30 天；逾時靠後端分塊／軟截止＋本呼叫 90s Abort。
      * record_kind：all｜ledger｜payment_request。 */
     accountingLedgerRecent: function (sessionOrToken, opts) {
@@ -1303,7 +1305,7 @@ var AccountingApi = (function () {
       // 前端維持 90s Abort；歷史查詢不重試 GAS HTML 404（見 postToUrl_）。
       return post(body, 90000);
     },
-    /** 歷史記帳單筆詳情（權限 ≥1 本人；≥5 他人；sheet+row 或 ingest_id；預設略過附件索引） */
+    /** 歷史記帳單筆詳情（權限 ≥1 本人；≥3 他人；sheet+row 或 ingest_id；預設略過附件索引） */
     accountingLedgerDetail: function (sessionOrToken, opts) {
       opts = opts || {};
       var body = {
@@ -1501,6 +1503,28 @@ var AccountingApi = (function () {
         } catch (eAuth) {}
       }
       return post(body, 120000);
+    },
+    /** 匯款標記頁：只新增廠商別名或綁定這支 LINE */
+    vendorAliasAdd: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return post({
+        action: 'vendor_alias_add',
+        auth: resolveAuth(sessionOrToken),
+        vendor_id: payload.vendor_id || '',
+        alias: payload.alias || '',
+        display_name: payload.display_name || '',
+        line_id: payload.line_id || '',
+        line_channel: payload.line_channel || '',
+        payment_request_id: payload.payment_request_id || payload.request_id || ''
+      }, 120000);
+    },
+    /** 只重送一筆已匯款通知（10 分鐘冷卻） */
+    vendorRemitNotifyResend: function (sessionOrToken, requestId) {
+      return post({
+        action: 'vendor_remit_notify_resend',
+        auth: resolveAuth(sessionOrToken),
+        request_id: requestId || ''
+      }, 120000);
     },
     /** 已匯款補通知：只重送匯款 LINE，不改入帳 */
     vendorPaymentResendNotify: function (sessionOrToken, paymentRequestIds) {
@@ -1933,6 +1957,208 @@ var AccountingApi = (function () {
         material_id: (filter && filter.material_id) || '',
         project_no: (filter && filter.project_no) || ''
       }));
+    },
+    /** 簽約注意事項 — 主控台狀態／複製連結／列印（project-console） */
+    esignNoticeStatus: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_notice_status',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    esignNoticePrint: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_notice_print',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        staff_preview: true
+      }));
+    },
+    /** 線上合約 — 主控台狀態／儲存付款表／寄出（project-console） */
+    esignContractStatus: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_status',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    esignContractStaffSave: function (sessionOrToken, projectNo, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_staff_save',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        payment_schedule: payload.payment_schedule,
+        case_fields: payload.case_fields || {},
+        mark_sent: payload.mark_sent || '',
+        reset_payment_default: payload.reset_payment_default || '',
+        customer_line_user_id: payload.customer_line_user_id || ''
+      }));
+    },
+    esignContractStaffSend: function (sessionOrToken, projectNo, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'esign_contract_staff_send',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || '',
+        payment_schedule: payload.payment_schedule,
+        case_fields: payload.case_fields || {},
+        customer_line_user_id: payload.customer_line_user_id || ''
+      }));
+    },
+    /** 線上報價 QUOTE-EDITOR-3 — project-console */
+    quoteEditorCatalog: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_catalog',
+        project_no: projectNo,
+        q: opts.q || '',
+        tab: opts.tab || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorGet: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_get',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddZone: function (sessionOrToken, projectNo, zoneName) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_zone',
+        project_no: projectNo,
+        zone_name: zoneName,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorAddLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_add_line',
+        project_no: payload.project_no,
+        zone_id: payload.zone_id,
+        catalog_key: payload.catalog_key || '',
+        custom: !!payload.custom,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        amount: payload.amount,
+        parent_line_id: payload.parent_line_id || '',
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorUpdateLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_update_line',
+        project_no: payload.project_no,
+        line_id: payload.line_id,
+        item: payload.item,
+        note: payload.note,
+        unit: payload.unit,
+        tab: payload.tab,
+        qty: payload.qty,
+        unit_price: payload.unit_price,
+        price_override_reason: payload.price_override_reason || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorDeleteLine: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_delete_line',
+        project_no: payload.project_no,
+        line_id: payload.line_id,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorReorderLines: function (sessionOrToken, payload) {
+      payload = payload || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_reorder_lines',
+        project_no: payload.project_no,
+        zone_id: payload.zone_id,
+        line_ids: payload.line_ids || [],
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorPreflight: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_preflight',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorSetFees: function (sessionOrToken, projectNo, fees, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_set_fees',
+        project_no: projectNo,
+        fees_received: fees || {},
+        quote_date: opts.quote_date || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorListVersions: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_list_versions',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorSend: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_send',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorNewVersion: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_new_version',
+        project_no: projectNo,
+        version_note: opts.version_note || '',
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorConfirm: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_confirm',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
+    },
+    quoteEditorPrint: function (sessionOrToken, projectNo) {
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_print',
+        project_no: projectNo,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorCustomerView: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      var body = buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_customer_view',
+        project_no: projectNo
+      });
+      if (opts.staffPreview) {
+        body.staff_preview = true;
+        if (body.auth) body.auth.staff_preview = true;
+      }
+      return postMaterial(body);
     },
     /** 選材 — 客戶唯讀（project-console） */
     materialPortalList: function (sessionOrToken, projectNo, opts) {

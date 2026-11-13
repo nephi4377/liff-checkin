@@ -21,6 +21,63 @@ function formatInsuranceHtml(ins, isDaily) {
     return `<p><strong>勞健保／勞退自付：</strong>−${(ins.total || 0).toLocaleString()} 元（勞保 ${(ins.labor || 0).toLocaleString()}＋健保 ${(ins.health || 0).toLocaleString()}${pensionNote}${depNote}）</p>`;
 }
 
+/** 與 shared/js/tax_withhold.js、後端 Logic_TaxWithhold 同步（115） */
+function payrollTaxRoundHalfUpDiv_(num, den) {
+    if (den <= 0) return 0;
+    return Math.floor((num * 2 + den) / (den * 2));
+}
+function payrollTaxFloorToTens_(n) {
+    const v = Math.floor(Number(n) || 0);
+    return v <= 0 ? 0 : Math.floor(v / 10) * 10;
+}
+function payrollNormalizeTaxMode_(raw) {
+    const s = String(raw || '').trim().toLowerCase().replace(/\s/g, '');
+    if (!s) return 'fixed5';
+    if (s === 'table' || s.indexOf('扣繳稅額表') >= 0) return 'table';
+    return 'fixed5';
+}
+function calcPayrollTaxBundleClient_(settings, monthlyGross, bonusAmount) {
+    const mode = payrollNormalizeTaxMode_(settings && (settings.taxWithholdMode || settings.扣繳方式));
+    const dependents = Math.max(0, Math.min(11, parseInt(settings && (settings.taxDependentCount ?? settings.扣繳扶養人數), 10) || 0));
+    const gross = Math.floor(Math.max(0, Number(monthlyGross) || 0));
+    const bonus = Math.floor(Math.max(0, Number(bonusAmount) || 0));
+    const insured = Math.floor(Math.max(0, Number(settings && (settings.insuredSalaryLevel || settings.投保級距)) || 0));
+    const ytd = Math.floor(Math.max(0, Number(settings && (settings.ytdBonusPaid || settings.本年已發獎金累計)) || 0));
+    let fixedRaw = 0;
+    if (mode === 'table') {
+        const taxable = Math.floor(Math.max(0, gross * 12 - (101000 * (1 + dependents) + 272000 + 227000)));
+        if (taxable > 0) {
+            const brackets = [
+                [0, 610000, 5, 0], [610001, 1380000, 12, 42700], [1380001, 2770000, 20, 153100],
+                [2770001, 5190000, 30, 430100], [5190001, null, 40, 949100]
+            ];
+            let rateNum = 5;
+            let prog = 0;
+            for (let i = 0; i < brackets.length; i++) {
+                const b = brackets[i];
+                if (taxable >= b[0] && (b[1] == null || taxable <= b[1])) {
+                    rateNum = b[2];
+                    prog = b[3];
+                    break;
+                }
+            }
+            const annual = Math.max(0, payrollTaxRoundHalfUpDiv_(taxable * rateNum - prog * 100, 100));
+            fixedRaw = payrollTaxFloorToTens_(annual / 12);
+        }
+    } else {
+        fixedRaw = payrollTaxRoundHalfUpDiv_(gross * 5, 100);
+    }
+    const fixedTax = fixedRaw <= 2000 ? 0 : fixedRaw;
+    const bonusTax = bonus >= 90501 ? payrollTaxRoundHalfUpDiv_(bonus * 5, 100) : 0;
+    let nhi = 0;
+    if (insured > 0 && bonus > 0) {
+        const threshold = insured * 4;
+        const chargeable = Math.floor(Math.max(0, ytd + bonus - Math.max(ytd, threshold)));
+        nhi = chargeable > 0 ? payrollTaxRoundHalfUpDiv_(chargeable * 211, 10000) : 0;
+    }
+    return { fixedSalaryTax: fixedTax, bonusTax, nhiSupplementary: nhi, total: fixedTax + bonusTax + nhi, mode, dependents };
+}
+
 const PAYROLL_MONTHLY_DAYS = 30;
 const PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL = '天然災害停班';
 
@@ -253,12 +310,34 @@ function calcOvertimePayLaborLaw(hourlyWage, hours) {
     return Math.round(pay);
 }
 
-function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePreview, attendanceBonusPolicy, period) {
+function buildEmployerCostLines(employerCost) {
+    const ec = employerCost || {};
+    if (!(ec.total > 0) && !(ec.laborEmployer > 0)) return [];
+    if (Array.isArray(ec.lines) && ec.lines.length) return ec.lines;
+    const injuryPct = (Number(ec.occupationalInjuryRate) || 0) * 100;
+    const avgDep = Number(ec.healthAvgDependents);
+    const avgDepNote = Number.isFinite(avgDep)
+        ? `60%×(1+平均眷口 ${avgDep})`
+        : '60%×(1+平均眷口)';
+    return [
+        { label: '勞保雇主（70%）', amount: ec.laborEmployer || 0, note: '普通事故 11.5%×70%' },
+        { label: '就保雇主（70%）', amount: ec.employmentInsurance || 0, note: '就業保險 1%×70%' },
+        { label: '職災保險', amount: ec.occupationalInjury || 0, note: `行業費率 ${injuryPct}%（設定值）` },
+        { label: '工資墊償基金', amount: ec.wageGuarantee || 0, note: '勞保投保薪資×0.025%' },
+        { label: '健保雇主', amount: ec.healthEmployer || 0, note: avgDepNote },
+        { label: '勞退提繳 6%', amount: ec.laborPensionEmployer || 0, note: '依勞退月提繳工資分級表' }
+    ].filter((r) => (r.amount || 0) > 0);
+}
+
+function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePreview, attendanceBonusPolicy, period, employerCostPreview) {
     const base = Number(settings.baseSalary) || 0;
     const remote = Number(input.remoteAllowanceAmount) || 0;
     const transport = Number(settings.transportationAllowance) || 0;
     const otherAllowance = Number(settings.otherAllowance) || 0;
     const ins = insurancePreview || { total: 0, labor: 0, health: 0, pension: 0, type: 'none' };
+    const employerCost = employerCostPreview || ins.employerCost || (snapshot && snapshot.employerCost) || null;
+    const companyCosts = buildEmployerCostLines(employerCost);
+    const companyCostTotal = companyCosts.reduce((s, x) => s + (x.amount || 0), 0);
     const insDeduction = payType === 'daily' ? 0 : (ins.total || 0);
     const st = snapshot.stats || {};
     const policy = normalizeAttendanceBonusPolicy(attendanceBonusPolicy);
@@ -350,18 +429,19 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
                 note: faNote
             });
         }
-        if (absent > 0 || absentBaseDeduction > 0) {
-            deductions.push({
-                label: '缺勤扣款',
-                amount: absentBaseDeduction,
-                note: `缺勤 ${fmtPayrollDay(absent)} 日（底薪÷30）`
-            });
-        }
+        // 有事假優先列事假；真正缺勤才列缺勤（勿用笼统「缺勤」蓋過假別）
         if (personalLeave > 0 || personalLeaveDeduction > 0) {
             deductions.push({
                 label: '事假扣款',
                 amount: personalLeaveDeduction,
                 note: `事假 ${fmtPayrollDay(personalLeave)} 日（底薪÷30）`
+            });
+        }
+        if ((absent > 0 || absentBaseDeduction > 0) && !(personalLeave > 0 && absent <= 0)) {
+            deductions.push({
+                label: '缺勤扣款',
+                amount: absentBaseDeduction,
+                note: `缺勤 ${fmtPayrollDay(absent)} 日（底薪÷30）`
             });
         }
         if (specialUnpaid > 0 || specialLeaveDeduction > 0) {
@@ -435,6 +515,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     } else if (ins.type === 'none') {
         deductions.push({ label: '勞健保／勞退', amount: 0, note: '不加保／個人自行處理' });
     }
+
     const payLe = payrollLateEarlyFromStats(st);
     const hourly = payrollHourlyWage(base, payType);
     const attendanceTimeDeduction = calcLateEarlyDeduction(hourly, payLe.late, payLe.early);
@@ -466,6 +547,36 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             });
         }
     }
+
+    // 稅基＝加項 − 假勤／遲到等薪資減項（不含勞健保／稅本身）
+    const nonTaxDedLabels = {
+        '勞健保／勞退': 1,
+        '勞健保／勞退自付': 1,
+        '所得稅扣繳（固定薪）': 1,
+        '所得稅扣繳（非固定獎金）': 1,
+        '二代健保補充保費': 1,
+        '其他扣款': 1
+    };
+    const salaryDedSum = deductions
+        .filter((d) => !nonTaxDedLabels[d.label])
+        .reduce((s, d) => s + (Number(d.amount) || 0), 0);
+    const addSumForTax = additions.reduce((s, x) => s + (x.amount || 0), 0);
+    const taxGross = Math.max(0, addSumForTax - salaryDedSum);
+    const taxBundle = calcPayrollTaxBundleClient_(settings, taxGross, Number(input.bonusAmount) || 0);
+    if (taxBundle.fixedSalaryTax > 0) {
+        deductions.push({
+            label: '所得稅扣繳（固定薪）',
+            amount: taxBundle.fixedSalaryTax,
+            note: taxBundle.mode === 'table' ? `依扣繳稅額表（配偶及受扶養 ${taxBundle.dependents}）` : '固定 5%'
+        });
+    }
+    if (taxBundle.bonusTax > 0) {
+        deductions.push({ label: '所得稅扣繳（非固定獎金）', amount: taxBundle.bonusTax, note: '非固定獎金 5%' });
+    }
+    if (taxBundle.nhiSupplementary > 0) {
+        deductions.push({ label: '二代健保補充保費', amount: taxBundle.nhiSupplementary, note: '獎金超過投保 4 倍部分 × 2.11%' });
+    }
+
     deductions.push({ label: '其他扣款', amount: 0, note: '主管審核時填入（員工送審時為 0）' });
 
     const addTotal = additions.reduce((s, x) => s + (x.amount || 0), 0);
@@ -479,12 +590,30 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         });
     return {
         additions, deductions, addTotal, dedTotal, estimatedNet,
+        companyCosts, companyCostTotal,
         baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport,
-        otherAllowance, overtimePay, insurance: ins,
+        otherAllowance, overtimePay, insurance: ins, employerCost,
         attendanceBonusPolicy: policy,
         employedDaysInPeriod, coversFullPeriod,
         autoRemark: autoRemarkParts.join('；')
     };
+}
+
+function renderCompanyCostHtml(companyCosts, companyCostTotal, esc) {
+    const escFn = esc || escPayrollHtml;
+    const rows = (companyCosts || []).filter((r) => (r.amount || 0) > 0);
+    if (!rows.length) return '';
+    const lis = rows.map((row) => {
+        const note = row.note ? `<span class="text-gray-500">（${escFn(row.note)}）</span>` : '';
+        return `<li class="flex justify-between gap-2 py-0.5"><span>${escFn(row.label)}${note}</span><span class="font-medium text-slate-700">${Number(row.amount).toLocaleString()}</span></li>`;
+    }).join('');
+    return `
+        <div class="bg-slate-50 rounded-lg p-2 border border-slate-200 mt-3">
+            <p class="text-xs font-bold text-slate-800 mb-1">公司成本（雇主負擔・不影響實發）</p>
+            <ul class="text-sm space-y-0.5">${lis}</ul>
+            <p class="text-xs text-right text-slate-800 mt-2 font-semibold">小計 ${Number(companyCostTotal || 0).toLocaleString()} 元</p>
+        </div>
+    `;
 }
 
 function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
@@ -514,6 +643,7 @@ function renderBreakdownHtml(breakdown, disclaimer, settings, payType, esc) {
                 <p class="text-xs text-right text-red-800 mt-2 font-semibold">小計 −${breakdown.dedTotal.toLocaleString()}</p>
             </div>
         </div>
+        ${renderCompanyCostHtml(breakdown.companyCosts, breakdown.companyCostTotal, escFn)}
         <p class="text-lg font-bold text-indigo-700 mt-3 text-right">預估實發：${breakdown.estimatedNet.toLocaleString()} 元</p>
     `;
 }
@@ -724,7 +854,7 @@ export function initPayrollReviewPanel(ctx) {
         const preview = buildPayrollBreakdown(settings, period.payType, snapshot, {
             remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
             overtimeHours: Number(els.overtimeHours.value) || 0
-        }, contextData.insurancePreview, contextData.attendanceBonusPolicy, period);
+        }, contextData.insurancePreview, contextData.attendanceBonusPolicy, period, contextData.employerCostPreview);
         els.calcBox.innerHTML = renderBreakdownHtml(preview, disclaimer, settings, period.payType, esc);
         if (els.supplement && !els.supplement.dataset.userEdited) {
             const existingNote = existingReview ? String(existingReview.supplementNote || '').trim() : '';
@@ -839,6 +969,9 @@ function renderPayslipDetailHtml(detail, esc) {
     const snap = detail.snapshot || {};
     const earnings = snap.earnings || [];
     const deductions = snap.deductions || [];
+    const companyCosts = snap.companyCosts || buildEmployerCostLines(snap.employerCost) || [];
+    const companyCostTotal = companyCosts.reduce((s, x) => s + (Number(x.amount) || 0), 0) ||
+        Number(snap.employerCost && snap.employerCost.total) || 0;
     const earnRows = earnings.filter((e) => (e.amount || 0) > 0).map((e) => {
         const note = e.note ? `<span class="text-gray-500 text-xs">（${esc(e.note)}）</span>` : '';
         return `<li class="flex justify-between gap-2"><span>${esc(e.label)}${note}</span><span class="text-green-700">+${Number(e.amount).toLocaleString()}</span></li>`;
@@ -861,6 +994,7 @@ function renderPayslipDetailHtml(detail, esc) {
                 <div><p class="text-xs font-bold text-green-800 mb-1">加項</p><ul class="space-y-1">${earnRows}</ul></div>
                 <div><p class="text-xs font-bold text-red-800 mb-1">扣項</p><ul>${dedRows}</ul></div>
             </div>
+            ${renderCompanyCostHtml(companyCosts, companyCostTotal, esc)}
             <p class="text-right text-lg font-bold text-indigo-700">實發 ${Number(detail.finalAmount || 0).toLocaleString()} 元</p>
             ${detail.bonusNote ? `<p class="text-xs text-gray-500">獎金備註：${esc(detail.bonusNote)}</p>` : ''}
         </div>
@@ -996,8 +1130,18 @@ export function initPayrollReviewApproval(ctx) {
             </div>
             <div class="mt-3 grid grid-cols-2 gap-2">
                 <label class="text-xs">出勤獎金<input type="number" id="pr-full-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.fullAttendanceBonus}"></label>
-                <label class="text-xs">獎金<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
-                <label class="text-xs col-span-2">獎金事由<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="主管填入"></label>
+                <label class="text-xs">獎金（元）<input type="number" id="pr-bonus-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="0"></label>
+                <label class="text-xs col-span-2">獎金類別<select id="pr-bonus-cat-${row.reviewId}" class="w-full rounded border-gray-300 text-sm">
+                    <option value="">選擇類別</option>
+                    <option value="position">職務加給</option>
+                    <option value="license">證照加給</option>
+                    <option value="performance">業績</option>
+                    <option value="close">結案</option>
+                    <option value="quarterly">季獎</option>
+                    <option value="video">影片獎金</option>
+                    <option value="other">其他獎金</option>
+                </select></label>
+                <label class="text-xs col-span-2">獎金備註<input type="text" id="pr-bonus-reason-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="選填（勿填專案報酬）"></label>
                 <label class="text-xs">扣款（其他）<input type="number" id="pr-ded-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" value="${row.deduction || 0}" placeholder="考勤罰款等"></label>
                 <label class="text-xs col-span-2">審核備註<input type="text" id="pr-note-${row.reviewId}" class="w-full rounded border-gray-300 text-sm" placeholder="駁回時必填"></label>
             </div>
@@ -1016,12 +1160,19 @@ export function initPayrollReviewApproval(ctx) {
             alert('駁回時請填寫審核備註');
             return;
         }
+        const bonusAmount = Number(document.getElementById(`pr-bonus-${reviewId}`)?.value) || 0;
+        const bonusCategory = document.getElementById(`pr-bonus-cat-${reviewId}`)?.value.trim() || '';
+        if (decision === 'approve' && bonusAmount > 0 && !bonusCategory) {
+            alert('有填獎金金額時請選擇獎金類別');
+            return;
+        }
         const payload = {
             action: 'payroll_review', op: 'resolve',
             operatorId: userProfile.userId, userName: userProfile.displayName,
             reviewId, decision,
             reviewNote: note,
-            bonusAmount: Number(document.getElementById(`pr-bonus-${reviewId}`)?.value) || 0,
+            bonusAmount,
+            bonusCategory,
             bonusReason: document.getElementById(`pr-bonus-reason-${reviewId}`)?.value.trim() || '',
             fullAttendanceBonus: Number(document.getElementById(`pr-full-${reviewId}`)?.value) || 0,
             deduction: Number(document.getElementById(`pr-ded-${reviewId}`)?.value) || 0
@@ -1174,7 +1325,8 @@ export function initPayrollAdminPreview(ctx) {
                 { remoteAllowanceAmount: 0, overtimeHours: 0 },
                 adminContext.insurancePreview,
                 adminContext.attendanceBonusPolicy,
-                adminContext.period
+                adminContext.period,
+                adminContext.employerCostPreview
             );
             let html = renderBreakdownHtml(preview, adminContext.disclaimer, adminContext.settings, adminContext.period.payType, esc);
             html += renderMarginBonusDraftsHtml(adminContext.marginBonusDrafts, esc);
