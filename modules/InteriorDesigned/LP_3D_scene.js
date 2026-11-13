@@ -22,6 +22,23 @@ export const LP_3D_DEFAULTS = {
     WALK_EYE_HEIGHT_CM: 160,
 };
 
+/** 大平面效能模式：同時達櫃體與牆段門檻才啟用簡化 mesh */
+export const LP_3D_HEAVY_THRESHOLDS = {
+    CABINETS: 40,
+    WALL_SEGMENTS: 10,
+};
+
+/**
+ * @param {{ fixtures?: { kind?: string }[], walls?: object[], partitionWalls?: object[] }} desc
+ */
+export function assessLayout3DHeavyMode(desc) {
+    const cabinetCount = desc?.fixtures?.filter((f) => f.kind === 'cabinet').length ?? 0;
+    const wallSegments = (desc?.walls?.length ?? 0) + (desc?.partitionWalls?.length ?? 0);
+    const heavy = cabinetCount >= LP_3D_HEAVY_THRESHOLDS.CABINETS
+        && wallSegments >= LP_3D_HEAVY_THRESHOLDS.WALL_SEGMENTS;
+    return { heavy, cabinetCount, wallSegments };
+}
+
 const DOOR_WINDOW_GROUPS = new Set(['門窗工程', '門片']);
 const WINDOW_NAME_RE = /窗|落地窗|氣窗|百葉窗/;
 const DOOR_NAME_RE = /門/;
