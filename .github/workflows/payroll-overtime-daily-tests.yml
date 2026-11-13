@@ -1,0 +1,25 @@
+name: Payroll overtime daily tests
+
+on:
+  pull_request:
+    paths:
+      - 'modules/attendance/payroll_overtime_daily.js'
+      - 'modules/attendance/payroll_overtime_daily.test.mjs'
+      - 'modules/attendance/payroll_review_panel.js'
+      - 'package.json'
+      - '.github/workflows/payroll-overtime-daily-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm run test:payroll-overtime-daily
