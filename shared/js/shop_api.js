@@ -382,6 +382,108 @@
         order_number: orderNumber,
         liff_id_token: (auth && auth.liff_id_token) || ''
       });
+    },
+
+    /**
+     * 縮圖 → data URL（GAS UrlFetch；LINE WebView 不直接載跨網域 img）
+     * mock：前端自抓 photon（CORS *）轉 blob／data URL
+     */
+    resolveThumbs: function (auth, urls) {
+      var list = (urls || []).filter(function (u) {
+        return !!u && /^https?:\/\//i.test(String(u));
+      });
+      var uniq = [];
+      var seen = {};
+      list.forEach(function (u) {
+        var key = String(u);
+        if (seen[key]) return;
+        seen[key] = true;
+        uniq.push(key);
+      });
+      if (!uniq.length) return Promise.resolve({ success: true, data: { thumbs: {} } });
+
+      function photonUrl(url) {
+        url = String(url || '').trim();
+        var m = url.match(/^https?:\/\/i\d+\.wp\.com\/([^/?#]+)(\/wp-content\/uploads\/[^?#]+)/i);
+        if (m) {
+          return 'https://i0.wp.com/' + m[1] + m[2] + '?w=112&h=112&crop=1&ssl=1';
+        }
+        var m2 = url.match(/^https?:\/\/([^/]+)(\/wp-content\/uploads\/[^?#]+)/i);
+        if (m2) {
+          return 'https://i0.wp.com/' + m2[1] + m2[2] + '?w=112&h=112&crop=1&ssl=1';
+        }
+        return url;
+      }
+
+      function blobToDataUrl(blob) {
+        return new Promise(function (resolve, reject) {
+          var fr = new FileReader();
+          fr.onload = function () {
+            resolve(String(fr.result || ''));
+          };
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+      }
+
+      function clientFetchOne(url) {
+        var target = photonUrl(url);
+        return fetch(target, { mode: 'cors', credentials: 'omit' })
+          .then(function (r) {
+            if (!r.ok) throw new Error('thumb http ' + r.status);
+            return r.blob();
+          })
+          .then(blobToDataUrl)
+          .then(function (dataUrl) {
+            return dataUrl && dataUrl.indexOf('data:image/') === 0 ? dataUrl : '';
+          })
+          .catch(function () {
+            return '';
+          });
+      }
+
+      if (useMock()) {
+        return Promise.all(
+          uniq.map(function (u) {
+            return clientFetchOne(u).then(function (d) {
+              return [u, d];
+            });
+          })
+        ).then(function (pairs) {
+          var thumbs = {};
+          pairs.forEach(function (p) {
+            if (p[1]) thumbs[p[0]] = p[1];
+          });
+          return { success: true, mock: true, data: { thumbs: thumbs } };
+        });
+      }
+
+      return postAction({
+        action: 'shop_orders_thumbs',
+        urls: uniq.slice(0, 24),
+        liff_id_token: (auth && auth.liff_id_token) || '',
+        user_id: (auth && auth.user_id) || ''
+      }).then(function (res) {
+        if (res && res.success && res.data && res.data.thumbs) return res;
+        // GAS 失敗時仍試 photon（桌機／非 LINE）
+        return Promise.all(
+          uniq.map(function (u) {
+            return clientFetchOne(u).then(function (d) {
+              return [u, d];
+            });
+          })
+        ).then(function (pairs) {
+          var thumbs = {};
+          pairs.forEach(function (p) {
+            if (p[1]) thumbs[p[0]] = p[1];
+          });
+          return {
+            success: true,
+            data: { thumbs: thumbs },
+            message: (res && res.message) || 'thumb fallback client'
+          };
+        });
+      });
     }
   };
 
