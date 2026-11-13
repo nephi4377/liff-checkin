@@ -343,7 +343,7 @@ const App = {
             '#/accounting/vendor-docs': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html&tab=archive' },
             '#/accounting/quick-review': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html' },
             '#/accounting/customer-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '追加減與收款', params: '&route=designer-customer-finance.html' },
-            '#/shop/orders': { name: 'iframe', src: 'modules/shop/orders-admin.html', title: '官網商店訂單' },
+            '#/shop/orders': { name: 'iframe', src: 'modules/shop/orders-admin.html?v=26.11.13.2', title: '官網商店訂單' },
             '#/help': { name: 'iframe', src: 'modules/help/index.html', title: '使用教學' },
             '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/accounting-ingest.html', title: '收支登錄說明' },
             '#/help/payroll': { name: 'iframe', src: 'modules/help/payroll.html', title: '薪資說明' },

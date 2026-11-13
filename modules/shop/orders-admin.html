@@ -39,11 +39,11 @@
     .items td.num, .items th.num { text-align: right; white-space: nowrap; }
     .items td.thumb { width: 56px; }
     .item-thumb {
-      width: 48px; height: 48px; object-fit: cover; border-radius: 8px;
+      width: 56px; height: 56px; object-fit: cover; border-radius: 8px;
       border: 1px solid var(--line); background: #f1f5f9; display: block;
     }
     .item-thumb-ph {
-      width: 48px; height: 48px; border-radius: 8px; border: 1px dashed var(--line);
+      width: 56px; height: 56px; border-radius: 8px; border: 1px dashed var(--line);
       background: #f8fafc; color: var(--muted); font-size: 11px;
       display: flex; align-items: center; justify-content: center;
     }
@@ -81,7 +81,7 @@
     window.CONFIG = CONFIG;
     window.dispatchEvent(new Event('shop-config-ready'));
   </script>
-  <script src="../../shared/js/shop_api.js"></script>
+  <script src="../../shared/js/shop_api.js?v=26.11.13.2"></script>
   <script>
     function money(n) {
       if (n == null || n === '') return '—';
@@ -163,6 +163,14 @@
         return auth;
       });
     }
+    /** Jetpack photon → 原站路徑，避免 LINE WebView 擋 i0.wp.com */
+    function normalizeShopImageUrl(url) {
+      url = String(url || '').trim();
+      if (!url) return '';
+      var m = url.match(/^https?:\/\/i\d+\.wp\.com\/([^/?#]+)(\/wp-content\/uploads\/[^?#]+)/i);
+      if (m) return 'https://' + m[1] + m[2];
+      return url;
+    }
     function itemThumbHtml(it) {
       var url = '';
       if (it) {
@@ -170,10 +178,12 @@
         else if (typeof it.image === 'string') url = it.image;
         else if (it.image && it.image.src) url = it.image.src;
       }
+      url = normalizeShopImageUrl(url);
       if (url && /^https?:\/\//i.test(String(url))) {
         return (
           '<img class="item-thumb" src="' + esc(url) + '" alt="' + esc(it.name || '商品圖') +
-          '" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<div class=\\\'item-thumb-ph\\\'>無圖</div>\'">'
+          '" width="56" height="56" loading="eager" decoding="async" ' +
+          'onerror="this.onerror=null;this.outerHTML=\'<div class=\\\'item-thumb-ph\\\'>無圖</div>\'">'
         );
       }
       return '<div class="item-thumb-ph" aria-hidden="true">無圖</div>';
