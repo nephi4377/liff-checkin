@@ -21,7 +21,7 @@ Endpoint：`https://info.tanxin.space/modules/projects/employee-todo/`
 | `scripts/rebuild-production-pwa.mjs`、`npm run build:pwa` | `src/App.jsx`、`src/liffAuth.js`（維持 main 與正式無關） |
 | `src/localDev.js`（localhost 預覽規則測試） | `npm run build` → dist-stub |
 
-目前換包標記：**`et-build=20261103c`**（與 `modules/projects/employee-todo/index.html` 一致）。
+目前換包標記：**`et-build=20261113d381`**（與 `modules/projects/employee-todo/index.html` 一致）。
 
 ```bash
 npm ci

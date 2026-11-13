@@ -13,6 +13,6 @@
 | 派工 | 任務卡只讀顯示「工務說明」；誰派的／限期等亦需點「編輯」才改 |
 | 預覽 | `?preview=1`／`?demo=1` **僅 localhost**，示範資料不打 GAS |
 | 登入取消 | 綠鈕 **fromUser** 會清一次性旗標再 `liff.login`，不會被卡住 |
-| 換包標記 | **`et-build=20261103c`**；改 bridge 後跑 `ET_BUILD=20261103c npm run build:pwa --prefix employee-todo-src` |
+| 換包標記 | **`et-build=20261113d381`**；改 bridge 後跑 `ET_BUILD=20261113d381 npm run build:pwa --prefix employee-todo-src` |
 
 正式舊站 `/employee-todo/` 仍為 Mantle 只讀回滾；勿對 Mantle POST。
