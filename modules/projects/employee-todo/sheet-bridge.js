@@ -302,11 +302,24 @@
     return ensureWorkers(doc);
   }
 
+  /** LIFF Endpoint（redirectUri 必須以此為前綴；與 LINE Console 登記一致） */
+  var LIFF_ENDPOINT_URL = 'https://info.tanxin.space/modules/projects/employee-todo/';
+
   function buildLoginRedirectUri() {
-    var u = new URL('https://info.tanxin.space/modules/projects/employee-todo/');
+    var u = new URL(LIFF_ENDPOINT_URL);
     var role = new URLSearchParams(window.location.search).get('role');
     if (role) u.searchParams.set('role', role);
     return u.href.split('#')[0];
+  }
+
+  function isLiffInClient() {
+    try {
+      return (
+        typeof window.liff.isInClient === 'function' && window.liff.isInClient()
+      );
+    } catch (e) {
+      return false;
+    }
   }
 
   function hideLoginRetry() {
@@ -317,11 +330,19 @@
     } catch (e) {}
   }
 
-  /** 一次性 login 被取消時，讓使用者手動重試並清掉 session 旗標 */
+  /**
+   * 外開瀏覽器：只顯示綠鈕，勿自動 liff.login（否則整頁被蓋掉／取消後旗標卡住）。
+   * LINE 內：可自動登入；取消後靠綠鈕手動重試。
+   */
   function showLoginRetry(hintText) {
     if (isPreview()) return;
     function mount() {
-      if (document.getElementById('et-sheet-login-retry-panel')) return;
+      var existing = document.getElementById('et-sheet-login-retry-panel');
+      if (existing) {
+        var msgEl = existing.querySelector('[data-et-login-msg]');
+        if (msgEl && hintText) msgEl.textContent = hintText;
+        return;
+      }
       var panel = document.createElement('div');
       panel.id = 'et-sheet-login-retry-panel';
       panel.setAttribute(
@@ -331,6 +352,7 @@
           'max-width:min(92vw,22rem);pointer-events:auto;',
       );
       var msg = document.createElement('p');
+      msg.setAttribute('data-et-login-msg', '1');
       msg.textContent =
         hintText || '請用 LINE 登入後才能載入試算表上的待辦';
       msg.setAttribute(
@@ -339,7 +361,7 @@
       );
       var btn = document.createElement('button');
       btn.type = 'button';
-      btn.textContent = '用 LINE 登入';
+      btn.textContent = '用 LINE 登入同步試算表';
       btn.setAttribute(
         'style',
         'border:0;border-radius:999px;padding:.55rem 1.1rem;' +
@@ -347,10 +369,8 @@
           'box-shadow:0 6px 18px #00000033;cursor:pointer;width:100%;',
       );
       btn.addEventListener('click', function () {
-        clearLoginAttemptFlag();
         liffReady = null;
-        hideLoginRetry();
-        if (!triggerLiffLogin()) {
+        if (!triggerLiffLogin({ fromUser: true })) {
           showLoginRetry('若未跳轉，請再按一次或改用 LINE 內建瀏覽器開啟');
         }
       });
@@ -374,19 +394,34 @@
     } catch (e) {}
   }
 
-  function triggerLiffLogin() {
+  /**
+   * @param {{ fromUser?: boolean }} [opts]
+   * fromUser：使用者點綠鈕，一律清旗標並呼叫 liff.login（不受一次性自動登入旗標擋住）
+   */
+  function triggerLiffLogin(opts) {
+    opts = opts || {};
+    var fromUser = !!opts.fromUser;
     if (!window.liff || typeof window.liff.login !== 'function') {
       showLoginRetry('LINE 登入尚未就緒，請稍後再按');
       return false;
     }
     try {
-      if (sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === '1') {
+      if (!fromUser && sessionStorage.getItem(LOGIN_ATTEMPT_KEY) === '1') {
         showLoginRetry('登入未完成，請再按下方按鈕');
         return false;
       }
+      if (fromUser) clearLoginAttemptFlag();
       sessionStorage.setItem(LOGIN_ATTEMPT_KEY, '1');
     } catch (e) {}
-    window.liff.login({ redirectUri: buildLoginRedirectUri() });
+    var redirectUri = buildLoginRedirectUri();
+    try {
+      window.liff.login({ redirectUri: redirectUri });
+    } catch (err) {
+      console.warn('[employee-todo bridge] liff.login', err, redirectUri);
+      clearLoginAttemptFlag();
+      showLoginRetry('無法開啟 LINE 登入，請稍後再試');
+      return false;
+    }
     return true;
   }
 
@@ -405,14 +440,19 @@
             .init({ liffId: LIFF_ID })
             .then(function () {
               if (!window.liff.isLoggedIn()) {
-                triggerLiffLogin();
+                // LINE App 內可自動登入；外開只顯示綠鈕，避免整頁跳轉／旗標卡住
+                if (isLiffInClient()) {
+                  triggerLiffLogin({ fromUser: false });
+                }
                 showLoginRetry();
                 finish(null);
                 return;
               }
               var token = window.liff.getIDToken() || '';
               if (!isTokenFresh(token)) {
-                triggerLiffLogin();
+                if (isLiffInClient()) {
+                  triggerLiffLogin({ fromUser: false });
+                }
                 showLoginRetry('登入已過期，請重新登入');
                 finish(null);
                 return;
@@ -423,7 +463,6 @@
             })
             .catch(function (err) {
               console.warn('[employee-todo bridge] liff.init', err);
-              triggerLiffLogin();
               showLoginRetry('無法初始化 LINE 登入');
               finish(null);
             });
