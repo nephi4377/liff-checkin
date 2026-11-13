@@ -26,7 +26,14 @@
       created_at: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
       line_user_id: 'U_MOCK_CUSTOMER',
       items_summary: 'K&B 旋轉鏡架組（摩卡色）×1',
-      items: [{ name: 'K&B 旋轉鏡架組（摩卡色）', quantity: 1, price: 3500, total: 3500, sku: 'KB-MIRROR-MOCHA' }],
+      items: [{
+        name: 'K&B 旋轉鏡架組（摩卡色）',
+        quantity: 1,
+        price: 3500,
+        total: 3500,
+        sku: 'KB-MIRROR-MOCHA',
+        image_url: 'https://tanxin.space/wp-content/uploads/2026/10/kb-d3030-300x300.jpg'
+      }],
       customer_name: '王小明',
       customer_phone: '0912-345-678',
       customer_email: 'ming@example.com',
@@ -62,7 +69,14 @@
       created_at: new Date(Date.now() - 20 * 3600 * 1000).toISOString(),
       line_user_id: 'U_MOCK_CUSTOMER',
       items_summary: '展示櫃層板組 ×1',
-      items: [{ name: '展示櫃層板組', quantity: 1, price: 5200, total: 5200, sku: 'SHELF-01' }],
+      items: [{
+        name: '展示櫃層板組',
+        quantity: 1,
+        price: 5200,
+        total: 5200,
+        sku: 'SHELF-01',
+        image_url: 'https://tanxin.space/wp-content/uploads/2026/10/hy-set-467-300x300.jpg'
+      }],
       customer_name: '林雅婷',
       customer_phone: '0988-111-222',
       customer_email: 'ya@example.com',
@@ -98,7 +112,14 @@
       created_at: new Date(Date.now() - 2 * 86400 * 1000).toISOString(),
       line_user_id: 'U_MOCK_CUSTOMER',
       items_summary: '示範家具 ×1',
-      items: [{ name: '示範家具', quantity: 1, price: 12000, total: 12000, sku: 'DEMO-FURN' }],
+      items: [{
+        name: '示範家具',
+        quantity: 1,
+        price: 12000,
+        total: 12000,
+        sku: 'DEMO-FURN',
+        image_url: 'https://tanxin.space/wp-content/uploads/2026/10/kb-d3030-300x300.jpg'
+      }],
       customer_name: '陳大文',
       customer_phone: '0922-000-111',
       customer_email: 'chen@example.com',

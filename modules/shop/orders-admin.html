@@ -34,9 +34,20 @@
     .detail dt { color: var(--muted); }
     .detail dd { margin: 0; line-height: 1.4; word-break: break-word; }
     .items { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 12px; }
-    .items th, .items td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; }
+    .items th, .items td { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; vertical-align: middle; }
     .items th { color: var(--muted); font-weight: 600; font-size: 12px; }
     .items td.num, .items th.num { text-align: right; white-space: nowrap; }
+    .items td.thumb { width: 56px; }
+    .item-thumb {
+      width: 48px; height: 48px; object-fit: cover; border-radius: 8px;
+      border: 1px solid var(--line); background: #f1f5f9; display: block;
+    }
+    .item-thumb-ph {
+      width: 48px; height: 48px; border-radius: 8px; border: 1px dashed var(--line);
+      background: #f8fafc; color: var(--muted); font-size: 11px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .item-name { display: flex; flex-direction: column; gap: 2px; }
     .detail-empty { font-size: 13px; color: var(--muted); margin: 0 0 10px; }
     .detail-status { font-size: 12px; color: var(--muted); margin: 0 0 8px; min-height: 1.2em; }
     .toggle-hint { font-size: 12px; color: var(--blue); margin-top: 8px; font-weight: 600; }
@@ -152,20 +163,36 @@
         return auth;
       });
     }
+    function itemThumbHtml(it) {
+      var url = '';
+      if (it) {
+        if (it.image_url) url = it.image_url;
+        else if (typeof it.image === 'string') url = it.image;
+        else if (it.image && it.image.src) url = it.image.src;
+      }
+      if (url && /^https?:\/\//i.test(String(url))) {
+        return (
+          '<img class="item-thumb" src="' + esc(url) + '" alt="' + esc(it.name || '商品圖') +
+          '" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML=\'<div class=\\\'item-thumb-ph\\\'>無圖</div>\'">'
+        );
+      }
+      return '<div class="item-thumb-ph" aria-hidden="true">無圖</div>';
+    }
     function itemsRowsHtml(items) {
       if (!items || !items.length) return '';
       var rows = items.map(function (it) {
         return (
-          '<tr><td>' + esc(it.name || '品項') +
-          (it.sku ? '<div style="font-size:11px;color:#64748b">SKU ' + esc(it.sku) + '</div>' : '') +
-          '</td><td class="num">' + esc(it.quantity != null ? it.quantity : 1) +
+          '<tr><td class="thumb">' + itemThumbHtml(it) + '</td>' +
+          '<td><div class="item-name">' + esc(it.name || '品項') +
+          (it.sku ? '<span style="font-size:11px;color:#64748b">SKU ' + esc(it.sku) + '</span>' : '') +
+          '</div></td><td class="num">' + esc(it.quantity != null ? it.quantity : 1) +
           '</td><td class="num">' + money(it.price) +
           '</td><td class="num">' + money(it.total) + '</td></tr>'
         );
       }).join('');
       return (
         '<table class="items" aria-label="品項明細">' +
-        '<thead><tr><th>品項</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th></tr></thead>' +
+        '<thead><tr><th></th><th>品項</th><th class="num">數量</th><th class="num">單價</th><th class="num">小計</th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table>'
       );
     }
