@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=5" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=102"></script>
+  <script src="../../shared/js/accounting_api.js?v=103"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_list_cache.js?v=7"></script>
   <script src="../../shared/js/accounting_action_queue.js?v=1"></script>
@@ -41,6 +41,20 @@
     #listLive { margin-left: 8px; font-weight: 600; color: #1a73e8; }
     .nav { margin-bottom: 12px; font-size: 14px; }
     .nav a { color: #1a73e8; text-decoration: none; }
+    .item.is-anomaly { background: #fff8e6; border-color: #f9ab00; box-shadow: 0 0 0 1px #f9ab00 inset; }
+    .item.is-normal-collapsed .review-panel,
+    .item.is-normal-collapsed .att-calendar,
+    .item.is-normal-collapsed .att-extra { display: none; }
+    .att-line { font-size: 13px; margin: 6px 0; color: #333; }
+    .att-line .att-warn { color: #b06000; font-weight: 600; }
+    .att-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-top: 8px; font-size: 11px; }
+    .att-cal-cell { border: 1px solid #e8eaed; border-radius: 6px; padding: 4px 2px; text-align: center; background: #fafafa; min-height: 36px; }
+    .att-cal-cell.hl { background: #fce8e6; border-color: #ea4335; color: #c5221f; font-weight: 600; }
+    .att-cal-cell.work { background: #e6f4ea; }
+    .att-cal-cell.rest { background: #f1f3f4; color: #666; }
+    .att-cal-cell.leave { background: #e8f0fe; }
+    .att-gate { background: #fff8e6; border: 1px solid #f9ab00; border-radius: 8px; padding: 10px 12px; margin: 8px 0; font-size: 14px; color: #8a5a00; }
+    .name-btn { background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: #1a73e8; cursor: pointer; text-decoration: underline; }
   </style>
 </head>
 <body class="acct-page acct-page-form">
@@ -72,8 +86,10 @@
       <button type="button" class="btn btn-primary btn-block" id="reloadBtn" title="略過暫存，立刻向後端重抓最新清單">重新載入最新</button>
     </div>
 
+    <div id="attGateBanner" class="att-gate hidden" role="status"></div>
     <div class="card">
       <h3 style="margin:0 0 8px">待審列表<span id="listLive" class="sub"></span></h3>
+      <p class="sub" style="margin:0 0 8px">異常（黃底）置頂；點姓名展開當月日曆。每人先「確認出勤」，全員確認後才能核准。</p>
       <div id="list"></div>
       <p id="emptyMsg" class="sub hidden">目前沒有待審薪資。</p>
     </div>
@@ -227,10 +243,51 @@
           '<ul style="margin:0;padding-left:18px;font-size:13px">' + lis + '</ul></div>';
       }
 
+      function attendanceCalendarHtml(ac, prId) {
+        var days = (ac && ac.calendarDays) || [];
+        if (!days.length) {
+          return '<p class="sub att-extra">此單無逐日班表快照（舊單據）；請對照出勤儀表。新送審單會帶日曆。</p>';
+        }
+        var cells = days.map(function (d) {
+          var dayNum = String(d.date || '').slice(-2);
+          var cls = 'att-cal-cell ' + esc(d.kind || '');
+          if (d.highlight) cls += ' hl';
+          var tip = esc(d.status || d.kind || '');
+          return '<div class="' + cls + '" title="' + tip + '"><div>' + esc(dayNum) + '</div><div style="font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            tip + '</div></div>';
+        }).join('');
+        return '<div class="att-calendar hidden" id="cal-' + prId + '">' +
+          '<p class="sub" style="margin:8px 0 4px;font-weight:600">當月出勤日曆（紅框＝異常日）</p>' +
+          '<div class="att-cal-grid">' + cells + '</div></div>';
+      }
+
+      function attendanceBlockHtml(row) {
+        var ac = row.attendance_check || {};
+        var line = ac.summaryLine ||
+          ('應上 ' + (ac.expectedWorkDays || 0) + '｜實上 ' + (ac.actualAttendanceDays || 0) +
+            '｜假別天數 ' + (ac.leaveDays || 0) + '｜缺卡 ' + (ac.missingPunchDays || 0));
+        var reasons = (ac.anomalyReasons || []).join('、');
+        var confirmed = !!ac.confirmed;
+        var confBtn = confirmed
+          ? '<span class="tag" style="background:#e6f4ea;color:#137333">出勤已確認</span>'
+          : '<button type="button" class="btn btn-primary" data-att-confirm="' + row.payroll_request_id + '">確認出勤</button>';
+        return '<div class="att-line">' + esc(line) +
+          (ac.isAnomalous ? ' <span class="att-warn">· 異常：' + esc(reasons || '需核對') + '</span>' : ' <span class="tag">正常</span>') +
+          '</div>' +
+          '<div class="att-extra" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0">' +
+          confBtn +
+          (confirmed && ac.confirmedBy ? '<span class="sub">確認人 ' + esc(ac.confirmedBy) + '</span>' : '') +
+          '</div>' +
+          attendanceCalendarHtml(ac, row.payroll_request_id);
+      }
+
       function renderItem(row) {
         var div = document.createElement('div');
-        div.className = 'item';
+        var ac = row.attendance_check || {};
+        var isAnom = !!ac.isAnomalous;
+        div.className = 'item' + (isAnom ? ' is-anomaly' : ' is-normal-collapsed');
         div.id = 'pr-' + row.payroll_request_id;
+        div.setAttribute('data-att-confirmed', ac.confirmed ? '1' : '0');
         var est = parseInt(row.estimated_net, 10) || 0;
         div.setAttribute('data-est', String(est));
         var tw = parseTaxWithholdFromRow(row);
@@ -265,8 +322,12 @@
             '<div><p class="sub" style="font-weight:600;color:#c5221f;margin:0">減項（可改）</p>' + editableDeductionsHtml(deductions, row.payroll_request_id) + '</div>' +
             '</div>' + companyBlock;
         }
+        var approveDisabled = !ac.confirmed ? ' disabled title="請先確認出勤；且須全員確認後才能核准"' : '';
         div.innerHTML =
-          '<div><strong>' + esc(row.employee_name) + '</strong> <span class="tag">' + esc(row.period_label) + '</span> ' + selfTag + '</div>' +
+          '<div><button type="button" class="name-btn" data-toggle-cal="' + row.payroll_request_id + '">' + esc(row.employee_name) + '</button>' +
+          ' <span class="tag">' + esc(row.period_label) + '</span> ' + selfTag +
+          (isAnom ? ' <span class="tag warn">出勤異常</span>' : '') + '</div>' +
+          attendanceBlockHtml(row) +
           '<p class="amount">試算實發 <span id="est-display-' + row.payroll_request_id + '">' + est.toLocaleString('zh-TW') + '</span> 元</p>' +
           '<p class="sub">期間 ' + esc(row.period_start) + '～' + esc(row.period_end) + ' · 發薪日 ' + esc(row.pay_date) + '</p>' +
           (ot > 0 ? '<p class="sub">加班 ' + ot + ' 小時</p>' : '') +
@@ -290,9 +351,9 @@
           '</div>' +
           '<p id="tax-hint-' + row.payroll_request_id + '" class="sub hidden" style="color:#8a5a00;margin:6px 0 0"></p>' +
           '<label>審核備註</label><input type="text" id="note-' + row.payroll_request_id + '" placeholder="減項有改請寫原因" value="' + esc(row.supplement_note || '') + '" />' +
-          '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。非固定獎金另計所得稅 5%（未達起扣免扣）；超過投保 4 倍部分另扣二代健保補充保費 2.11%。</p>' +
+          '<p class="sub" style="margin-top:8px">薪轉／額外金額請至「薪資待匯款」調整。出勤核對只顯示警示，不自動加金額或加班。</p>' +
           '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">' +
-          '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '">核准</button>' +
+          '<button type="button" class="btn btn-ok" data-approve="' + row.payroll_request_id + '"' + approveDisabled + '>核准</button>' +
           '<button type="button" class="btn btn-warn" data-reject="' + row.payroll_request_id + '">退回</button>' +
           '</div></div>';
         return div;
@@ -323,6 +384,133 @@
       function setUpdating(on) {
         var el = document.getElementById('listLive');
         if (el) el.textContent = on ? '更新中…' : '';
+      }
+
+      var lastAttendanceGate = null;
+
+      /** 蒐集尚未核准的審核欄位（確認出勤／標記異議後重繪時還原，避免草稿被洗掉） */
+      function captureReviewDrafts_() {
+        var out = Object.create(null);
+        document.querySelectorAll('#list .item[id^="pr-"]').forEach(function (card) {
+          var id = String(card.id || '').replace(/^pr-/, '');
+          if (!id) return;
+          var draft = { fields: {}, ded: [] };
+          ['bonus-', 'bcat-', 'ded-', 'bnote-', 'note-'].forEach(function (prefix) {
+            var el = document.getElementById(prefix + id);
+            if (el) draft.fields[prefix] = el.value;
+          });
+          card.querySelectorAll('.ded-line-input').forEach(function (inp) {
+            draft.ded.push({
+              idx: inp.getAttribute('data-idx'),
+              label: inp.getAttribute('data-label') || '',
+              value: inp.value
+            });
+          });
+          out[id] = draft;
+        });
+        return out;
+      }
+
+      function restoreReviewDrafts_(drafts) {
+        if (!drafts) return;
+        Object.keys(drafts).forEach(function (id) {
+          var draft = drafts[id];
+          if (!draft) return;
+          Object.keys(draft.fields || {}).forEach(function (prefix) {
+            var el = document.getElementById(prefix + id);
+            if (el) el.value = draft.fields[prefix];
+          });
+          (draft.ded || []).forEach(function (d) {
+            var inp = document.querySelector(
+              '#pr-' + id + ' .ded-line-input[data-idx="' + String(d.idx) + '"]'
+            );
+            if (!inp && d.label) {
+              inp = document.querySelector(
+                '#pr-' + id + ' .ded-line-input[data-label="' + String(d.label).replace(/"/g, '\\"') + '"]'
+              );
+            }
+            if (inp) inp.value = d.value;
+          });
+          var bonusEl = document.getElementById('bonus-' + id);
+          if (bonusEl && typeof bonusEl.dispatchEvent === 'function') {
+            bonusEl.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        });
+      }
+
+      function refreshAttendanceGateFromDom_() {
+        var filterVal = document.getElementById('filterReview').value || 'pending_review';
+        if (filterVal !== 'pending_review') {
+          applyAttendanceGate(null, filterVal);
+          return;
+        }
+        var cards = document.querySelectorAll('#list .item[id^="pr-"]');
+        var unconfirmed = 0;
+        cards.forEach(function (card) {
+          if (card.getAttribute('data-att-confirmed') !== '1') unconfirmed += 1;
+        });
+        applyAttendanceGate({
+          all_confirmed: unconfirmed === 0,
+          unconfirmed_count: unconfirmed,
+          message: unconfirmed > 0
+            ? ('尚有 ' + unconfirmed + ' 人未確認出勤，全部確認後才能核准薪資')
+            : ''
+        }, filterVal);
+      }
+
+      function markAttendanceConfirmedInPlace_(prId, ac) {
+        var card = document.getElementById('pr-' + prId);
+        if (!card) return;
+        card.setAttribute('data-att-confirmed', '1');
+        var extra = card.querySelector('.att-extra');
+        if (extra) {
+          var by = (ac && ac.confirmedBy) ? String(ac.confirmedBy) : '';
+          extra.innerHTML =
+            '<span class="tag" style="background:#e6f4ea;color:#137333">出勤已確認</span>' +
+            (by ? '<span class="sub">確認人 ' + esc(by) + '</span>' : '');
+        }
+        if (typeof AccountingListCache !== 'undefined') {
+          AccountingListCache.patch(session, listCacheKey(), function (data) {
+            if (!data || !data.items) return;
+            data.items.forEach(function (row) {
+              if (String(row.payroll_request_id) !== String(prId)) return;
+              row.attendance_check = row.attendance_check || {};
+              row.attendance_check.confirmed = true;
+              if (ac) {
+                row.attendance_check.confirmedAt = ac.confirmedAt || row.attendance_check.confirmedAt;
+                row.attendance_check.confirmedBy = ac.confirmedBy || row.attendance_check.confirmedBy;
+              }
+            });
+          });
+        }
+        refreshAttendanceGateFromDom_();
+      }
+
+      function applyAttendanceGate(gate, filterVal) {
+        var banner = document.getElementById('attGateBanner');
+        if (!banner) return;
+        if (filterVal !== 'pending_review' || !gate) {
+          banner.classList.add('hidden');
+          lastAttendanceGate = null;
+          return;
+        }
+        lastAttendanceGate = gate;
+        if (gate.all_confirmed) {
+          banner.classList.add('hidden');
+          banner.textContent = '';
+        } else {
+          banner.textContent = gate.message || ('尚有 ' + (gate.unconfirmed_count || 0) + ' 人未確認出勤，全部確認後才能核准薪資');
+          banner.classList.remove('hidden');
+        }
+        document.querySelectorAll('#list [data-approve]').forEach(function (btn) {
+          var root = btn.closest('.item');
+          var rowOk = root && root.getAttribute('data-att-confirmed') === '1';
+          var allOk = !!gate.all_confirmed;
+          btn.disabled = !(rowOk && allOk);
+          btn.title = btn.disabled
+            ? (allOk ? '請先確認此員出勤' : '尚有人未確認出勤，全部確認後才能核准')
+            : '';
+        });
       }
 
       function applyListData(data, keepExisting) {
@@ -357,6 +545,7 @@
         });
         emptyMsg.classList.toggle('hidden', hasRenderedItems());
         emptyMsg.textContent = filterVal === 'pending_review' ? '目前沒有待審薪資。' : '目前沒有符合條件的薪資單。';
+        applyAttendanceGate(data.attendance_confirm_gate, filterVal);
         lastRenderedCacheKey = listCacheKey();
       }
 
@@ -461,9 +650,46 @@
       }
 
       document.getElementById('list').addEventListener('click', async function (e) {
+        var toggleId = e.target.getAttribute('data-toggle-cal');
+        if (toggleId) {
+          var card = document.getElementById('pr-' + toggleId);
+          var cal = document.getElementById('cal-' + toggleId);
+          if (card && card.classList.contains('is-normal-collapsed')) {
+            card.classList.remove('is-normal-collapsed');
+          } else if (card && !card.classList.contains('is-anomaly')) {
+            card.classList.add('is-normal-collapsed');
+          }
+          if (cal) cal.classList.toggle('hidden');
+          return;
+        }
+        var confirmId = e.target.getAttribute('data-att-confirm');
+        if (confirmId) {
+          var cBtn = e.target;
+          await AccountingUi.runAsync(cBtn, {
+            busyLabel: '確認中…',
+            queue: true,
+            queueId: 'payroll_att_confirm',
+            itemId: confirmId
+          }, async function () {
+            var res = await AccountingApi.payrollAttendanceConfirm(session, {
+              payroll_request_id: confirmId
+            });
+            if (!res.success) throw new Error(res.message || '確認失敗');
+            setOk(res.message || '已確認出勤');
+            // 就地更新確認狀態，保留其他卡片未存的加減項／備註草稿
+            markAttendanceConfirmedInPlace_(confirmId, res.attendance_check || null);
+          }).catch(function (err) {
+            if (err && err.message) setMsg(err.message);
+          });
+          return;
+        }
         var approveId = e.target.getAttribute('data-approve');
         var rejectId = e.target.getAttribute('data-reject');
         if (!approveId && !rejectId) return;
+        if (approveId && lastAttendanceGate && !lastAttendanceGate.all_confirmed) {
+          setMsg(lastAttendanceGate.message || '尚有人未確認出勤，全部確認後才能核准');
+          return;
+        }
         var id = approveId || rejectId;
         if (typeof AccountingActionQueue !== 'undefined' &&
             AccountingActionQueue.isPending('payroll_review', id)) return;
@@ -523,10 +749,13 @@
             setOk(ap.message || (ap.already_reviewed ? '此筆先前已核准' : '已核准，會計可至薪資待匯款匯出'));
           }
           removeReviewedItem_(id);
+          // 退回後重算出勤閘：剩餘待審若已全確認，核准鈕應立刻可按
+          refreshAttendanceGateFromDom_();
         }).catch(function (err) {
           if (err && err.message && err.message !== '此項目已在處理中') {
             if (isAlreadySettledReviewMsg_(err.message)) {
               removeReviewedItem_(id);
+              refreshAttendanceGateFromDom_();
               setOk(err.message);
               return;
             }

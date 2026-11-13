@@ -1736,6 +1736,13 @@ var AccountingApi = (function () {
         auth: resolveAuth(sessionOrToken)
       }, payload || {}));
     },
+    /** 規格 A：審核端確認該員出勤核對（全部確認後才能核准） */
+    payrollAttendanceConfirm: function (sessionOrToken, payload) {
+      return post(Object.assign({
+        action: 'payroll_attendance_confirm',
+        auth: resolveAuth(sessionOrToken)
+      }, payload || {}));
+    },
     payrollRequestReject: function (sessionOrToken, payload) {
       return post(Object.assign({
         action: 'payroll_request_reject',
