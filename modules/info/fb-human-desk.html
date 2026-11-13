@@ -142,7 +142,7 @@
   <div class="wrap">
     <header>
       <h1 class="brand">添心設計</h1>
-      <p class="sub">Messenger 真人客服 · 選對話後可看最近來訊與回覆。24 小時內一般回覆；逾 24 小時須確認未解決問題才帶 HUMAN_AGENT；超過七天停用。此頁不自動對真實客戶送訊，除非你在已部署測試環境手動送出。</p>
+      <p class="sub">Messenger 真人客服 · 請從 LINE 主控台進入（勿直連本頁）。選對話後可看最近來訊與回覆。24 小時內一般回覆；逾 24 小時須確認未解決問題才帶 HUMAN_AGENT；超過七天停用。不自動對真實客戶送訊。</p>
     </header>
     <div id="status" class="status" role="status">載入中…</div>
     <div class="layout">
@@ -260,6 +260,34 @@
         });
       }
 
+      /** 本頁不是 Hub LIFF Endpoint；不可對 HUB_LIFF_ID 做 liff.login(redirectUri=本頁)。 */
+      function hubEntryUrl() {
+        try {
+          return new URL('/#/fb-human-desk', location.origin).href;
+        } catch (e) {
+          return 'https://info.tanxin.space/#/fb-human-desk';
+        }
+      }
+
+      function showOpenViaHub(msg) {
+        var url = hubEntryUrl();
+        setStatus(
+          (msg || '請從主控台開啟本頁') + ' → ' + url,
+          'err'
+        );
+        detailEl.className = 'detail';
+        detailEl.innerHTML =
+          '<p style="margin:0 0 10px;line-height:1.5">' +
+            esc(msg || 'Messenger 真人客服必須從「整合主控台」進入。') +
+          '</p>' +
+          '<p style="margin:0 0 12px;font-size:13px;color:var(--muted);line-height:1.45">' +
+            '直連本頁會用錯 LIFF 回呼網址，LINE 會顯示 400 Bad Request。' +
+            '請在 LINE 內開啟主控台後點「Messenger 真人客服」。' +
+          '</p>' +
+          '<a class="primary" style="display:inline-block;text-decoration:none" href="' +
+            esc(url) + '">前往主控台真人客服</a>';
+      }
+
       function initLiffToken() {
         if (state.mock) {
           state.token = 'mock-token';
@@ -267,27 +295,26 @@
           state.actorName = '本地模擬同事';
           return Promise.resolve();
         }
+        // 與 shop／會計 iframe 相同：只向 Hub 父層要 token，絕不在本頁 liff.init(HUB_LIFF_ID)
         return requestHubToken().then(function (hubTok) {
           if (hubTok) {
             state.token = hubTok;
             return;
           }
-          var cfg = window.FB_HUMAN_CONFIG || {};
-          var liffId = cfg.HUB_LIFF_ID || cfg.PROJECT_CONSOLE_LIFF_ID || '';
-          if (!liffId || typeof liff === 'undefined') {
-            throw new Error('請從主控台開啟本頁，或設定 LIFF 後再試');
-          }
-          return liff.init({ liffId: liffId }).then(function () {
-            if (!liff.isLoggedIn()) {
-              liff.login({ redirectUri: location.href });
-              return;
+          if (window.parent === window) {
+            // 外開／貼連結：導回 Hub hash，避免 liff.login(redirectUri=本頁) → LINE 400
+            try {
+              location.replace(hubEntryUrl());
+            } catch (e) {
+              showOpenViaHub('請從主控台開啟');
             }
-            state.token = liff.getIDToken() || '';
-            return liff.getProfile().then(function (p) {
-              state.actorName = (p && p.displayName) || '';
-              state.actorId = (p && p.userId) || '';
-            });
-          });
+            return;
+          }
+          // 已在 iframe 但父層暫無 token：請主控台重登，勿在本頁呼叫 liff.login
+          try {
+            window.parent.postMessage({ type: 'request_hub_liff_relogin', force: false }, '*');
+          } catch (e2) { /* ignore */ }
+          throw new Error('主控台尚未登入或登入已過期，請關閉本頁後從 LINE 重新開啟主控台，再點「Messenger 真人客服」');
         });
       }
 
