@@ -343,7 +343,8 @@ const App = {
             '#/accounting/vendor-docs': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html&tab=archive' },
             '#/accounting/quick-review': { name: 'iframe', src: 'modules/accounting/index.html?v=26.11.04.3', title: '單據與存檔', params: '&route=quick_review.html' },
             '#/accounting/customer-finance': { name: 'iframe', src: 'modules/accounting/index.html', title: '追加減與收款', params: '&route=designer-customer-finance.html' },
-            '#/shop/orders': { name: 'iframe', src: 'modules/shop/orders-admin.html?v=26.11.13.2', title: '官網商店訂單' },
+            // 新檔名 orders-hub.html：LINE 對同路徑 HTML 常忽略 ?v= 快取戳
+            '#/shop/orders': { name: 'iframe', src: 'modules/shop/orders-hub.html', title: '官網商店訂單' },
             '#/help': { name: 'iframe', src: 'modules/help/index.html', title: '使用教學' },
             '#/help/accounting-ingest': { name: 'iframe', src: 'modules/help/accounting-ingest.html', title: '收支登錄說明' },
             '#/help/payroll': { name: 'iframe', src: 'modules/help/payroll.html', title: '薪資說明' },
@@ -371,9 +372,15 @@ const App = {
             const route = routes[path] || routes['#'];
             const hashParams = queryString ? `&${queryString}` : '';
             const routeParams = route.params || '';
+            // 商店訂單：每次進入都換新檔路徑＋時間戳，逼 LINE WebView 重抓 HTML
+            let src = route.src;
+            if (path === '#/shop/orders') {
+                src = 'modules/shop/orders-hub.html?v=26.11.13.4&_cb=' + Date.now();
+            }
 
             currentView.value = {
                 ...route,
+                src: src || route.src,
                 params: hashParams + routeParams
             };
             if (path === '#/attendance-report' && Number(currentUser.value?.permission || 0) > 0
