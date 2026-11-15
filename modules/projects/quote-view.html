@@ -89,13 +89,15 @@
       var stMap = { draft: '草稿（尚未送出）', sent: '待您確認', confirmed: '已確認' };
       document.getElementById('headerSub').textContent =
         '案號 ' + (quote.project_no || projectNo) + '｜版本 v' + (quote.version || 1) +
-        '｜' + (stMap[quote.status] || quote.status || '');
+        '｜' + (stMap[quote.status] || quote.status || '') +
+        (quote.valid_until ? '｜有效期限 ' + quote.valid_until : '');
       function lineRows(list, indent) {
         return (list || []).map(function (ln) {
           var note = ln.note ? '<div class="hint">' + esc(ln.note) + '</div>' : '';
+          var billing = ln.billing_label ? '<div class="hint">' + esc(ln.billing_label) + '</div>' : '';
           var bundle = (ln.addons && ln.addons.length)
             ? '<div class="hint">含附加小計 ' + money(ln.line_subtotal) + '</div>' : '';
-          var row = '<tr' + (indent ? ' class="addon"' : '') + '><td>' + esc(ln.item) + note + bundle +
+          var row = '<tr' + (indent ? ' class="addon"' : '') + '><td>' + esc(ln.item) + note + billing + bundle +
             '</td><td>' + esc(ln.unit) + '</td><td>' + esc(String(ln.qty)) +
             '</td><td>' + money(ln.amount) + '</td></tr>';
           return row + lineRows(ln.addons || [], true);
@@ -137,10 +139,12 @@
         '<br/>已收丈量費 ' + money(f.measure) + '／啟動金 ' + money(f.startup) +
         '／規劃費 ' + money(f.planning) +
         '<br/>已扣 ' + money(t.deducted) + '｜應付 ' + money(t.payable) +
+        (quote.valid_until ? '<br/>有效期限：' + esc(quote.valid_until) : '') +
+        (quote.expired ? '<br/><strong>已過期，請洽設計師</strong>' : '') +
         (quote.confirmed_at ? '<br/>確認時間：' + esc(quote.confirmed_at) : '') +
         '</div>';
       var btn = document.getElementById('btnConfirm');
-      if (btn) btn.hidden = !quote.can_confirm;
+      if (btn) btn.hidden = staffPreview || !quote.can_confirm;
     }
     async function load() {
       if (!projectNo) {
@@ -208,7 +212,7 @@
       setStatus('送出確認中…');
       try {
         var res = await AccountingApi.quoteEditorConfirm(session, projectNo, {
-          staffPreview: staffPreview
+          staffPreview: false
         });
         if (!res || !res.success) throw new Error((res && res.message) || '確認失敗');
         quote = QuoteEditorSanitize.toCustomerQuote(res.quote || {});

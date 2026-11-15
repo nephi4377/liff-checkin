@@ -88,7 +88,8 @@
 
   function rowHtml(row, st) {
     var child = isChild(row);
-    var cabinet = !child && (row.is_cabinet || (grid() && grid().looksLikeCabinet(row.item, row.unit, row.note)));
+    var noteHay = String(row.customer_note || '') + ' ' + String(row.internal_note || '');
+    var cabinet = !child && (row.is_cabinet || (grid() && grid().looksLikeCabinet(row.item, row.unit, noteHay)));
     var amountText = String(row.item || '').trim() ? money(row.amount) : '';
     var bundle = cabinet && row.line_subtotal && row.line_subtotal !== row.amount
       ? '<div class="hint">含加購 ' + money(row.line_subtotal) + '</div>' : '';
@@ -107,7 +108,8 @@
       '<td>' + textHtml(row, 'qty', '數量') + '</td>' +
       '<td>' + textHtml(row, 'unit_price', '單價（同事）') + '</td>' +
       '<td class="amt" data-amount-for="' + esc(row.row_id) + '">' + amountText + bundle + '</td>' +
-      '<td>' + textHtml(row, 'note', '說明') + '</td>' +
+      '<td>' + textHtml(row, 'customer_note', '對客說明') + '</td>' +
+      '<td>' + textHtml(row, 'internal_note', '內部備註') + '</td>' +
       '<td>' + textHtml(row, 'price_override_reason', '改價原因') + '</td>' +
       '<td class="row-actions">' +
         '<button type="button" class="btn-row-delete" data-act="delete" data-row-id="' + esc(row.row_id) + '" aria-label="刪除這列"' + lock + '>刪</button>' +
@@ -271,7 +273,7 @@
       : '';
     st.host.innerHTML =
       '<div class="sheet-wrap"><table class="sheet"><thead><tr>' +
-      '<th>空間</th><th>工種</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th>說明</th><th>改價原因</th><th class="row-actions"></th>' +
+      '<th>空間</th><th>工種</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th>對客說明</th><th>內部備註</th><th>改價原因</th><th class="row-actions"></th>' +
       '</tr></thead><tbody>' +
       st.rows.map(function (r) { return rowHtml(r, st); }).join('') +
       '</tbody></table></div>' +

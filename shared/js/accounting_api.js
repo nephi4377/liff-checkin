@@ -2041,6 +2041,8 @@ var AccountingApi = (function () {
         catalog_key: payload.catalog_key || '',
         custom: !!payload.custom,
         item: payload.item,
+        customer_note: payload.customer_note,
+        internal_note: payload.internal_note,
         note: payload.note,
         unit: payload.unit,
         tab: payload.tab,
@@ -2049,6 +2051,7 @@ var AccountingApi = (function () {
         amount: payload.amount,
         parent_line_id: payload.parent_line_id || '',
         price_override_reason: payload.price_override_reason || '',
+        draft_revision: payload.draft_revision,
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
@@ -2059,12 +2062,15 @@ var AccountingApi = (function () {
         project_no: payload.project_no,
         line_id: payload.line_id,
         item: payload.item,
+        customer_note: payload.customer_note,
+        internal_note: payload.internal_note,
         note: payload.note,
         unit: payload.unit,
         tab: payload.tab,
         qty: payload.qty,
         unit_price: payload.unit_price,
         price_override_reason: payload.price_override_reason || '',
+        draft_revision: payload.draft_revision,
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
@@ -2074,6 +2080,7 @@ var AccountingApi = (function () {
         action: 'quote_editor_delete_line',
         project_no: payload.project_no,
         line_id: payload.line_id,
+        draft_revision: payload.draft_revision,
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
@@ -2084,6 +2091,7 @@ var AccountingApi = (function () {
         project_no: payload.project_no,
         zone_id: payload.zone_id,
         line_ids: payload.line_ids || [],
+        draft_revision: payload.draft_revision,
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },
@@ -2117,6 +2125,16 @@ var AccountingApi = (function () {
         action: 'quote_editor_send',
         project_no: projectNo,
         version_note: opts.version_note || '',
+        draft_revision: opts.draft_revision,
+        userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
+      }));
+    },
+    quoteEditorApprove: function (sessionOrToken, projectNo, opts) {
+      opts = opts || {};
+      return postMaterial(buildMaterialPostBody_(sessionOrToken, {
+        action: 'quote_editor_approve',
+        project_no: projectNo,
+        quote_id: opts.quote_id || '',
         userId: (sessionOrToken && sessionOrToken.auth && sessionOrToken.auth.user_id) || ''
       }));
     },

@@ -3,8 +3,8 @@
  * 純資料，不碰畫面、不碰功能開關。客人用的列由 toCustomerLines 去掉單價。
  */
 (function (root) {
-  var COLS = ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason'];
-  var BLANK_COLS = ['tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason'];
+  var COLS = ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'customer_note', 'internal_note', 'price_override_reason'];
+  var BLANK_COLS = ['tab', 'item', 'unit', 'qty', 'unit_price', 'customer_note', 'internal_note', 'price_override_reason'];
   var seq = 1;
 
   function roundMoney(n) {
@@ -43,7 +43,8 @@
       unit: '',
       qty: '',
       unit_price: '',
-      note: '',
+      customer_note: '',
+      internal_note: '',
       price_override_reason: '',
       catalog_key: '',
       catalog_price: null,
@@ -161,8 +162,10 @@
     '單位': 'unit',
     '數量': 'qty',
     '單價': 'unit_price',
-    '說明': 'note',
-    '備註': 'note',
+    '說明': 'customer_note',
+    '對客說明': 'customer_note',
+    '內部備註': 'internal_note',
+    '備註': 'internal_note',
     '改價原因': 'price_override_reason'
   };
 
@@ -528,7 +531,9 @@
       custom: custom,
       catalog_key: row.catalog_key || '',
       item: String(row.item || '').trim(),
-      note: String(row.note || '').trim(),
+      customer_note: String(row.customer_note || '').trim(),
+      internal_note: String(row.internal_note || '').trim(),
+      note: String(row.internal_note || row.note || '').trim(),
       unit: String(row.unit || '').trim(),
       qty: row.qty,
       unit_price: row.unit_price,
@@ -619,7 +624,8 @@
         unit: row.unit,
         qty: row.qty,
         amount: amount,
-        note: row.note || '',
+        customer_note: row.customer_note || '',
+        note: row.customer_note || '',
         tab: row.tab || '',
         is_cabinet: !!row.is_cabinet && !isChild(row),
         line_subtotal: amount,
@@ -659,7 +665,9 @@
       unit: ln.unit || '',
       qty: ln.qty == null ? '' : ln.qty,
       unit_price: ln.unit_price == null ? '' : ln.unit_price,
-      note: ln.note || '',
+      customer_note: ln.customer_note || '',
+      internal_note: ln.internal_note || (ln.note && !ln.customer_note ? ln.note : '') || '',
+      note: ln.customer_note || '',
       price_override_reason: ln.price_override_reason || '',
       catalog_key: ln.catalog_key || '',
       custom: !!ln.custom,
@@ -715,7 +723,7 @@
       var local = r.line_id ? localById[String(r.line_id)] : null;
       if (local && local.dirty) {
         var merged = Object.assign({}, r);
-        ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason', 'catalog_key', 'custom'].forEach(function (k) {
+        ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'customer_note', 'internal_note', 'price_override_reason', 'catalog_key', 'custom'].forEach(function (k) {
           if (local[k] != null) merged[k] = local[k];
         });
         merged.dirty = true;
