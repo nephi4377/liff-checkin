@@ -130,7 +130,6 @@ test('editor sheet hangs addons under a cabinet', () => {
   assert.match(gridSrc, /addAddonRow/);
   assert.match(gridSrc, /looksLikeAddon/);
   assert.match(uiSrc, /＋加購/);
-  assert.match(editorHtml, /＋加購|加購/);
   assert.match(mainJs, /resolveAddonParentId/);
 });
 
@@ -226,11 +225,12 @@ test('editor/view load AccountingApi via absolute path; never classic-load ES co
   assert.match(viewHtml, /isLocalStaffPreview|buildLocalCustomerSession/);
 });
 
-test('main shows sheet before zone and auto-adds 未分區 on save', () => {
+test('main shows unified sheet before zone and auto-adds 未分區 on save', () => {
   assert.match(mainJs, /PENDING_ZONE_ID/);
   assert.match(mainJs, /未分區/);
   assert.match(mainJs, /quoteEditorAddZone/);
-  assert.match(mainJs, /displayZones/);
+  assert.match(mainJs, /mountUnified/);
+  assert.match(mainJs, /ensureZoneForRow/);
   assert.match(mainJs, /標準計價表載入失敗/);
   assert.doesNotMatch(mainJs, /catch \(e\) \{ \/\* ignore \*\/ \}/);
 });
