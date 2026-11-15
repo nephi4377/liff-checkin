@@ -220,13 +220,14 @@
 
   function suggestItems(catalog, query, tab, limit) {
     var q = String(query || '').trim().toLowerCase();
-    if (!q) return [];
+    var tabSet = String(tab || '').trim();
     var max = limit || 8;
+    if (!q && !tabSet) return [];
     var list = (catalog || []).filter(function (it) {
+      if (tabSet && String(it.tab || '') !== tabSet) return false;
+      if (!q) return true;
       var hay = (String(it.item || '') + ' ' + String(it.note || '')).toLowerCase();
-      if (hay.indexOf(q) === -1) return false;
-      if (tab && String(it.tab || '') !== String(tab)) return false;
-      return true;
+      return hay.indexOf(q) !== -1;
     });
     return list.slice(0, max).map(cleanHit);
   }

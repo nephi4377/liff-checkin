@@ -127,6 +127,9 @@ test('catalog suggestion fills unit and price and stays editable', () => {
     catalog_key: '油漆工程::矽酸鈣天花板'
   }];
   assert.deepEqual(grid.suggestItems(catalog, '', '', 8), []);
+  const tabAll = grid.suggestItems(catalog, '', '木作工程', 8);
+  assert.equal(tabAll.length, 1);
+  assert.equal(tabAll[0].item, '開門高衣櫃-D60H240內');
   const hits = grid.suggestItems(catalog, '衣櫃', '', 8);
   assert.equal(hits.length, 1);
   assert.equal(hits[0].item, '開門高衣櫃-D60H240內');
@@ -415,7 +418,11 @@ test('local draft keeps unsaved rows and hides rows removed on this browser', ()
 test('editor page wires the sheet; customer page still has no unit price column', () => {
   assert.match(editorHtml, /quote-editor-grid\.js/);
   assert.match(editorHtml, /quote-editor-grid-ui\.js/);
-  assert.match(editorHtml, /成本與廠商價不會出現/);
+  assert.match(editorHtml, /未分區/);
+  assert.match(editorHtml, /（自填）/);
+  assert.match(gridUi, /data-suggest-custom/);
+  assert.match(gridUi, /（自填）/);
+  assert.match(gridUi, /ensureZone/);
   assert.match(gridUi, /btn-row-delete/);
   assert.match(gridUi, /btn-row-insert/);
   assert.match(gridUi, /btn-row-up/);

@@ -5,6 +5,8 @@
 (function (root) {
   var DEFAULT_TRADES = ['木作工程', '系統櫃', '油漆工程', '水電工程', '泥作工程', '其他', '自訂'];
   var DEFAULT_UNITS = ['式', '尺', '台尺', '坪', '才', '組', '個', '米', '樘', '處', '片', '只'];
+  var ITEM_SUGGEST_LIMIT = 120;
+  var CUSTOM_ITEM_LABEL = '（自填）';
   var states = {};
   var zoneSubs = {};
   var catalog = [];
@@ -201,7 +203,7 @@
       st.rows.map(rowHtml).join('') +
       '</tbody></table></div>' +
       '<div class="trade-sum hint"></div>' +
-      '<p class="hint">點格子就能打。Tab、方向鍵換格，Enter 往下。最底空白列打字會再留一列。從 Excel 貼上多列也可以。改完會自動暫存。抽屜、拉籃按「＋加購」。</p>' +
+      '<p class="hint">點格子就能打。工種選好後點品名可看細項清單（含「' + esc(CUSTOM_ITEM_LABEL) + '」）；也可直接打字。Tab、Enter 換格。抽屜、拉籃按「＋加購」自填。</p>' +
       undo +
       '<div class="suggest" hidden></div>';
     publish(st);
@@ -220,11 +222,19 @@
     var rowId = input.getAttribute('data-row-id');
     var idx = findIdx(st.rows, rowId);
     var row = st.rows[idx];
-    var hits = grid().suggestItems(catalog, q, row && row.tab, 8);
-    if (!hits.length) { box.hidden = true; box.innerHTML = ''; return; }
-    box.innerHTML = hits.map(function (hit, i) {
+    var tab = row && row.tab;
+    var hits = grid().suggestItems(catalog, q, tab, ITEM_SUGGEST_LIMIT);
+    var html = '<button type="button" class="suggest-custom" data-suggest-custom="1">' +
+      esc(CUSTOM_ITEM_LABEL) + '（名稱、單位、單價手打）</button>';
+    if (!tab && !hits.length) {
+      html += '<div class="hint" style="padding:0.45rem">請先選工種，或點「' + esc(CUSTOM_ITEM_LABEL) + '」手打</div>';
+    } else if (tab && !hits.length && q) {
+      html += '<div class="hint" style="padding:0.45rem">此工種沒有符合「' + esc(q) + '」的細項，可選自填</div>';
+    }
+    html += hits.map(function (hit, i) {
       return '<button type="button" data-suggest="' + i + '">' + esc(hit.item) + '｜' + esc(hit.unit) + '｜' + money(hit.price) + '</button>';
     }).join('');
+    box.innerHTML = html;
     box.hidden = false;
     box._hits = hits;
     box._rowId = rowId;
@@ -255,6 +265,20 @@
     (plan.localDeletes || []).forEach(function (id) { rememberDelete(st, id); });
     var blocked = null;
     plan.ops.forEach(function (op) { if (op.type === 'blocked' && !blocked) blocked = op; });
+    var needsZone = plan.ops.some(function (op) {
+      return op.type === 'add' || op.type === 'update' || op.type === 'delete' || op.type === 'reorder';
+    });
+    if (needsZone && st.ctx.ensureZone) {
+      try {
+        await st.ctx.ensureZone(st);
+      } catch (eZone) {
+        writeDraft(st);
+        if (st.ctx.onStatus) {
+          st.ctx.onStatus((eZone && eZone.message) || '建立空間失敗，這台仍留著剛才打的', 'err');
+        }
+        return;
+      }
+    }
     writeDraft(st);
     if (st.ctx.localOnly) {
       st.rows.forEach(function (row) {
@@ -348,6 +372,11 @@
 
   function bind(st) {
     var host = st.host;
+    host.addEventListener('focusin', function (e) {
+      var el = e.target;
+      if (!el || !el.getAttribute) return;
+      if (el.getAttribute('data-field') === 'item' && el.tagName === 'INPUT') showSuggest(st, el);
+    });
     host.addEventListener('compositionstart', function () { st.composing = true; });
     host.addEventListener('compositionend', function (e) {
       st.composing = false;
@@ -379,6 +408,10 @@
       render(st, { rowId: rowId, field: field, start: caret });
     }
     if (field === 'item' && el.tagName === 'INPUT') showSuggest(st, el);
+    if (field === 'tab') {
+      var itemEl = st.host.querySelector('[data-row-id="' + rowId + '"][data-field="item"]');
+      if (itemEl && document.activeElement === itemEl) showSuggest(st, itemEl);
+    }
     schedule(st);
   }
 
@@ -433,6 +466,20 @@
   function onClick(st, e) {
     var btn = e.target && e.target.closest ? e.target.closest('button') : null;
     if (!btn || !st.host.contains(btn)) return;
+    if (btn.getAttribute('data-suggest-custom') != null) {
+      var boxCustom = st.host.querySelector('.suggest');
+      var rowIdCustom = boxCustom && boxCustom._rowId;
+      var idxCustom = findIdx(st.rows, rowIdCustom);
+      if (idxCustom >= 0) {
+        st.rows[idxCustom].catalog_key = '';
+        st.rows[idxCustom].catalog_price = null;
+        st.rows[idxCustom].custom = true;
+        schedule(st);
+        if (st.ctx.onStatus) st.ctx.onStatus('已選自填：名稱、單位、數量、單價請手打', 'ok');
+      }
+      if (boxCustom) { boxCustom.hidden = true; boxCustom.innerHTML = ''; }
+      return;
+    }
     var suggest = btn.getAttribute('data-suggest');
     if (suggest != null) {
       var box = st.host.querySelector('.suggest');
@@ -518,6 +565,27 @@
     bind(st);
   }
 
+  function migrateDraftZone(ctx, fromId, toId) {
+    if (!fromId || !toId || fromId === toId) return;
+    var store = storage();
+    if (!store) return;
+    var all = readAll(ctx);
+    if (!all || !all.zones) return;
+    if (all.zones[fromId]) {
+      all.zones[toId] = all.zones[fromId];
+      delete all.zones[fromId];
+      try { store.setItem(draftKey(ctx), JSON.stringify(all)); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function renamedZoneState(oldId, newZone) {
+    var st = states[oldId];
+    if (!st || !newZone) return;
+    st.zone = newZone;
+    states[newZone.zone_id] = st;
+    if (oldId !== newZone.zone_id) delete states[oldId];
+  }
+
   function setCatalog(items) {
     catalog = items || [];
   }
@@ -568,7 +636,9 @@
     pendingDeletes: pendingDeletes,
     clearTotals: clearTotals,
     recalcFees: recalcFees,
-    refreshSheets: refreshSheets
+    refreshSheets: refreshSheets,
+    migrateDraftZone: migrateDraftZone,
+    renamedZoneState: renamedZoneState
   };
   root.QuoteEditorGridUi = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
