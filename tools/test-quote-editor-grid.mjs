@@ -101,6 +101,7 @@ test('paste tab-separated rows, including a header, and keep one blank row', () 
 test('paste starts at the focused column when there is no header', () => {
   const rows = grid.ensureTrailingBlank([]);
   const itemCol = grid.COLS.indexOf('item');
+  assert.equal(grid.COLS[0], 'zone_id');
   grid.applyClipboard(rows, 0, itemCol, '抽屜組\t組\t1\t1200');
   assert.equal(rows[0].item, '抽屜組');
   assert.equal(rows[0].unit, '組');
@@ -418,11 +419,14 @@ test('local draft keeps unsaved rows and hides rows removed on this browser', ()
 test('editor page wires the sheet; customer page still has no unit price column', () => {
   assert.match(editorHtml, /quote-editor-grid\.js/);
   assert.match(editorHtml, /quote-editor-grid-ui\.js/);
-  assert.match(editorHtml, /未分區/);
+  assert.match(editorHtml, /同一張表/);
+  assert.match(gridUi, /mountUnified/);
+  assert.match(gridUi, /zone_id/);
+  assert.match(gridUi, /＋新空間/);
   assert.match(editorHtml, /（自填）/);
   assert.match(gridUi, /data-suggest-custom/);
   assert.match(gridUi, /（自填）/);
-  assert.match(gridUi, /ensureZone/);
+  assert.match(gridUi, /ensureZoneForRow/);
   assert.match(gridUi, /btn-row-delete/);
   assert.match(gridUi, /btn-row-insert/);
   assert.match(gridUi, /btn-row-up/);

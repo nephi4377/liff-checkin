@@ -3,7 +3,8 @@
  * 純資料，不碰畫面、不碰功能開關。客人用的列由 toCustomerLines 去掉單價。
  */
 (function (root) {
-  var COLS = ['tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason'];
+  var COLS = ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason'];
+  var BLANK_COLS = ['tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason'];
   var seq = 1;
 
   function roundMoney(n) {
@@ -36,6 +37,7 @@
       parent_line_id: '',
       parent_row_id: '',
       depth: 0,
+      zone_id: '',
       tab: '',
       item: '',
       unit: '',
@@ -60,8 +62,9 @@
 
   function isBlank(row) {
     if (!row) return true;
-    for (var i = 0; i < COLS.length; i++) {
-      if (String(row[COLS[i]] == null ? '' : row[COLS[i]]).trim() !== '') return false;
+    for (var i = 0; i < BLANK_COLS.length; i++) {
+      var key = BLANK_COLS[i];
+      if (String(row[key] == null ? '' : row[key]).trim() !== '') return false;
     }
     return true;
   }
@@ -97,7 +100,7 @@
     row.dirty = true;
     var added = false;
     if (index === rows.length - 1 && !isBlank(row)) {
-      rows.push(blankRow());
+      rows.push(blankRow({ zone_id: row.zone_id || '' }));
       added = true;
     }
     return { rows: rows, added: added };
@@ -149,6 +152,7 @@
   }
 
   var HEADER_MAP = {
+    '空間': 'zone_id',
     '工種': 'tab',
     '項目': 'item',
     '品名': 'item',
@@ -358,6 +362,7 @@
       parent_row_id: parent.row_id,
       parent_line_id: parent.line_id || '',
       depth: 1,
+      zone_id: parent.zone_id || '',
       tab: parent.tab || '',
       unit: '組',
       custom: true
@@ -398,12 +403,13 @@
   function insertBelow(rows, index) {
     var row = rows[index];
     if (!row) return { rows: rows, index: -1 };
-    var neu = blankRow();
+    var neu = blankRow({ zone_id: row.zone_id || '' });
     var at = index + 1;
     if (isChild(row)) {
       neu.parent_row_id = row.parent_row_id;
       neu.parent_line_id = row.parent_line_id;
       neu.depth = 1;
+      neu.zone_id = row.zone_id || '';
       neu.tab = row.tab || '';
       neu.unit = row.unit || '組';
       neu.custom = true;
@@ -460,6 +466,9 @@
     });
     var bj = bi + dir;
     if (bi < 0 || bj < 0 || bj >= blocks.length) return rows;
+    var zA = String(rows[blocks[bi].start].zone_id || '');
+    var zB = String(rows[blocks[bj].start].zone_id || '');
+    if (zA !== zB) return rows;
     var pieces = blocks.map(function (blk) { return rows.slice(blk.start, blk.start + blk.len); });
     var swap = pieces[bi];
     pieces[bi] = pieces[bj];
@@ -533,6 +542,7 @@
     opts = opts || {};
     var ops = [];
     var seen = {};
+    var orderByZone = {};
     (rows || []).forEach(function (row) {
       if (row && row.line_id) seen[String(row.line_id)] = true;
       if (!isPersistable(row)) return;
@@ -544,46 +554,56 @@
         });
         return;
       }
+      var zid = String(row.zone_id || opts.defaultZoneId || '').trim();
       if (!row.line_id) {
         var pid = parentLineId(row, rows);
         if ((row.parent_row_id || row.parent_line_id) && !pid) {
           ops.push({ type: 'wait', row_id: row.row_id, message: '等櫃子先存好，再存加購' });
           return;
         }
-        ops.push({ type: 'add', row_id: row.row_id, payload: toPayload(row, rows) });
+        ops.push({ type: 'add', row_id: row.row_id, zone_id: zid, payload: toPayload(row, rows) });
         return;
       }
       if (row.dirty) {
-        ops.push({ type: 'update', row_id: row.row_id, payload: toPayload(row, rows) });
+        ops.push({ type: 'update', row_id: row.row_id, zone_id: zid, payload: toPayload(row, rows) });
       }
     });
+    var serverByZone = opts.serverLineIdsByZone || {};
+    if ((!serverByZone || !Object.keys(serverByZone).length) && opts.serverLineIds) {
+      serverByZone = { '': opts.serverLineIds };
+    }
     var localDeletes = [];
-    (opts.serverLineIds || []).forEach(function (id) {
-      if (id && !seen[String(id)]) localDeletes.push(id);
+    Object.keys(serverByZone).forEach(function (zKey) {
+      (serverByZone[zKey] || []).forEach(function (id) {
+        if (id && !seen[String(id)]) localDeletes.push(id);
+      });
     });
-    var order = [];
     (rows || []).forEach(function (row) {
       var id = row && row.line_id ? String(row.line_id) : '';
       if (!id || id.indexOf('local-') === 0 || !seen[id]) return;
-      order.push(id);
+      var zid = String(row.zone_id || opts.defaultZoneId || '').trim();
+      if (!orderByZone[zid]) orderByZone[zid] = [];
+      orderByZone[zid].push(id);
     });
-    var serverOrder = [];
-    (opts.serverLineIds || []).forEach(function (id) {
-      var key = String(id || '');
-      if (!key || key.indexOf('local-') === 0) return;
-      serverOrder.push(key);
-    });
-    var sameOrder = order.length === serverOrder.length;
-    if (sameOrder) {
-      for (var oi = 0; oi < order.length; oi++) {
-        if (order[oi] !== serverOrder[oi]) sameOrder = false;
-      }
-    }
     localDeletes.forEach(function (id) {
       if (!id || String(id).indexOf('local-') === 0) return;
       ops.push({ type: 'delete', line_id: id });
     });
-    if (!sameOrder) ops.push({ type: 'reorder', line_ids: order });
+    Object.keys(orderByZone).forEach(function (zid) {
+      var order = orderByZone[zid];
+      var serverOrder = (serverByZone[zid] || []).filter(function (id) {
+        return id && String(id).indexOf('local-') !== 0;
+      });
+      var sameOrder = order.length === serverOrder.length;
+      if (sameOrder) {
+        for (var oi = 0; oi < order.length; oi++) {
+          if (order[oi] !== serverOrder[oi]) sameOrder = false;
+        }
+      }
+      if (!sameOrder && order.length) {
+        ops.push({ type: 'reorder', zone_id: zid, line_ids: order });
+      }
+    });
     return { ops: ops, localDeletes: localDeletes };
   }
 
@@ -627,12 +647,13 @@
     return tops;
   }
 
-  function rowFromLine(ln, depth, parentRow) {
+  function rowFromLine(ln, depth, parentRow, zoneId) {
     return blankRow({
       line_id: ln.line_id || '',
       parent_line_id: ln.parent_line_id || (parentRow && parentRow.line_id) || '',
       parent_row_id: parentRow ? parentRow.row_id : '',
       depth: depth,
+      zone_id: zoneId || (parentRow && parentRow.zone_id) || '',
       tab: ln.tab || '',
       item: ln.item || '',
       unit: ln.unit || '',
@@ -650,16 +671,30 @@
   }
 
   function rowsFromZone(zone) {
+    var zid = zone && zone.zone_id ? String(zone.zone_id) : '';
     var rows = [];
     ((zone && zone.lines) || []).forEach(function (ln) {
-      var top = rowFromLine(ln, 0, null);
+      var top = rowFromLine(ln, 0, null, zid);
       rows.push(top);
       (ln.addons || []).forEach(function (ad) {
-        rows.push(rowFromLine(ad, 1, top));
+        rows.push(rowFromLine(ad, 1, top, zid));
       });
     });
     ensureTrailingBlank(rows);
     return rows;
+  }
+
+  function flattenZonesToRows(zones, mergeFn) {
+    var flat = [];
+    (zones || []).forEach(function (zone) {
+      var chunk = rowsFromZone(zone);
+      while (chunk.length && isBlank(chunk[chunk.length - 1])) chunk.pop();
+      if (mergeFn) chunk = mergeFn(zone, chunk);
+      flat = flat.concat(chunk);
+    });
+    ensureTrailingBlank(flat);
+    trimExtraTrailing(flat);
+    return flat;
   }
 
   function mergeLocal(serverRows, localRows, deletedIds) {
@@ -680,7 +715,7 @@
       var local = r.line_id ? localById[String(r.line_id)] : null;
       if (local && local.dirty) {
         var merged = Object.assign({}, r);
-        ['tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason', 'catalog_key', 'custom'].forEach(function (k) {
+        ['zone_id', 'tab', 'item', 'unit', 'qty', 'unit_price', 'note', 'price_override_reason', 'catalog_key', 'custom'].forEach(function (k) {
           if (local[k] != null) merged[k] = local[k];
         });
         merged.dirty = true;
@@ -719,6 +754,7 @@
     blankRow: blankRow,
     isBlank: isBlank,
     ensureTrailingBlank: ensureTrailingBlank,
+    trimExtraTrailing: trimExtraTrailing,
     touchCell: touchCell,
     commitEnter: commitEnter,
     moveCell: moveCell,
@@ -737,6 +773,7 @@
     autosavePlan: autosavePlan,
     toCustomerLines: toCustomerLines,
     rowsFromZone: rowsFromZone,
+    flattenZonesToRows: flattenZonesToRows,
     mergeLocal: mergeLocal
   };
 

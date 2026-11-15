@@ -7,6 +7,8 @@
   var DEFAULT_UNITS = ['式', '尺', '台尺', '坪', '才', '組', '個', '米', '樘', '處', '片', '只'];
   var ITEM_SUGGEST_LIMIT = 120;
   var CUSTOM_ITEM_LABEL = '（自填）';
+  var UNIFIED_KEY = '__unified__';
+  var NEW_ZONE_OPT = '__qe_new_zone__';
   var states = {};
   var zoneSubs = {};
   var catalog = [];
@@ -50,6 +52,22 @@
     return out;
   }
 
+  function zoneSelectHtml(row, ctx) {
+    var value = row.zone_id == null ? '' : String(row.zone_id);
+    var zones = (ctx && ctx.getZones && ctx.getZones()) || [];
+    var lock = sheetEditable ? '' : ' disabled';
+    var html = '<select data-row-id="' + esc(row.row_id) + '" data-field="zone_id" aria-label="空間"' + lock + '>';
+    html += '<option value=""></option>';
+    zones.forEach(function (z) {
+      if (!z || !z.zone_id) return;
+      html += '<option value="' + esc(String(z.zone_id)) + '"' +
+        (String(z.zone_id) === value ? ' selected' : '') + '>' + esc(z.name || z.zone_id) + '</option>';
+    });
+    html += '<option value="' + esc(NEW_ZONE_OPT) + '">＋新空間</option>';
+    html += '</select>';
+    return html;
+  }
+
   function selectHtml(row, field, label, options) {
     var value = row[field] == null ? '' : String(row[field]);
     var html = '<select data-row-id="' + esc(row.row_id) + '" data-field="' + field + '" aria-label="' + esc(label) + '"' +
@@ -68,7 +86,7 @@
       '" value="' + esc(value) + '"' + (sheetEditable ? '' : ' disabled') + ' />';
   }
 
-  function rowHtml(row) {
+  function rowHtml(row, st) {
     var child = isChild(row);
     var cabinet = !child && (row.is_cabinet || (grid() && grid().looksLikeCabinet(row.item, row.unit, row.note)));
     var amountText = String(row.item || '').trim() ? money(row.amount) : '';
@@ -78,7 +96,11 @@
     var addonBtn = cabinet
       ? '<button type="button" class="btn-addon-add" data-act="addon" data-row-id="' + esc(row.row_id) + '" aria-label="加購"' + lock + '>＋加購</button>'
       : '';
+    var zoneCell = child
+      ? '<span class="hint">' + esc(resolveZoneLabel(row, st && st.ctx)) + '</span>'
+      : zoneSelectHtml(row, st && st.ctx);
     return '<tr class="' + (child ? 'addon' : '') + '" data-row-id="' + esc(row.row_id) + '">' +
+      '<td>' + zoneCell + '</td>' +
       '<td>' + selectHtml(row, 'tab', '工種', trades) + '</td>' +
       '<td class="item-cell">' + textHtml(row, 'item', child ? '加購名稱' : '品名') + '</td>' +
       '<td>' + selectHtml(row, 'unit', '單位', DEFAULT_UNITS) + '</td>' +
@@ -119,12 +141,46 @@
     try { return JSON.parse(store.getItem(draftKey(ctx)) || 'null'); } catch (e2) { return null; }
   }
 
+  function resolveZoneLabel(row, ctx) {
+    var zid = String(row && row.zone_id || '').trim();
+    if (!zid) return '—';
+    var zones = (ctx && ctx.getZones && ctx.getZones()) || [];
+    var hit = zones.filter(function (z) { return String(z.zone_id) === zid; })[0];
+    return (hit && hit.name) || zid;
+  }
+
   function writeDraft(st) {
     var store = storage();
     if (!store) return;
     var all = readAll(st.ctx) || { zones: {} };
     if (!all.zones) all.zones = {};
-    all.zones[st.zone.zone_id] = { rows: st.rows, deletedLineIds: st.deleted || [] };
+    if (st.unified) {
+      var byZone = {};
+      (st.rows || []).forEach(function (r) {
+        if (!r || grid().isBlank(r)) return;
+        var zid = String(r.zone_id || '').trim() || (st.ctx.pendingZoneId || '__unset__');
+        if (!byZone[zid]) byZone[zid] = [];
+        byZone[zid].push(r);
+      });
+      Object.keys(byZone).forEach(function (zid) {
+        var chunk = byZone[zid].slice();
+        grid().ensureTrailingBlank(chunk);
+        grid().trimExtraTrailing(chunk);
+        all.zones[zid] = {
+          rows: chunk,
+          deletedLineIds: ((st.deletedByZone && st.deletedByZone[zid]) || []).slice()
+        };
+      });
+      if (st.deletedByZone) {
+        Object.keys(st.deletedByZone).forEach(function (zid) {
+          if (byZone[zid]) return;
+          if (!all.zones[zid]) all.zones[zid] = { rows: [grid().blankRow({ zone_id: zid })], deletedLineIds: [] };
+          all.zones[zid].deletedLineIds = (st.deletedByZone[zid] || []).slice();
+        });
+      }
+    } else {
+      all.zones[st.zone.zone_id] = { rows: st.rows, deletedLineIds: st.deleted || [] };
+    }
     try { store.setItem(draftKey(st.ctx), JSON.stringify(all)); } catch (e) { /* 滿了就略過 */ }
   }
 
@@ -149,9 +205,18 @@
       any = true;
       pretax += Number(zoneSubs[id].zone_subtotal) || 0;
     });
+    if (!any) {
+      var ust = states[UNIFIED_KEY];
+      if (ust && ust.lastResult) {
+        pretax = Number(ust.lastResult.zone_subtotal) || 0;
+        any = true;
+      }
+    }
     if (!any) return;
-    var sample = null;
-    Object.keys(states).forEach(function (id) { if (!sample) sample = states[id]; });
+    var sample = states[UNIFIED_KEY] || null;
+    if (!sample) {
+      Object.keys(states).forEach(function (id) { if (!sample) sample = states[id]; });
+    }
     var totals = grid().totalsFromPretax(pretax, sample ? feesOf(sample) : {});
     if (sample && sample.ctx && sample.ctx.onTotals) sample.ctx.onTotals(totals);
   }
@@ -159,13 +224,21 @@
   function publish(st) {
     var result = grid().recalc(st.rows, feesOf(st));
     st.lastResult = result;
-    zoneSubs[st.zone.zone_id] = { zone_subtotal: result.zone_subtotal };
+    if (st.unified) {
+      zoneSubs[UNIFIED_KEY] = { zone_subtotal: result.zone_subtotal };
+    } else {
+      zoneSubs[st.zone.zone_id] = { zone_subtotal: result.zone_subtotal };
+    }
     var sumEl = st.host.querySelector('.trade-sum');
     if (sumEl) sumEl.textContent = summaryText(result);
     var card = st.host.parentElement;
     if (card) {
-      var title = card.querySelector('[data-zone-sub]');
-      if (title) title.textContent = '空間小計 ' + money(result.zone_subtotal);
+      var title = card.querySelector('[data-sheet-sub]');
+      if (title) title.textContent = '工項小計 ' + money(result.zone_subtotal);
+      if (!st.unified) {
+        var zsub = card.querySelector('[data-zone-sub]');
+        if (zsub) zsub.textContent = '空間小計 ' + money(result.zone_subtotal);
+      }
     }
     st.rows.forEach(function (row) {
       var cell = st.host.querySelector('[data-amount-for="' + row.row_id + '"]');
@@ -198,20 +271,27 @@
       : '';
     st.host.innerHTML =
       '<div class="sheet-wrap"><table class="sheet"><thead><tr>' +
-      '<th>工種</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th>說明</th><th>改價原因</th><th class="row-actions"></th>' +
+      '<th>空間</th><th>工種</th><th>品名</th><th>單位</th><th>數量</th><th>單價</th><th>小計</th><th>說明</th><th>改價原因</th><th class="row-actions"></th>' +
       '</tr></thead><tbody>' +
-      st.rows.map(rowHtml).join('') +
+      st.rows.map(function (r) { return rowHtml(r, st); }).join('') +
       '</tbody></table></div>' +
       '<div class="trade-sum hint"></div>' +
-      '<p class="hint">點格子就能打。工種選好後點品名可看細項清單（含「' + esc(CUSTOM_ITEM_LABEL) + '」）；也可直接打字。Tab、Enter 換格。抽屜、拉籃按「＋加購」自填。</p>' +
+      '<p class="hint">空間可空或選「＋新空間」（請先在上方輸入名稱）。Tab 往右、Enter 往下；最底列 Enter 會加一列。可從 Excel 貼上多列。工種點品名可看細項（含「' + esc(CUSTOM_ITEM_LABEL) + '」）。</p>' +
       undo +
       '<div class="suggest" hidden></div>';
     publish(st);
     if (focus && focus.rowId) focusCell(st.host, focus.rowId, focus.field, focus.start);
   }
 
-  function rememberDelete(st, lineId) {
+  function rememberDelete(st, lineId, zoneId) {
     if (!lineId || String(lineId).indexOf('local-') === 0) return;
+    if (st.unified) {
+      var zid = String(zoneId || '').trim();
+      if (!st.deletedByZone) st.deletedByZone = {};
+      if (!st.deletedByZone[zid]) st.deletedByZone[zid] = [];
+      if (st.deletedByZone[zid].indexOf(lineId) < 0) st.deletedByZone[zid].push(lineId);
+      return;
+    }
     if (st.deleted.indexOf(lineId) < 0) st.deleted.push(lineId);
   }
 
@@ -260,21 +340,56 @@
     }
   }
 
+  async function resolveRowZone(st, row) {
+    if (!row || !st.ctx.ensureZoneForRow) return row.zone_id;
+    try {
+      row.zone_id = await st.ctx.ensureZoneForRow(row);
+      return row.zone_id;
+    } catch (e) {
+      throw e;
+    }
+  }
+
   async function flush(st) {
-    var plan = grid().autosavePlan(st.rows, { serverLineIds: st.serverIds });
-    (plan.localDeletes || []).forEach(function (id) { rememberDelete(st, id); });
+    var plan = grid().autosavePlan(st.rows, {
+      serverLineIdsByZone: st.unified ? st.serverIdsByZone : null,
+      serverLineIds: st.unified ? null : st.serverIds
+    });
+    (plan.localDeletes || []).forEach(function (id) {
+      var zid = '';
+      if (st.unified && st.serverIdsByZone) {
+        Object.keys(st.serverIdsByZone).forEach(function (z) {
+          if ((st.serverIdsByZone[z] || []).indexOf(id) >= 0) zid = z;
+        });
+      }
+      rememberDelete(st, id, st.unified ? zid : undefined);
+    });
     var blocked = null;
     plan.ops.forEach(function (op) { if (op.type === 'blocked' && !blocked) blocked = op; });
     var needsZone = plan.ops.some(function (op) {
-      return op.type === 'add' || op.type === 'update' || op.type === 'delete' || op.type === 'reorder';
+      return op.type === 'add' || op.type === 'update';
     });
-    if (needsZone && st.ctx.ensureZone) {
+    if (needsZone && st.ctx.ensureZoneForRow) {
+      for (var zi = 0; zi < st.rows.length; zi++) {
+        var rowZ = st.rows[zi];
+        if (!rowZ || !String(rowZ.item || '').trim()) continue;
+        try {
+          await resolveRowZone(st, rowZ);
+        } catch (eZone) {
+          writeDraft(st);
+          if (st.ctx.onStatus) {
+            st.ctx.onStatus((eZone && eZone.message) || '建立空間失敗，這台仍留著剛才打的', 'err');
+          }
+          return;
+        }
+      }
+    } else if (needsZone && st.ctx.ensureZone && !st.unified) {
       try {
         await st.ctx.ensureZone(st);
-      } catch (eZone) {
+      } catch (eZone2) {
         writeDraft(st);
         if (st.ctx.onStatus) {
-          st.ctx.onStatus((eZone && eZone.message) || '建立空間失敗，這台仍留著剛才打的', 'err');
+          st.ctx.onStatus((eZone2 && eZone2.message) || '建立空間失敗，這台仍留著剛才打的', 'err');
         }
         return;
       }
@@ -301,55 +416,87 @@
       st.rows.forEach(function (r) { if (r.row_id === op.row_id) row = r; });
       if (!row || !st.ctx.saveOp) continue;
       try {
+        var zid = op.zone_id || row.zone_id || (st.zone && st.zone.zone_id);
         var sent = {
           type: op.type,
           row_id: op.row_id,
           line_id: row.line_id,
-          zone_id: st.zone.zone_id,
+          zone_id: zid,
           payload: op.payload
         };
         var res = await st.ctx.saveOp(sent);
         if (res && res.line_id) row.line_id = res.line_id;
         row.dirty = false;
         row.saved_unit_price = row.unit_price;
-        if (row.line_id && st.serverIds.indexOf(row.line_id) < 0) st.serverIds.push(row.line_id);
+        if (row.line_id) {
+          if (st.unified) {
+            if (!st.serverIdsByZone[zid]) st.serverIdsByZone[zid] = [];
+            if (st.serverIdsByZone[zid].indexOf(row.line_id) < 0) st.serverIdsByZone[zid].push(row.line_id);
+          } else if (st.serverIds.indexOf(row.line_id) < 0) {
+            st.serverIds.push(row.line_id);
+          }
+        }
       } catch (e) {
         writeDraft(st);
         if (st.ctx.onStatus) st.ctx.onStatus((e && e.message) || '自動暫存失敗，這台仍留著剛才打的', 'err');
         return;
       }
     }
-    var structural = grid().autosavePlan(st.rows, { serverLineIds: st.serverIds });
+    var structural = grid().autosavePlan(st.rows, {
+      serverLineIdsByZone: st.unified ? st.serverIdsByZone : null,
+      serverLineIds: st.unified ? null : st.serverIds
+    });
     var deleteOps = structural.ops.filter(function (op) { return op.type === 'delete'; });
     for (var d = 0; d < deleteOps.length; d++) {
       var dop = deleteOps[d];
       try {
+        var dopZone = dop.zone_id;
+        if (!dopZone) {
+          st.rows.forEach(function (r) { if (r && r.line_id === dop.line_id) dopZone = r.zone_id; });
+        }
         if (st.ctx.saveOp) {
           await st.ctx.saveOp({
             type: 'delete',
             line_id: dop.line_id,
-            zone_id: st.zone.zone_id
+            zone_id: dopZone || (st.zone && st.zone.zone_id)
           });
         }
-        st.deleted = (st.deleted || []).filter(function (id) { return id !== dop.line_id; });
-        st.serverIds = (st.serverIds || []).filter(function (id) { return id !== dop.line_id; });
+        if (st.unified) {
+          Object.keys(st.deletedByZone || {}).forEach(function (zid) {
+            st.deletedByZone[zid] = (st.deletedByZone[zid] || []).filter(function (id) { return id !== dop.line_id; });
+          });
+          Object.keys(st.serverIdsByZone || {}).forEach(function (zid) {
+            st.serverIdsByZone[zid] = (st.serverIdsByZone[zid] || []).filter(function (id) { return id !== dop.line_id; });
+          });
+        } else {
+          st.deleted = (st.deleted || []).filter(function (id) { return id !== dop.line_id; });
+          st.serverIds = (st.serverIds || []).filter(function (id) { return id !== dop.line_id; });
+        }
       } catch (errDel) {
         writeDraft(st);
         if (st.ctx.onStatus) st.ctx.onStatus((errDel && errDel.message) || '刪除沒有存回報價，送出前會先擋住', 'err');
         return;
       }
     }
-    var after = grid().autosavePlan(st.rows, { serverLineIds: st.serverIds });
-    var reorder = null;
-    after.ops.forEach(function (op) { if (op.type === 'reorder' && !reorder) reorder = op; });
-    if (reorder && st.ctx.saveOp) {
+    var after = grid().autosavePlan(st.rows, {
+      serverLineIdsByZone: st.unified ? st.serverIdsByZone : null,
+      serverLineIds: st.unified ? null : st.serverIds
+    });
+    var reorders = after.ops.filter(function (op) { return op.type === 'reorder'; });
+    for (var ri = 0; ri < reorders.length; ri++) {
+      var reorder = reorders[ri];
+      if (!reorder || !st.ctx.saveOp) continue;
       try {
         await st.ctx.saveOp({
           type: 'reorder',
-          zone_id: st.zone.zone_id,
+          zone_id: reorder.zone_id || (st.zone && st.zone.zone_id),
           line_ids: reorder.line_ids
         });
-        st.serverIds = (reorder.line_ids || []).slice();
+        if (st.unified) {
+          st.serverIdsByZone[reorder.zone_id] = (reorder.line_ids || []).slice();
+        } else {
+          st.serverIds = (reorder.line_ids || []).slice();
+        }
       } catch (errRe) {
         writeDraft(st);
         if (st.ctx.onStatus) st.ctx.onStatus((errRe && errRe.message) || '順序沒有存回報價', 'err');
@@ -357,7 +504,13 @@
       }
     }
     writeDraft(st);
-    if (st.deleted.length && st.ctx.onStatus) {
+    var pendingDel = false;
+    if (st.unified) {
+      Object.keys(st.deletedByZone || {}).forEach(function (zid) {
+        if ((st.deletedByZone[zid] || []).length) pendingDel = true;
+      });
+    } else if ((st.deleted || []).length) pendingDel = true;
+    if (pendingDel && st.ctx.onStatus) {
       st.ctx.onStatus('有列還沒從報價刪掉，送出前會先擋住。', 'err');
       return;
     }
@@ -411,6 +564,24 @@
     if (field === 'tab') {
       var itemEl = st.host.querySelector('[data-row-id="' + rowId + '"][data-field="item"]');
       if (itemEl && document.activeElement === itemEl) showSuggest(st, itemEl);
+    }
+    if (field === 'zone_id' && el.value === NEW_ZONE_OPT) {
+      var prevZone = st.rows[idx].zone_id || '';
+      if (st.ctx.pickNewZone) {
+        st.ctx.pickNewZone(st, rowId).then(function (zid) {
+          st.rows[idx].zone_id = zid;
+          render(st, { rowId: rowId, field: 'tab' });
+          schedule(st);
+        }).catch(function (err) {
+          st.rows[idx].zone_id = prevZone;
+          render(st, { rowId: rowId, field: 'zone_id' });
+          if (st.ctx.onStatus) st.ctx.onStatus((err && err.message) || '新增空間失敗', 'err');
+        });
+      } else {
+        st.rows[idx].zone_id = prevZone;
+        render(st, { rowId: rowId, field: 'zone_id' });
+      }
+      return;
     }
     schedule(st);
   }
@@ -508,7 +679,9 @@
       var removed = grid().deleteRow(st.rows, idx);
       st.lastRemoved = removed.removed;
       if (removed.removed) {
-        (removed.removed.items || []).forEach(function (item) { rememberDelete(st, item.line_id); });
+        (removed.removed.items || []).forEach(function (item) {
+          rememberDelete(st, item.line_id, st.rows[idx] && st.rows[idx].zone_id);
+        });
       }
       render(st);
       schedule(st);
@@ -538,6 +711,71 @@
       schedule(st);
       if (st.ctx.onStatus) st.ctx.onStatus('已在櫃子下面加一列，名稱、數量、單價可自填', 'ok');
     }
+  }
+
+  function mountUnified(host, zones, ctx, preserveRows) {
+    if (!host || !grid()) return;
+    ctx = ctx || {};
+    var all = readAll(ctx);
+    var displayZones = (zones && zones.length) ? zones.slice() : [{
+      zone_id: ctx.pendingZoneId || '__qe_pending_zone__',
+      name: ctx.defaultZoneName || '未分區',
+      lines: [],
+      _pending: true
+    }];
+    var serverIdsByZone = {};
+    var deletedByZone = {};
+    var flat = preserveRows ? preserveRows.slice() : [];
+    if (!preserveRows) {
+      displayZones.forEach(function (zone) {
+        var draft = all && all.zones && all.zones[zone.zone_id];
+        var serverRows = grid().rowsFromZone(zone);
+        serverRows.forEach(function (r) { r.zone_id = zone.zone_id; });
+        var rows = draft ? grid().mergeLocal(serverRows, (draft.rows || []), draft.deletedLineIds || []) : serverRows;
+        rows.forEach(function (r) { if (!r.zone_id) r.zone_id = zone.zone_id; });
+        while (rows.length && grid().isBlank(rows[rows.length - 1])) rows.pop();
+        flat = flat.concat(rows);
+        serverIdsByZone[zone.zone_id] = collectIds(zone);
+        deletedByZone[zone.zone_id] = (draft && draft.deletedLineIds) ? draft.deletedLineIds.slice() : [];
+      });
+      grid().ensureTrailingBlank(flat);
+      grid().trimExtraTrailing(flat);
+    }
+    var st = {
+      host: host,
+      ctx: ctx,
+      rows: flat,
+      unified: true,
+      zones: displayZones,
+      serverIdsByZone: serverIdsByZone,
+      deletedByZone: deletedByZone,
+      lastRemoved: null,
+      timer: null,
+      composing: false
+    };
+    states[UNIFIED_KEY] = st;
+    host.classList.add('sheet-host');
+    render(st);
+    bind(st);
+  }
+
+  function peekUnifiedRows() {
+    var st = states[UNIFIED_KEY];
+    return st && st.rows ? st.rows.map(function (r) { return Object.assign({}, r); }) : null;
+  }
+
+  function isUnified() {
+    return !!states[UNIFIED_KEY];
+  }
+
+  function syncZonesFromStaff(ctx) {
+    var st = states[UNIFIED_KEY];
+    if (!st || !ctx || !ctx.getZones) return;
+    st.ctx = ctx;
+    st.zones = ctx.getZones() || [];
+    var active = false;
+    try { active = !!(document.activeElement && st.host.contains(document.activeElement)); } catch (e) { active = false; }
+    if (!active) render(st);
   }
 
   function mount(host, zone, ctx) {
@@ -603,7 +841,17 @@
 
   function pendingDeletes() {
     var all = [];
+    var unified = states[UNIFIED_KEY];
+    if (unified && unified.unified) {
+      Object.keys(unified.deletedByZone || {}).forEach(function (zid) {
+        (unified.deletedByZone[zid] || []).forEach(function (lineId) {
+          if (lineId && all.indexOf(lineId) < 0) all.push(lineId);
+        });
+      });
+      return all;
+    }
     Object.keys(states).forEach(function (id) {
+      if (id === UNIFIED_KEY) return;
       (states[id].deleted || []).forEach(function (lineId) {
         if (lineId && all.indexOf(lineId) < 0) all.push(lineId);
       });
@@ -616,21 +864,25 @@
   }
 
   function refreshSheets() {
-    Object.keys(states).forEach(function (id) {
-      var st = states[id];
-      var active = false;
-      try { active = !!(document.activeElement && st.host.contains(document.activeElement)); } catch (e) { active = false; }
-      if (active) return;
-      render(st);
-    });
+    var st = states[UNIFIED_KEY];
+    if (!st) return;
+    var active = false;
+    try { active = !!(document.activeElement && st.host.contains(document.activeElement)); } catch (e) { active = false; }
+    if (active) return;
+    render(st);
   }
 
   function recalcFees() {
-    Object.keys(states).forEach(function (id) { publish(states[id]); });
+    var st = states[UNIFIED_KEY];
+    if (st) publish(st);
   }
 
   var api = {
     mount: mount,
+    mountUnified: mountUnified,
+    peekUnifiedRows: peekUnifiedRows,
+    isUnified: isUnified,
+    syncZonesFromStaff: syncZonesFromStaff,
     setCatalog: setCatalog,
     setTrades: setTrades,
     pendingDeletes: pendingDeletes,

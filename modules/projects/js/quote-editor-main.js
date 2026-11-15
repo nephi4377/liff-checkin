@@ -128,11 +128,15 @@
     return order.map(function (tab) { return { tab: tab, lines: map[tab] }; });
   }
 
-  function renderZones() {
+  function quoteZones_() {
+    return (staffView && staffView.quote && staffView.quote.zones) || [];
+  }
+
+  function renderZones(preserveRows) {
     var box = $('zonesBox');
     if (!box) return;
     var sel = $('zoneSelect');
-    var zones = (staffView && staffView.quote && staffView.quote.zones) || [];
+    var zones = quoteZones_();
     if (sel) {
       var prevZone = sel.value || '';
       sel.innerHTML = zones.map(function (z) {
@@ -152,18 +156,12 @@
       lines: [],
       _pending: true
     }];
-    box.innerHTML = displayZones.map(function (z) {
-      var id = escapeHtml(z.zone_id);
-      return '<div class=\"card\" data-zone-card=\"' + id + '\">' +
-        '<div class=\"zone-title\">' + escapeHtml(z.name) +
-        ' <span class=\"hint\" data-zone-sub=\"' + id + '\"></span></div>' +
-        '<div class=\"sheet-host\" data-zone-host=\"' + id + '\"></div></div>';
-    }).join('');
-    if (!window.QuoteEditorGridUi) return;
-    displayZones.forEach(function (z) {
-      var host = box.querySelector('[data-zone-host=\"' + String(z.zone_id).replace(/\"/g, '') + '\"]');
-      if (host) QuoteEditorGridUi.mount(host, z, gridContext());
-    });
+    box.innerHTML = '<div class=\"card\"><div class=\"zone-title\">報價工項（單表）' +
+      ' <span class=\"hint\" data-sheet-sub></span></div>' +
+      '<div class=\"sheet-host\" data-unified-sheet></div></div>';
+    if (!window.QuoteEditorGridUi || !QuoteEditorGridUi.mountUnified) return;
+    var host = box.querySelector('[data-unified-sheet]');
+    if (host) QuoteEditorGridUi.mountUnified(host, displayZones, gridContext(), preserveRows);
   }
 
   function patchZoneCardDom(oldZoneId, newZone) {
@@ -186,6 +184,67 @@
         title.appendChild(span);
       }
     }
+  }
+
+  async function ensureZoneForRow(row) {
+    if (!row) return '';
+    var zid = String(row.zone_id || '').trim();
+    if (zid && zid !== PENDING_ZONE_ID && zid !== '__qe_new_zone__') return zid;
+    var zones = quoteZones_();
+    var existing = zones.filter(function (z) { return z.name === DEFAULT_ZONE_NAME; })[0];
+    if (existing) {
+      row.zone_id = existing.zone_id;
+      return existing.zone_id;
+    }
+    return createDefaultZone_(row);
+  }
+
+  async function createDefaultZone_(row) {
+    if (staffView && staffView.local_fixture) {
+      var localId = 'z-local-default';
+      var localZone = { zone_id: localId, name: DEFAULT_ZONE_NAME, lines: [] };
+      staffView.quote.zones = [localZone];
+      if (window.QuoteEditorGridUi && QuoteEditorGridUi.migrateDraftZone) {
+        QuoteEditorGridUi.migrateDraftZone(gridContext(), PENDING_ZONE_ID, localId);
+      }
+      if (row) row.zone_id = localId;
+      if (QuoteEditorGridUi.syncZonesFromStaff) QuoteEditorGridUi.syncZonesFromStaff(gridContext());
+      setStatus('已自動建立空間「' + DEFAULT_ZONE_NAME + '」', 'ok');
+      return localId;
+    }
+    var res = await AccountingApi.quoteEditorAddZone(session, projectNo, DEFAULT_ZONE_NAME);
+    if (!res || !res.success) throw new Error((res && res.message) || '自動建立空間失敗');
+    staffView = res.staff;
+    var created = quoteZones_().filter(function (z) { return z.name === DEFAULT_ZONE_NAME; })[0] || quoteZones_()[0];
+    if (!created) throw new Error('自動建立空間後仍無空間');
+    if (window.QuoteEditorGridUi && QuoteEditorGridUi.migrateDraftZone) {
+      QuoteEditorGridUi.migrateDraftZone(gridContext(), PENDING_ZONE_ID, created.zone_id);
+    }
+    if (row) row.zone_id = created.zone_id;
+    if (QuoteEditorGridUi.syncZonesFromStaff) QuoteEditorGridUi.syncZonesFromStaff(gridContext());
+    setStatus('已自動建立空間「' + DEFAULT_ZONE_NAME + '」', 'ok');
+    return created.zone_id;
+  }
+
+  async function pickNewZoneForRow(st, rowId) {
+    var name = ($('zoneName') && $('zoneName').value || '').trim();
+    if (!name) throw new Error('請先在上方輸入新空間名稱，再選「＋新空間」');
+    if (staffView && staffView.local_fixture) {
+      var newId = 'z-local-' + Date.now();
+      var neu = { zone_id: newId, name: name, lines: [] };
+      staffView.quote.zones = quoteZones_().concat([neu]);
+      if ($('zoneName')) $('zoneName').value = '';
+      if (QuoteEditorGridUi.syncZonesFromStaff) QuoteEditorGridUi.syncZonesFromStaff(gridContext());
+      return newId;
+    }
+    var res = await AccountingApi.quoteEditorAddZone(session, projectNo, name);
+    if (!res || !res.success) throw new Error((res && res.message) || '新增空間失敗');
+    staffView = res.staff;
+    if ($('zoneName')) $('zoneName').value = '';
+    var created = quoteZones_().filter(function (z) { return z.name === name; }).pop() || quoteZones_().slice(-1)[0];
+    if (QuoteEditorGridUi.syncZonesFromStaff) QuoteEditorGridUi.syncZonesFromStaff(gridContext());
+    setStatus('已加入空間「' + name + '」', 'ok');
+    return created && created.zone_id;
   }
 
   async function ensureZoneForSheet(st) {
@@ -327,7 +386,19 @@
       onStatus: function (msg, kind) { if (msg) setStatus(msg, kind); },
       onTotals: showLiveTotals,
       saveOp: saveGridOp,
-      ensureZone: ensureZoneForSheet
+      ensureZone: ensureZoneForSheet,
+      ensureZoneForRow: ensureZoneForRow,
+      pickNewZone: pickNewZoneForRow,
+      getZones: function () {
+        var zones = quoteZones_();
+        return zones.length ? zones : [{
+          zone_id: PENDING_ZONE_ID,
+          name: DEFAULT_ZONE_NAME,
+          _pending: true
+        }];
+      },
+      pendingZoneId: PENDING_ZONE_ID,
+      defaultZoneName: DEFAULT_ZONE_NAME
     };
   }
 
@@ -387,8 +458,10 @@
   }
 
   function applyStaff(res, okMsg) {
+    var preserve = window.QuoteEditorGridUi && QuoteEditorGridUi.peekUnifiedRows
+      ? QuoteEditorGridUi.peekUnifiedRows() : null;
     staffView = res.staff;
-    renderZones();
+    renderZones(preserve);
     fillFeesFromStaff();
     renderTotals();
     renderVersions();
