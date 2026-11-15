@@ -69,8 +69,13 @@
     };
   }
 
+  function useEmptyZonesFixture() {
+    return qs('empty_zones') === '1';
+  }
+
   function fixtureStaffPayload(projectNo) {
     var pno = String(projectNo || TEST_PROJECT).trim() || TEST_PROJECT;
+    var zones = useEmptyZonesFixture() ? [] : null;
     var quote = {
       quote_id: 'qe-local-' + pno,
       project_no: pno,
@@ -78,7 +83,7 @@
       status: 'draft',
       quote_date: '2026-11-10',
       fees_received: { measure: 3000, startup: 10000, planning: 0 },
-      zones: [{
+      zones: zones || [{
         zone_id: 'z-local-1',
         name: '客廳',
         lines: [{

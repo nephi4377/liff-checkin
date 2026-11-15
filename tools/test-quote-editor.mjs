@@ -96,8 +96,8 @@ test('designer console has 線上報價 tab and cost-guard print', () => {
 test('editor and view pages wire sanitize and no customer unit price', () => {
   assert.match(editorHtml, /quote-editor-sanitize\.js/);
   assert.match(editorHtml, /quote-editor-grid\.js/);
-  assert.match(editorHtml, /成本與廠商價不會出現/);
-  assert.match(editorHtml, /客人頁也不顯示單價/);
+  assert.match(editorHtml, /成本不會出現在客人頁/);
+  assert.match(editorHtml, /（自填）/);
   assert.match(viewHtml, /QuoteEditorSanitize/);
   assert.match(mainJs, /payloadContainsForbiddenToken/);
   assert.match(mainJs, /groupLinesByTrade/);
@@ -130,7 +130,7 @@ test('editor sheet hangs addons under a cabinet', () => {
   assert.match(gridSrc, /addAddonRow/);
   assert.match(gridSrc, /looksLikeAddon/);
   assert.match(uiSrc, /＋加購/);
-  assert.match(editorHtml, /抽屜/);
+  assert.match(editorHtml, /＋加購|加購/);
   assert.match(mainJs, /resolveAddonParentId/);
 });
 
@@ -224,6 +224,20 @@ test('editor/view load AccountingApi via absolute path; never classic-load ES co
   assert.match(mainJs, /AccountingApi 未載入/);
   assert.match(mainJs, /isLocalStaffPreview/);
   assert.match(viewHtml, /isLocalStaffPreview|buildLocalCustomerSession/);
+});
+
+test('main shows sheet before zone and auto-adds 未分區 on save', () => {
+  assert.match(mainJs, /PENDING_ZONE_ID/);
+  assert.match(mainJs, /未分區/);
+  assert.match(mainJs, /quoteEditorAddZone/);
+  assert.match(mainJs, /displayZones/);
+  assert.match(mainJs, /標準計價表載入失敗/);
+  assert.doesNotMatch(mainJs, /catch \(e\) \{ \/\* ignore \*\/ \}/);
+});
+
+test('local fixture supports empty_zones query for manual QA', () => {
+  assert.match(localJs, /empty_zones/);
+  assert.match(localJs, /useEmptyZonesFixture/);
 });
 
 test('local fixture is gated to project 999 only', () => {

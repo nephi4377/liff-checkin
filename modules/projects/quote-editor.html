@@ -128,6 +128,7 @@
     }
     .suggest button { display: block; width: 100%; text-align: left; border-radius: 0; margin: 0; }
     .suggest button:hover { background: #f3f7f8; }
+    .suggest button.suggest-custom { font-weight: 600; background: #eef6f8; }
     .trade-sum { margin-top: 0.45rem; }
     @media (max-width: 720px) {
       .edit-grid { grid-template-columns: 1fr 1fr; }
@@ -149,7 +150,7 @@
         <input id="zoneName" placeholder="例如：客廳" />
         <button type="button" id="btnAddZone">加入空間</button>
       </div>
-      <p class="hint">直接點下面表格的格子打字。工種、單位用選的；品名可打，也可從標準計價點一筆帶入單位和單價，之後仍可改。抽屜、拉籃按該櫃的「＋加購」，名稱、數量、單價可自填。改價要寫原因。格子會自動暫存。成本與廠商價不會出現在客人頁或列印；客人頁也不顯示單價。</p>
+      <p class="hint">沒先建空間也能直接填表（第一次存列會自動建立「未分區」）。工種選好後點品名可看細項清單或選「（自填）」手打。選細項會帶入單位與單價，之後仍可改。櫃體加購按「＋加購」自填。改價要寫原因。成本不會出現在客人頁。</p>
     </div>
 
     <div id="zonesBox"></div>
@@ -190,8 +191,8 @@
     </div>
     <pre id="preflightBox" class="card hint" hidden></pre>
   </div>
-  <script src="/modules/projects/js/quote-editor-grid.js?v=quote-sheet-2"></script>
-  <script src="/modules/projects/js/quote-editor-grid-ui.js?v=quote-sheet-2"></script>
-  <script src="/modules/projects/js/quote-editor-main.js?v=quote-sheet-2"></script>
+  <script src="/modules/projects/js/quote-editor-grid.js?v=quote-sheet-3"></script>
+  <script src="/modules/projects/js/quote-editor-grid-ui.js?v=quote-sheet-3"></script>
+  <script src="/modules/projects/js/quote-editor-main.js?v=quote-sheet-3"></script>
 </body>
 </html>

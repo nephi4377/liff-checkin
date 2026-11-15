@@ -8,6 +8,9 @@
   var busy = false;
   var tradeTabs = [];
   var addonParentId = '';
+  var PENDING_ZONE_ID = '__qe_pending_zone__';
+  var DEFAULT_ZONE_NAME = '未分區';
+  var ensureZoneInflight = null;
 
   function $(id) { return document.getElementById(id); }
   function qs(name) {
@@ -143,11 +146,13 @@
     if ($('customParent')) fillCustomParentOptions(sel && sel.value);
 
     if (window.QuoteEditorGridUi) QuoteEditorGridUi.clearTotals();
-    if (!zones.length) {
-      box.innerHTML = '<div class=\"card hint\">尚未新增空間。先在上方加入一個空間（例如客廳）。</div>';
-      return;
-    }
-    box.innerHTML = zones.map(function (z) {
+    var displayZones = zones.length ? zones : [{
+      zone_id: PENDING_ZONE_ID,
+      name: DEFAULT_ZONE_NAME,
+      lines: [],
+      _pending: true
+    }];
+    box.innerHTML = displayZones.map(function (z) {
       var id = escapeHtml(z.zone_id);
       return '<div class=\"card\" data-zone-card=\"' + id + '\">' +
         '<div class=\"zone-title\">' + escapeHtml(z.name) +
@@ -155,10 +160,79 @@
         '<div class=\"sheet-host\" data-zone-host=\"' + id + '\"></div></div>';
     }).join('');
     if (!window.QuoteEditorGridUi) return;
-    zones.forEach(function (z) {
+    displayZones.forEach(function (z) {
       var host = box.querySelector('[data-zone-host=\"' + String(z.zone_id).replace(/\"/g, '') + '\"]');
       if (host) QuoteEditorGridUi.mount(host, z, gridContext());
     });
+  }
+
+  function patchZoneCardDom(oldZoneId, newZone) {
+    var esc = String(oldZoneId).replace(/\"/g, '');
+    var card = document.querySelector('[data-zone-card=\"' + esc + '\"]');
+    if (!card) return;
+    card.setAttribute('data-zone-card', String(newZone.zone_id));
+    var host = card.querySelector('[data-zone-host]');
+    if (host) host.setAttribute('data-zone-host', String(newZone.zone_id));
+    var title = card.querySelector('.zone-title');
+    if (title) {
+      var sub = title.querySelector('[data-zone-sub]');
+      title.textContent = '';
+      title.appendChild(document.createTextNode(newZone.name + ' '));
+      if (sub) title.appendChild(sub);
+      else {
+        var span = document.createElement('span');
+        span.className = 'hint';
+        span.setAttribute('data-zone-sub', String(newZone.zone_id));
+        title.appendChild(span);
+      }
+    }
+  }
+
+  async function ensureZoneForSheet(st) {
+    if (!st || !st.zone || !st.zone._pending) return st.zone.zone_id;
+    if (ensureZoneInflight) {
+      await ensureZoneInflight;
+      return st.zone.zone_id;
+    }
+    var oldId = st.zone.zone_id;
+    ensureZoneInflight = (async function () {
+      try {
+        if (staffView && staffView.local_fixture) {
+          var localId = 'z-local-default';
+          var localZone = { zone_id: localId, name: DEFAULT_ZONE_NAME, lines: [] };
+          staffView.quote.zones = [localZone];
+          if (window.QuoteEditorGridUi && QuoteEditorGridUi.migrateDraftZone) {
+            QuoteEditorGridUi.migrateDraftZone(gridContext(), oldId, localId);
+          }
+          st.zone = localZone;
+          patchZoneCardDom(oldId, localZone);
+          if (window.QuoteEditorGridUi && QuoteEditorGridUi.renamedZoneState) {
+            QuoteEditorGridUi.renamedZoneState(oldId, localZone);
+          }
+          setStatus('已自動建立空間「' + DEFAULT_ZONE_NAME + '」', 'ok');
+          return localId;
+        }
+        var res = await AccountingApi.quoteEditorAddZone(session, projectNo, DEFAULT_ZONE_NAME);
+        if (!res || !res.success) throw new Error((res && res.message) || '自動建立空間失敗');
+        staffView = res.staff;
+        var zones = (staffView.quote && staffView.quote.zones) || [];
+        var real = zones.filter(function (z) { return z.name === DEFAULT_ZONE_NAME; })[0] || zones[0];
+        if (!real) throw new Error('自動建立空間後仍無空間');
+        if (window.QuoteEditorGridUi && QuoteEditorGridUi.migrateDraftZone) {
+          QuoteEditorGridUi.migrateDraftZone(gridContext(), oldId, real.zone_id);
+        }
+        st.zone = real;
+        patchZoneCardDom(oldId, real);
+        if (window.QuoteEditorGridUi && QuoteEditorGridUi.renamedZoneState) {
+          QuoteEditorGridUi.renamedZoneState(oldId, real);
+        }
+        setStatus('已自動建立空間「' + DEFAULT_ZONE_NAME + '」', 'ok');
+        return real.zone_id;
+      } finally {
+        ensureZoneInflight = null;
+      }
+    })();
+    return ensureZoneInflight;
   }
 
   function readFeeInputs() {
@@ -252,7 +326,8 @@
       getFees: readFeeInputs,
       onStatus: function (msg, kind) { if (msg) setStatus(msg, kind); },
       onTotals: showLiveTotals,
-      saveOp: saveGridOp
+      saveOp: saveGridOp,
+      ensureZone: ensureZoneForSheet
     };
   }
 
@@ -373,6 +448,7 @@
 
   async function loadTradeTabs(preferFixture) {
     var sel = $('tradeSelect');
+    var catalogErr = '';
     try {
       var local = localHelper_();
       var res = null;
@@ -382,14 +458,18 @@
         try {
           res = await AccountingApi.quoteEditorCatalog(session, projectNo, {});
         } catch (eCat) {
+          catalogErr = (eCat && eCat.message) || '標準計價表載入失敗';
           if (local && local.canUseLocalFixture(projectNo)) res = local.fixtureCatalogPayload();
-          else return;
+          else throw eCat;
         }
         if ((!res || !res.success) && local && local.canUseLocalFixture(projectNo)) {
+          catalogErr = catalogErr || ((res && res.message) || '標準計價表載入失敗');
           res = local.fixtureCatalogPayload();
         }
       }
-      if (!res || !res.success) return;
+      if (!res || !res.success) {
+        throw new Error((res && res.message) || catalogErr || '標準計價表載入失敗');
+      }
       tradeTabs = res.tabs || [];
       if (sel) {
         var prev = sel.value || '';
@@ -404,25 +484,47 @@
       if (useFixtureItems && local && local.fixtureCatalogItems) {
         items = local.fixtureCatalogItems();
       } else if (tradeTabs.length) {
+        var failedTabs = [];
         var lists = await Promise.all(tradeTabs.map(function (tab) {
-          return AccountingApi.quoteEditorCatalog(session, projectNo, { tab: tab }).catch(function () { return null; });
+          return AccountingApi.quoteEditorCatalog(session, projectNo, { tab: tab }).catch(function () {
+            failedTabs.push(tab);
+            return null;
+          });
         }));
         lists.forEach(function (one) {
           if (one && one.success && one.items) items = items.concat(one.items);
         });
+        if (failedTabs.length) {
+          catalogErr = catalogErr || ('部分工種細項載入失敗：' + failedTabs.join('、'));
+        }
         if (!items.length && local && local.canUseLocalFixture(projectNo) && local.fixtureCatalogItems) {
           items = local.fixtureCatalogItems();
         }
       }
       if (typeof QuoteEditorSanitize !== 'undefined' && items.length) {
         var leaked = QuoteEditorSanitize.payloadContainsForbiddenToken(items);
-        if (leaked) items = [];
+        if (leaked) {
+          items = [];
+          catalogErr = catalogErr || ('價目表含禁止欄位 ' + leaked + '，已擋下載入');
+        }
       }
       if (window.QuoteEditorGridUi) {
-        if (items.length) QuoteEditorGridUi.setCatalog(items);
+        QuoteEditorGridUi.setCatalog(items);
         if (QuoteEditorGridUi.refreshSheets) QuoteEditorGridUi.refreshSheets();
       }
-    } catch (e) { /* ignore */ }
+      if (!items.length) {
+        setStatus(catalogErr || '標準計價細項是空的，可手打自填', 'err');
+      } else if (catalogErr) {
+        setStatus(catalogErr + '（其餘工種仍可選細項）', 'err');
+      }
+    } catch (e) {
+      tradeTabs = [];
+      if (window.QuoteEditorGridUi) {
+        QuoteEditorGridUi.setCatalog([]);
+        if (QuoteEditorGridUi.refreshSheets) QuoteEditorGridUi.refreshSheets();
+      }
+      setStatus((e && e.message) || '標準計價表載入失敗，仍可手打自填', 'err');
+    }
   }
 
   async function addZone() {
