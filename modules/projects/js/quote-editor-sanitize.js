@@ -7,7 +7,8 @@
     'cost', 'cost_unit', 'cost_price', 'cost_total', 'internal_cost',
     'vendor_price', 'vendor', 'supplier_price', 'designer_price',
     'margin', 'profit', 'markup',
-    '成本', '廠商價', '廠商', '成本單價', '成本合計'
+    '成本', '廠商價', '廠商', '成本單價', '成本合計',
+    'internal_note'
   ];
 
   function isForbiddenKey(key) {
@@ -59,7 +60,8 @@
     var lineSubtotal = line.line_subtotal != null
       ? Math.round(Number(line.line_subtotal) || 0)
       : amount + addons.reduce(function (s, a) { return s + (Number(a.amount) || 0); }, 0);
-    return stripForbiddenDeep({
+    var note = String(line.customer_note != null ? line.customer_note : '').trim();
+    var out = stripForbiddenDeep({
       line_id: line.line_id,
       custom: !!line.custom,
       tab: line.tab || '',
@@ -67,12 +69,14 @@
       unit: line.unit,
       qty: line.qty,
       amount: amount,
-      note: line.note || '',
+      note: note,
       parent_line_id: line.parent_line_id || '',
       is_cabinet: !!line.is_cabinet,
       line_subtotal: lineSubtotal,
       addons: addons
     });
+    if (line.billing_label) out.billing_label = String(line.billing_label);
+    return out;
   }
 
   function toCustomerQuote(quote) {
@@ -123,7 +127,10 @@
       notes: quote.notes || '',
       can_confirm: !!quote.can_confirm,
       confirmed_at: quote.confirmed_at || '',
-      sent_at: quote.sent_at || ''
+      sent_at: quote.sent_at || '',
+      valid_until: quote.valid_until || '',
+      validity_days: quote.validity_days,
+      expired: !!quote.expired
     });
   }
 

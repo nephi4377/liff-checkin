@@ -32,15 +32,39 @@
   function setBusy(on) {
     busy = !!on;
     ['btnAddZone', 'btnSearch', 'btnPreflight', 'btnPrint', 'btnRefresh',
-      'btnSaveFees', 'btnSend', 'btnNewVersion', 'btnAddCustom', 'btnSaveCustom'].forEach(function (id) {
+      'btnSaveFees', 'btnSend', 'btnApprove', 'btnNewVersion', 'btnAddCustom', 'btnSaveCustom'].forEach(function (id) {
       var b = $(id);
       if (b) b.disabled = busy;
     });
   }
 
   function statusLabel(st) {
-    var map = { draft: '草稿', sent: '已送出', confirmed: '客人已確認' };
+    var map = {
+      draft: '草稿',
+      pending_approval: '待核准',
+      sent: '已核准（客人可見）',
+      confirmed: '客人已確認'
+    };
     return map[st] || st || '—';
+  }
+
+  function draftRevision_() {
+    var q = staffView && staffView.quote;
+    return q && q.draft_revision != null ? q.draft_revision : 1;
+  }
+
+  function withDraftRevision_(payload) {
+    payload = payload || {};
+    payload.draft_revision = draftRevision_();
+    return payload;
+  }
+
+  function handleConflict_(res) {
+    if (res && res.conflict) {
+      setStatus((res.message || '版本衝突') + '（請按重新載入）', 'err');
+      return true;
+    }
+    return false;
   }
 
   function escapeHtml(s) {
@@ -323,12 +347,14 @@
     if (!op) return {};
     if (op.type !== 'delete' && op.type !== 'reorder' && !op.payload) return {};
     if (op.type === 'add') {
-      var res = await AccountingApi.quoteEditorAddLine(session, {
+      var res = await AccountingApi.quoteEditorAddLine(session, withDraftRevision_({
         project_no: projectNo,
         zone_id: op.zone_id,
         catalog_key: op.payload.catalog_key || '',
         custom: !!op.payload.custom,
         item: op.payload.item,
+        customer_note: op.payload.customer_note,
+        internal_note: op.payload.internal_note,
         note: op.payload.note,
         unit: op.payload.unit,
         tab: op.payload.tab,
@@ -336,40 +362,50 @@
         unit_price: op.payload.unit_price,
         parent_line_id: op.payload.parent_line_id || '',
         price_override_reason: op.payload.price_override_reason || ''
-      });
+      }));
+      if (handleConflict_(res)) throw new Error(res.message || '版本衝突');
       if (!res || !res.success) throw new Error((res && res.message) || '儲存失敗');
+      if (res.staff) applyStaff(res, '');
       return { line_id: res.line && res.line.line_id };
     }
     if (op.type === 'update') {
-      var res2 = await AccountingApi.quoteEditorUpdateLine(session, {
+      var res2 = await AccountingApi.quoteEditorUpdateLine(session, withDraftRevision_({
         project_no: projectNo,
         line_id: op.line_id,
         item: op.payload.item,
+        customer_note: op.payload.customer_note,
+        internal_note: op.payload.internal_note,
         note: op.payload.note,
         unit: op.payload.unit,
         tab: op.payload.tab,
         qty: op.payload.qty,
         unit_price: op.payload.unit_price,
         price_override_reason: op.payload.price_override_reason || ''
-      });
+      }));
+      if (handleConflict_(res2)) throw new Error(res2.message || '版本衝突');
       if (!res2 || !res2.success) throw new Error((res2 && res2.message) || '儲存失敗');
+      if (res2.staff) applyStaff(res2, '');
       return { line_id: op.line_id };
     }
     if (op.type === 'delete') {
-      var resDel = await AccountingApi.quoteEditorDeleteLine(session, {
+      var resDel = await AccountingApi.quoteEditorDeleteLine(session, withDraftRevision_({
         project_no: projectNo,
         line_id: op.line_id
-      });
+      }));
+      if (handleConflict_(resDel)) throw new Error(resDel.message || '版本衝突');
       if (!resDel || !resDel.success) throw new Error((resDel && resDel.message) || '刪除失敗');
+      if (resDel.staff) applyStaff(resDel, '');
       return { line_id: op.line_id };
     }
     if (op.type === 'reorder') {
-      var resRe = await AccountingApi.quoteEditorReorderLines(session, {
+      var resRe = await AccountingApi.quoteEditorReorderLines(session, withDraftRevision_({
         project_no: projectNo,
         zone_id: op.zone_id,
         line_ids: op.line_ids || []
-      });
+      }));
+      if (handleConflict_(resRe)) throw new Error(resRe.message || '版本衝突');
       if (!resRe || !resRe.success) throw new Error((resRe && resRe.message) || '排序失敗');
+      if (resRe.staff) applyStaff(resRe, '');
       return {};
     }
     return {};
@@ -469,6 +505,8 @@
     var flag = staffView.feature_enabled ? '正式開放中' : (staffView.project_allowed ? '測試案可用' : '未開放');
     $('headerSub').textContent = '案號 ' + projectNo + '｜版本 v' + (q.version || 1) +
       '｜' + statusLabel(q.status) + '｜' + flag;
+    var btnAp = $('btnApprove');
+    if (btnAp) btnAp.hidden = !(staffView && staffView.can_approve);
     setStatus(okMsg || '已更新', 'ok');
   }
 
@@ -797,7 +835,8 @@
     setBusy(true);
     try {
       var res = await AccountingApi.quoteEditorSend(session, projectNo, {
-        version_note: ($('versionNote') && $('versionNote').value) || ''
+        version_note: ($('versionNote') && $('versionNote').value) || '',
+        draft_revision: draftRevision_()
       });
       if (!res || !res.success) {
         var box = $('preflightBox');
@@ -816,13 +855,27 @@
           throw new Error('送出資料仍含單價，已擋下');
         }
       }
-      applyStaff(res, '已送出給客人（此版鎖定）');
+      applyStaff(res, '已送交核准（店長或老闆核准後客人才看得到）');
     } catch (e) {
       setStatus((e && e.message) || '送出失敗', 'err');
     } finally {
       setBusy(false);
     }
   }
+
+  async function approveQuote() {
+  if (!window.confirm('核准後客人才能看到這版報價，確定核准？')) return;
+  setBusy(true);
+  try {
+    var res = await AccountingApi.quoteEditorApprove(session, projectNo, {});
+    if (!res || !res.success) throw new Error((res && res.message) || '核准失敗');
+    applyStaff(res, '已核准，客人現在可以查看');
+  } catch (e) {
+    setStatus((e && e.message) || '核准失敗', 'err');
+  } finally {
+    setBusy(false);
+  }
+}
 
   async function newVersion() {
     setBusy(true);
@@ -913,7 +966,13 @@
       }).join('');
       var t = print.totals || {};
       var f = print.fees_received || {};
-      w.document.write('<html><head><title>報價列印</title></head><body style=\"font-family:sans-serif;padding:16px\">' +
+      var wmStyle = print.is_draft || print.watermark
+        ? '@media print{body::before{content:\"' + escapeHtml(print.watermark || '草稿') +
+          '\";position:fixed;top:40%;left:10%;font-size:72px;color:rgba(160,0,0,0.18);transform:rotate(-25deg);z-index:9999;}}'
+        : '';
+      w.document.write('<html><head><title>報價列印</title><style>' + wmStyle + '</style></head>' +
+        '<body style=\"font-family:sans-serif;padding:16px\">' +
+        (print.is_draft ? '<p style=\"color:#a33\"><strong>草稿</strong>（尚未送交核准）</p>' : '') +
         '<h2>工程報價單</h2><div>案號 ' + escapeHtml(print.project_no || projectNo) + '</div>' +
         zonesHtml +
         '<p>未稅 ' + money(t.pretax) + '｜稅 ' + money(t.tax) + '｜含稅 ' + money(t.with_tax) + '</p>' +
@@ -962,6 +1021,7 @@
   watchFees();
   if ($('btnSaveFees')) $('btnSaveFees').onclick = saveFees;
   if ($('btnSend')) $('btnSend').onclick = sendQuote;
+  if ($('btnApprove')) $('btnApprove').onclick = approveQuote;
   if ($('btnNewVersion')) $('btnNewVersion').onclick = newVersion;
   if ($('btnAddCustom')) $('btnAddCustom').onclick = function () {
     if ($('customBox')) $('customBox').hidden = !$('customBox').hidden;
