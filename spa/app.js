@@ -620,6 +620,11 @@ const App = {
             const auth = {};
             if (idToken) auth.liff_id_token = idToken;
             if (uid) auth.user_id = uid;
+            // LIFF token 過期時只剩 user_id：附 hub_gate_ticket（accounting-gas HubUserIdGate）；取不到照常送出
+            const hubGate = window.HubGateTicket;
+            if (uid && hubGate && typeof hubGate.attach === 'function') {
+                await hubGate.attach(auth, { liffToken: idToken, action: 'vendor_payment_list' });
+            }
             const tasks = [];
             if (perm >= 3) {
                 tasks.push(
