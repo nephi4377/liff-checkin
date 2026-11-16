@@ -220,8 +220,84 @@ var AccountingApi = (function () {
     if (timeoutMs === undefined && body && body.action === 'ledger_review_bundle') {
       ms = 90000;
     }
-    return postToUrl_(GAS_API, body, ms, '會計');
+    var payload = await withHubGateTicket_(body);
+    return postToUrl_(GAS_API, payload, ms, '會計');
   }
+
+  /** 同目錄 hub_gate_ticket.js（頁面沒先載時動態補載，不必每頁加 script） */
+  var HUB_GATE_LIB_FILE = 'hub_gate_ticket.js?v=1';
+  var hubGateLibSrc_ = (function () {
+    try {
+      if (typeof document === 'undefined') return '';
+      var cur = document.currentScript && document.currentScript.src;
+      if (!cur) {
+        var el = document.querySelector('script[src*="accounting_api.js"]');
+        cur = el && el.src;
+      }
+      return cur ? new URL(HUB_GATE_LIB_FILE, cur).href : '';
+    } catch (eSrc) {
+      return '';
+    }
+  })();
+  var hubGateLibPromise_ = null;
+  var hubGateLibWarned_ = false;
+
+  function currentHubGateLib_() {
+    var lib = (typeof window !== 'undefined' && window.HubGateTicket) ||
+      (typeof HubGateTicket !== 'undefined' ? HubGateTicket : null);
+    return lib && typeof lib.attach === 'function' ? lib : null;
+  }
+
+  function loadHubGateLib_() {
+    var ready = currentHubGateLib_();
+    if (ready) return Promise.resolve(ready);
+    if (hubGateLibPromise_) return hubGateLibPromise_;
+    hubGateLibPromise_ = new Promise(function (resolve) {
+      if (!hubGateLibSrc_ || typeof document === 'undefined' || !document.createElement) {
+        resolve(null);
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = hubGateLibSrc_;
+      s.async = true;
+      s.onload = function () { resolve(currentHubGateLib_()); };
+      s.onerror = function () { resolve(null); };
+      (document.head || document.documentElement).appendChild(s);
+    }).then(function (lib) {
+      if (!lib) hubGateLibPromise_ = null;
+      return lib;
+    });
+    return hubGateLibPromise_;
+  }
+
+  /**
+   * 主控台身分只帶 user_id／operatorUserId 時附 hub_gate_ticket（accounting-gas HubUserIdGate）。
+   * 取不到票照常送出（audit 期間不可擋使用者）；不改呼叫端傳入的 body。
+   */
+  async function withHubGateTicket_(body) {
+    if (!body || typeof body !== 'object') return body;
+    var auth = body.auth && typeof body.auth === 'object' ? body.auth : null;
+    var uid = (auth && auth.user_id) || body.user_id || body.operatorUserId;
+    if (!uid) return body;
+    try {
+      var lib = await loadHubGateLib_();
+      if (!lib) {
+        if (!hubGateLibWarned_) {
+          hubGateLibWarned_ = true;
+          console.warn('[HubGateTicket][WARN] hub_gate_ticket.js 未載入，會計請求不附 hub_gate_ticket（audit 期間照常送出）');
+        }
+        return body;
+      }
+      var copy = Object.assign({}, body);
+      if (auth) copy.auth = Object.assign({}, auth);
+      return await lib.attach(copy);
+    } catch (eGate) {
+      console.warn('[HubGateTicket][WARN] 附票失敗，照常送出：', (eGate && eGate.message) || eGate);
+      return body;
+    }
+  }
+
+  if (hubGateLibSrc_) loadHubGateLib_();
 
   function buildHubAuthFromOperator_(hubOp) {
     if (!hubOp || !hubOp.userId) return null;
