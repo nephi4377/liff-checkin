@@ -341,10 +341,34 @@
 
 ---
 
+## 9.5 主控台登入憑證 hub_gate_ticket（2026-11-16）
+
+從主控台進會計時，請求只帶使用者編號；會計後端要另一張「主控台登入憑證」才能確認真的是本人（Backend_GAS #377；後端目前只記警告、不擋）。
+
+**人怎麼走**
+
+1. 員工在 LINE 開主控台 → 進會計（或主控台首頁讀款項待辦）。
+2. 會計頁送出請求前，先看本分頁有沒有還沒過期的憑證；有就直接附上。
+3. 沒有 → 向主控台要 LINE 登入憑證 → 拿去換一張約 2 分鐘的憑證 → 附上送出。
+4. 換不到（主控台 LINE 登入過期、換票失敗、太慢）→ **照常送出**，瀏覽器 console 留警告；1 分鐘內不再重試。
+
+| 白話（上列步驟） | 程式對照（開發用） |
+|---|---|
+| 送出前附憑證 | `AccountingApi.post()` → `withHubGateTicket_`；`HubGateTicket.attach(body)` |
+| 本分頁快取 | `sessionStorage` `tanxin_hub_gate_ticket_v1`（依票內 `exp`，到期前 20 秒換新） |
+| 向主控台要 LINE 登入憑證 | `postMessage` `request_hub_liff_token` → `hub_liff_token`（`spa/app.js`） |
+| 換憑證 | project-console POST `accounting_hub_gate_ticket`（`liff_id_token`） |
+| 換不到照常送出 | console `[HubGateTicket][WARN] reason=…`；退避 `tanxin_hub_gate_ticket_fail_v1` 60 秒 |
+
+**呼叫端**：`shared/js/hub_gate_ticket.js`（`accounting_api.js` 沒先載時會自動補載）；`spa/app.js` 款項待辦；`tools/sketchup-render-studio/app.js`。後端驗證 `accounting-gas/core/HubUserIdGate.js`。
+
+---
+
 ## 10. 變更紀錄
 
 | 日期 | 變更 |
 |------|------|
+| 2026-11-16 | v1.9.13：§9.5 主控台只帶使用者編號的會計請求附 `hub_gate_ticket`（快取到期前、失敗照常送出＋console WARN）。前端 only，無 clasp。 |
 | 2026-10-30 | v1.9.12：團隊工作總覽讀 `HubRefCache` 後正規化權限字串 2／3、排除離職；篩完空則 API（避免離職被標缺交）。 |
 | 2026-10-30 | v1.9.11：總監人事筆記讀 `HubRefCache` 後排除廠商／離職／權限≥5；篩完空則 API；**本頁不寫回**共用 `employees`（demo 不污染）。 |
 | 2026-10-30 | v1.9.10：出勤儀表**不信任** `HubRefCache` 員工名單；一律向後端 `get_employees` 確認（含近期離職）。共用篩選模組仍供他頁使用。 |
