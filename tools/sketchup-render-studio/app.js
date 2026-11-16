@@ -146,10 +146,17 @@
     }
     var url = ($('gasUrlInput') && $('gasUrlInput').value.trim()) || CONFIG.apiUrl;
     if (!url) return Promise.reject(new Error('尚未設定 GAS URL'));
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
+    // 只帶 user_id（?uid=）時附 hub_gate_ticket；取不到照常送出（accounting-gas audit 只記 WARN）
+    var hubGate = window.HubGateTicket;
+    var ready = (state.staffUserId && hubGate && typeof hubGate.attach === 'function')
+      ? hubGate.attach(payload, { liffToken: state.idToken || '' })
+      : Promise.resolve(payload);
+    return ready.then(function () {
+      return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
     }).then(function (res) {
       return res.text().then(function (text) {
         var trimmed = String(text || '').trim();
