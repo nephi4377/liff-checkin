@@ -3,6 +3,8 @@
  * API：leave_year_stats / mode=list
  */
 
+import { classifyLeaveYearStatsListFetch } from '/modules/attendance/leave_year_stats_list_fetch.js?v=20260831';
+
 function esc(s) {
     if (s == null || s === undefined) return '';
     return String(s)
@@ -55,6 +57,7 @@ export function initLeaveYearStatsManager(opts) {
     let sortDir = 'asc';
     let loadedOnce = false;
     let loading = false;
+    let lastLoadFailed = false;
 
     function fillYears() {
         if (!yearSelect) return;
@@ -200,6 +203,36 @@ export function initLeaveYearStatsManager(opts) {
         }).join('');
     }
 
+    async function fetchListOnce(year) {
+        const res = await fetchApi({
+            page: 'attendance_api',
+            action: 'leave_year_stats',
+            mode: 'list',
+            year,
+            operatorId
+        });
+        return classifyLeaveYearStatsListFetch(res, '無法取得假勤年度統計');
+    }
+
+    async function fetchListWithRetry(year) {
+        try {
+            const first = await fetchListOnce(year);
+            if (first.kind !== 'error') return first;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            return fetchListOnce(year);
+        } catch (err) {
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            try {
+                return await fetchListOnce(year);
+            } catch (err2) {
+                return classifyLeaveYearStatsListFetch(
+                    { success: false, message: (err2 && err2.message) || (err && err.message) },
+                    '無法取得假勤年度統計'
+                );
+            }
+        }
+    }
+
     async function load() {
         if (!canView) {
             showDenied();
@@ -212,28 +245,19 @@ export function initLeaveYearStatsManager(opts) {
             loadBtn.disabled = true;
             loadBtn.textContent = '載入中…';
         }
-        setState('loading');
+        setState(rows.length ? 'table' : 'loading');
         if (errorEl) errorEl.innerHTML = '';
-        if (metaEl) metaEl.textContent = '';
+        if (metaEl && !rows.length) metaEl.textContent = '';
         const year = parseInt(yearSelect?.value || String(new Date().getFullYear()), 10);
         try {
-            const res = await fetchApi({
-                page: 'attendance_api',
-                action: 'leave_year_stats',
-                mode: 'list',
-                year,
-                operatorId
-            });
-            if (!res || res.success === false) {
-                throw new Error(res?.message || '無法取得假勤年度統計');
+            const classified = await fetchListWithRetry(year);
+            if (classified.kind === 'error') {
+                throw new Error(classified.message);
             }
-            const data = res.data;
-            const list = Array.isArray(data?.rows)
-                ? data.rows
-                : (Array.isArray(data) ? data : []);
-            rows = list;
+            lastLoadFailed = false;
             loadedOnce = true;
-            if (!rows.length) {
+            rows = classified.rows;
+            if (classified.kind === 'empty') {
                 setState('empty');
                 if (emptyEl) {
                     emptyEl.innerHTML = '<p class="font-medium text-gray-700">這一年還沒有假勤統計資料</p><p class="text-sm text-gray-500 mt-1">可能尚無已核准假單，或後端尚未產生年度彙總。可換一年再查。</p>';
@@ -242,17 +266,25 @@ export function initLeaveYearStatsManager(opts) {
                 renderTable();
             }
         } catch (err) {
-            rows = [];
+            lastLoadFailed = true;
             setState('error');
             const msg = err?.message || '載入失敗';
+            const isTimeout = /過久|逾時|timeout|Abort/i.test(msg);
             const isUnknownAction = /unknown|未知|不支援|not support|invalid action|找不到/i.test(msg);
             if (errorEl) {
                 errorEl.innerHTML = `
-                    <p class="font-medium">載入失敗</p>
+                    <p class="font-medium">讀不到全員假勤統計，不是沒人休假</p>
                     <p class="mt-1 text-sm">${esc(msg)}</p>
                     <p class="mt-2 text-sm text-gray-600">${isUnknownAction
                         ? '後端可能尚未啟用「假勤年度統計」介面。請稍後再試，或請管理者確認後端已上線。'
-                        : '請檢查網路後按「重新載入」再試一次。'}</p>`;
+                        : (isTimeout
+                            ? '這次等太久被中斷了。請再試一次；若仍失敗，可能是該年還沒有快取，凌晨會自動產生。'
+                            : '請檢查網路後按「再試一次」。舊資料若還在，會留在下面。')}</p>
+                    <button type="button" id="lys-error-retry" class="mt-3 min-h-[44px] px-4 rounded-lg bg-white border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50">再試一次</button>`;
+                document.getElementById('lys-error-retry')?.addEventListener('click', () => load());
+            }
+            if (rows.length) {
+                if (tableWrap) tableWrap.classList.remove('hidden');
             }
         } finally {
             loading = false;
@@ -291,10 +323,10 @@ export function initLeaveYearStatsManager(opts) {
 
     loadBtn?.addEventListener('click', () => load());
     yearSelect?.addEventListener('change', () => {
-        if (loadedOnce) load();
+        if (loadedOnce || lastLoadFailed) load();
     });
     searchInput?.addEventListener('input', () => {
-        if (rows.length || loadedOnce) renderTable();
+        if (rows.length) renderTable();
     });
     document.getElementById('lys-thead')?.addEventListener('click', onSortClick);
 
