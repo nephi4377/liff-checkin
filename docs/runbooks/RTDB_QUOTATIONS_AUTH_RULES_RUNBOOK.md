@@ -47,8 +47,8 @@ Repo 片段：**`firebase/rtdb-rules.p0-sensitive.fragment.json`**（內含 `_NO
 
 ```json
 "quotations": {
+  ".read": "auth != null",
   "$projectNo": {
-    ".read": "auth != null",
     ".write": "auth != null"
   }
 },
@@ -63,6 +63,8 @@ Repo 片段：**`firebase/rtdb-rules.p0-sensitive.fragment.json`**（內含 `_NO
   ".write": "auth != null"
 }
 ```
+
+> **BudgetAuditor 總覽**：`db.ref('quotations').once('value')` 需要**父層** `.read`；只放 `$projectNo` 子層時，已登入列整包仍會 DENIED。
 
 ### 2.1 上層規則檢查（子層收緊是否會生效）
 

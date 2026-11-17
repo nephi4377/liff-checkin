@@ -1,8 +1,8 @@
 {
   "rules": {
     "quotations": {
+      ".read": "auth != null",
       "$projectNo": {
-        ".read": "auth != null",
         ".write": "auth != null"
       }
     },

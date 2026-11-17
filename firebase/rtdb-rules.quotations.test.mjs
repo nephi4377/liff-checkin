@@ -58,6 +58,17 @@ async function run() {
     await assertSucceeds(get(ref(db, 'quotations/752')));
   });
 
+  await assert('unauthenticated list/shallow read quotations denied', async () => {
+    const db = dbFor(null);
+    await assertFails(get(ref(db, 'quotations')));
+  });
+
+  await assert('authenticated list/shallow read quotations allowed', async () => {
+    const db = dbFor({ uid: 'anon-list' });
+    await assertSucceeds(set(ref(db, 'quotations/776'), { context: { items: [] } }));
+    await assertSucceeds(get(ref(db, 'quotations')));
+  });
+
   await assert('unauthenticated read notifications denied', async () => {
     const db = dbFor(null);
     await assertFails(get(ref(db, 'notifications/Uprobe')));
