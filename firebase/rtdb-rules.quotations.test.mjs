@@ -58,6 +58,39 @@ async function run() {
     await assertSucceeds(get(ref(db, 'quotations/752')));
   });
 
+  await assert('unauthenticated read notifications denied', async () => {
+    const db = dbFor(null);
+    await assertFails(get(ref(db, 'notifications/Uprobe')));
+  });
+
+  await assert('unauthenticated write notifications allowed (GAS compat)', async () => {
+    const db = dbFor(null);
+    await assertSucceeds(
+      set(ref(db, 'notifications/Uprobe/msg1'), { message: 'probe', timestamp: 1 }),
+    );
+  });
+
+  await assert('authenticated read notifications allowed', async () => {
+    const db = dbFor({ uid: 'anon-notif' });
+    await assertSucceeds(get(ref(db, 'notifications/Uprobe/msg1')));
+  });
+
+  await assert('unauthenticated read quickRenovationQuote settings denied', async () => {
+    const db = dbFor(null);
+    await assertFails(get(ref(db, 'quickRenovationQuote/settingsV2')));
+  });
+
+  await assert('unauthenticated write quickRenovationQuote denied', async () => {
+    const db = dbFor(null);
+    await assertFails(set(ref(db, 'quickRenovationQuote/settingsV2'), { adminPin: 'x' }));
+  });
+
+  await assert('authenticated read/write quickRenovationQuote allowed', async () => {
+    const db = dbFor({ uid: 'anon-qr' });
+    await assertSucceeds(set(ref(db, 'quickRenovationQuote/settingsV2'), { adminPin: 'x', schema: 1 }));
+    await assertSucceeds(get(ref(db, 'quickRenovationQuote/settingsV2')));
+  });
+
   await assert('unrelated public node still readable without auth', async () => {
     const db = dbFor(null);
     await assertSucceeds(get(ref(db, '_emulator_unrelated_public/probe')));

@@ -1,0 +1,24 @@
+{
+  "_NOTICE": "P0 片段：禁止 firebase deploy / firebase deploy --only database。僅在 Firebase Console 手動合併進「完整匯出 rules」。合併前請確認根或父層無 .read:true／.write:true 覆蓋這些節點（見 docs/runbooks/RTDB_QUOTATIONS_AUTH_RULES_RUNBOOK.md §2.1）。合併時不要把 _NOTICE 貼進 Console。",
+  "_AUTH_NOTES": {
+    "quotations": "讀寫皆 auth!=null。GAS 結案／驗收 REST 需 Script Property FIREBASE_RTDB_AUTH；若尚未設定，合併時可暫時只收緊 .read、.write 保留匯出檔原值（runbook §1.5 乙）。",
+    "notifications": "讀取 auth!=null。寫入暫維持 true：Backend_GAS pushToFirebase 目前未帶 ?auth=。發布後陌生人不可 curl 讀員工 UID／訊息，但仍可匿名寫入直到 GAS 補 token。讀取端：添心助手 taupdata 目前無 Firebase Auth，發布前須先讓該客戶端 signInAnonymously（或同等 auth），否則即時通知會停。",
+    "quickRenovationQuote": "讀寫皆 auth!=null（含 settingsV2／adminPin）。前端 QuickRenovationQuote 已走 TanxinFirebaseRtdb.ensureAuth 匿名登入。"
+  },
+  "quotations": {
+    "$projectNo": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  },
+  "notifications": {
+    "$uid": {
+      ".read": "auth != null",
+      ".write": true
+    }
+  },
+  "quickRenovationQuote": {
+    ".read": "auth != null",
+    ".write": "auth != null"
+  }
+}

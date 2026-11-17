@@ -6,6 +6,16 @@
         ".write": "auth != null"
       }
     },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": true
+      }
+    },
+    "quickRenovationQuote": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     "_emulator_unrelated_public": {
       ".read": true,
       ".write": false
