@@ -72,7 +72,10 @@
   }
 
   function qrApplyLoadedSettingsObject(parsed) {
-    state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), parsed);
+    var incoming = parsed && typeof parsed === 'object' ? JSON.parse(JSON.stringify(parsed)) : {};
+    qrSanitizeSettingsSecrets(incoming);
+    state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), incoming);
+    qrSanitizeSettingsSecrets(state.settings);
     if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
       state.settings.mepPerZone = state.settings.mepPerRoom;
     }
@@ -142,6 +145,7 @@
   }
 
   function saveSettingsLocalOnly() {
+    qrSanitizeSettingsSecrets(state.settings);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state.settings));
   }
 
@@ -235,10 +239,12 @@
       ? TanxinFirebaseRtdb.ensureAuth()
       : Promise.resolve();
     return pushChain.then(function () {
+      qrSanitizeSettingsSecrets(state.settings);
+      /* 整包 set 且不含 adminPin → 一併清掉雲端舊明文 PIN（與 RTDB lockdown 配合）。 */
       return qrFbSettingsRef(db).set(state.settings);
     })
       .then(function () {
-        qrFbSetSyncNote('已上傳至雲端（' + FB_RTDB_SETTINGS_PATH + '）。');
+        qrFbSetSyncNote('已上傳至雲端（' + FB_RTDB_SETTINGS_PATH + '；不含明文 PIN）。');
         if (!silent) alert('已上傳到 Firebase。');
         return true;
       })
@@ -683,12 +689,17 @@
   function loadSettings() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(raw));
-      else state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        qrSanitizeSettingsSecrets(parsed);
+        state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), parsed);
+      } else state.settings = JSON.parse(JSON.stringify(DEFAULTS));
     } catch (e) {
       state.settings = JSON.parse(JSON.stringify(DEFAULTS));
     }
+    qrSanitizeSettingsSecrets(state.settings);
     normalizeSettingsAfterLoad();
+    qrSanitizeSettingsSecrets(state.settings);
     return state.settings;
   }
 

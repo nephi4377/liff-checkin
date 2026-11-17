@@ -932,8 +932,9 @@ flowchart LR
 
 ###### 1.4.6 管理員與安全
 
-- 設定頁僅內部使用；正式試作以 **localStorage** 儲存，**主鍵** **`qr_estimator_settings_v2`**（內有 **`itemDefs`、`schemeMenus`** 等，見 **§1.4.2a**）；**開發中**原型可**暫關** PIN 以利調菜單。  
-- 上線：菜單與坪數推估參數改**伺服端**、驗證可選 PIN／帳密，審計與權限依 `§2` 擴充（非本原型必備）。
+- 設定頁僅內部使用；正式試作以 **localStorage** 儲存，**主鍵** **`qr_estimator_settings_v2`**（內有 **`itemDefs`、`schemeMenus`** 等，見 **§1.4.2a**）。  
+- **管理 PIN**：`QuickRenovationQuote_v2_admin.html` 進入前須 prompt 輸入；前端只存 **SHA-256 hex**（`QR_ADMIN_PIN_SHA256`），**DEFAULTS／版控不得含明文 PIN**。已洩漏舊值永久拒絕。本機與 Firebase `settingsV2` **不得再寫入** `adminPin` 明文（上傳時省略該欄以清掉雲端舊值）。RTDB `quickRenovationQuote` 讀寫另依正式規則收緊（與 quotations 登入閘配合）。  
+- 後續：菜單與坪數推估參數改**伺服端**、驗證可升級帳密／權限，審計依 `§2` 擴充。
 
 ###### 1.4.7 試作 schema 4 擴充（`schemaVersion: 4`）
 
