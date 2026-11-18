@@ -1,7 +1,8 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
-**版本**：v1.10（2026-08-21）  
-**關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
+**版本**：v1.11（2026-11-19）  
+**最後對照程式**：2026-11-19（Asia/Taipei）  
+**關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/ACCT_SEC_2_HUB_USER_ID_GATE.md`、`project-console/SPEC/ACCOUNTING_HUB_GATE_TICKET_CLIENT.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
 
@@ -81,7 +82,7 @@
 |------|------|
 | **唯一員工鍵** | Checkin「員工資料」的 **`userId`（LINE UID）** 是全公司員工身分的準則，HUB、會計、考勤都應對到同一列 |
 | **HUB 主控台** | SPA 用 **LIFF 登入** → `userProfile.userId`；iframe 開子頁時帶 `uid`／`permission` 等 query |
-| **會計靜態頁（員工）** | 方案 A：隨 HUB iframe，沿用官方 LINE 的 `userId`；**從主控台進不向 HUB 借通行證**；後端用編號查員工表。直接開網址才自己 LINE 登入。正式站測試模式關閉 |
+| **會計靜態頁（員工）** | 方案 A：隨 HUB iframe，沿用官方 LINE 的 `userId`。從主控台進時，會計請求帶員工編號，並盡量再附一張約 2 分鐘的主控台憑證（用主控台的登入狀態去換，不把登入憑證本身交給會計後端）。換不到仍送出；後端目前預設只記警告。直接開網址才自己 LINE 登入。正式站測試模式關閉 |
 | **看起來不同** | 常見原因：① bypass 沒帶 HUB 的 `uid`；② 子頁相對連結丟失 query；③ **把廠商 `vendor_id`／綁定 UID 和員工 `userId` 搞混**；④ 誤用**會計 LINE** 的 UID 去查員工表（官方與會計 Channel 的 UID **本來就不同**） |
 
 **結論（員工）**：財務同仁只認 **官方 LINE → HUB → 會計** 這條路；`userId` 對應**同一份**員工試算表同一列即可。  
@@ -200,7 +201,7 @@
 | `uid` | `userId` | `OperatorContext` → `dev_user_id`（bypass）或顯示用 |
 | `name` | `displayName` | `OperatorContext.userName`／畫面 |
 | `permission` | `permission` | `OperatorContext` → `dev_permission`（bypass）；**核准仍以後端查表為準** |
-| `hub_liff_id` | 用來辨識「這次是從主控台進來」 | 寫入本分頁記憶；**不再**向主控台借通行證 |
+| `hub_liff_id` | 用來辨識「這次是從主控台進來」 | 寫入本分頁記憶。會計後端不直接收 LINE 登入憑證；只有員工編號時，子頁會向主控台要登入狀態，換成短效主控台憑證再附上（見 §9.5） |
 
 **注意**
 
@@ -214,7 +215,7 @@
 
 | 模式 | 人的入口 | 身分怎麼認 | 權限來源 |
 |------|----------|------------|----------|
-| **從主控台進** | LINE → 主控台 → 會計 | 本分頁記住的使用者編號 | 後端查員工表（不信網址上的權限數字） |
+| **從主控台進** | LINE → 主控台 → 會計 | 本分頁記住的使用者編號，外加短效主控台憑證（換得到才有） | 後端查員工表。畫面可先用網址上的權限進門；寫入仍查表。網址權限比查表高時，本分頁會留下較高的那個數字（見 §9.6） |
 | **直接開網址** | 書籤／貼上連結 | 自己 LINE 登入；同一分頁可沿用 | 同上，查員工表 |
 | **廠商入口** | 會計官方 LINE | 廠商自己的 LINE 登入 | 廠商名冊，不是員工權限 |
 | **測試模式** | 正式站**關閉** | — | GAS `ACCOUNTING_AUTH_BYPASS=false` |
@@ -240,7 +241,7 @@
   "userName": "王小明",
   "displayName": "王小明",
   "permission": 5,
-  "hubLiffId": "2007974938-xxxxxxxx",
+  "hubLiffId": "（主控台通道代號，不寫進文件）",
   "source": "hub_iframe",
   "ts": 1719012345678
 }
@@ -266,7 +267,7 @@
 | 統一 `tanxin_operator_v1` | ✅ `operator_context.js` |
 | HUB 主控台種子寫入 `OperatorContext` | ✅ `index.html` 載入＋`spa/app.js` `syncHubOperatorSession`（F6） |
 | **全站參考主檔 `HubRefCache`（`tanxin_ref_v1:*`）** | ✅ `hub_ref_cache.js`；HUB 寫入、iframe 只讀 |
-| 會計讀 operator；從主控台進**不借通行證** | ✅ `accounting_api.js` v49（本分頁 `user_id`；後端查員工表） |
+| 會計讀 operator；從主控台進附短效憑證，換不到仍送出 | ✅ `accounting_api.js` 的 `post()` 呼叫 `hub_gate_ticket.js`（本分頁 `user_id`；後端查員工表；憑證見 §9.5） |
 | 選材從主控台進：請求必帶員工編號（網址／本分頁） | ✅ `accounting_api.js` v53；project-console 認 `user_id`／`uid`／`userId` |
 | 會計導覽保留 query | ✅ `accounting_nav.js` `hubQueryString()` |
 | 會計全頁 bootstrap 收斂 | ✅ `accounting_boot.js` + `modules/accounting/*.html` |
@@ -341,26 +342,62 @@
 
 ---
 
-## 9.5 主控台登入憑證 hub_gate_ticket（2026-11-16）
+## 9.5 主控台憑證（2026-11-19 對照程式）
 
-從主控台進會計時，請求只帶使用者編號；會計後端要另一張「主控台登入憑證」才能確認真的是本人（Backend_GAS #377；後端目前只記警告、不擋）。
+從主控台進會計時，請求帶使用者編號。會計後端另要一張短效「主控台憑證」，才知道這個編號真的是剛登入的人。後端開關目前預設是**觀察**：沒有憑證仍放行，只記警告。改成**強制**後，沒有有效憑證就拒絕。開關在會計後端，不必為了切換而改前端。細節見 backend `accounting-gas/SPEC/ACCT_SEC_2_HUB_USER_ID_GATE.md`。
 
-**人怎麼走**
+這張憑證約 2 分鐘有效，最長不超過 10 分鐘。同一分頁的主控台與子頁共用；到期前 20 秒就換新。
 
-1. 員工在 LINE 開主控台 → 進會計（或主控台首頁讀款項待辦）。
-2. 會計頁送出請求前，先看本分頁有沒有還沒過期的憑證；有就直接附上。
-3. 沒有 → 向主控台要 LINE 登入憑證 → 拿去換一張約 2 分鐘的憑證 → 附上送出。
-4. 換不到（主控台 LINE 登入過期、換票失敗、太慢）→ **照常送出**，瀏覽器 console 留警告；1 分鐘內不再重試。
+```mermaid
+flowchart TD
+  A[在 LINE 打開主控台] --> B[點進會計或看款項待辦]
+  B --> C{這一分頁有沒有還沒過期的主控台憑證}
+  C -->|有，而且是同一人| D[請求附上憑證再送出]
+  C -->|沒有| E[向主控台要目前的登入狀態]
+  E --> F{約 5 秒內換到憑證}
+  F -->|換到| D
+  F -->|換不到或逾時| G[不附憑證就送出，瀏覽器留警告]
+  D --> H[會計後端對員工表]
+  G --> H
+  H -->|憑證有效| I[依員工表的權限做事]
+  H -->|沒有有效憑證，目前是觀察| J[仍放行並記警告]
+  H -->|沒有有效憑證，已改強制| K[拒絕，請回主控台重開]
+```
 
-| 白話（上列步驟） | 程式對照（開發用） |
+| 白話（圖上寫的） | 程式對照（開發用） |
 |---|---|
-| 送出前附憑證 | `AccountingApi.post()` → `withHubGateTicket_`；`HubGateTicket.attach(body)` |
-| 本分頁快取 | `sessionStorage` `tanxin_hub_gate_ticket_v1`（依票內 `exp`，到期前 20 秒換新） |
-| 向主控台要 LINE 登入憑證 | `postMessage` `request_hub_liff_token` → `hub_liff_token`（`spa/app.js`） |
-| 換憑證 | project-console POST `accounting_hub_gate_ticket`（`liff_id_token`） |
-| 換不到照常送出 | console `[HubGateTicket][WARN] reason=…`；退避 `tanxin_hub_gate_ticket_fail_v1` 60 秒 |
+| 在 LINE 打開主控台 | `spa/app.js` 登入後 `syncHubOperatorSession` 寫入本分頁 |
+| 點進會計或看款項待辦 | 會計走 `AccountingApi.post`；款項待辦走 `fetchPaymentTodos` |
+| 這一分頁有沒有還沒過期的主控台憑證 | `sessionStorage` `tanxin_hub_gate_ticket_v1`；`HubGateTicket` 依票內到期時間，提前 20 秒換新 |
+| 是同一人 | 票上的人必須等於這次請求的員工編號；對不上就不附這張票 |
+| 向主控台要目前的登入狀態 | 子頁 `postMessage` `request_hub_liff_token`；主控台回 `hub_liff_token` |
+| 約 5 秒內換到憑證 | `HubGateTicket.attach` 最多等 5 秒；向主控台換票的那一次最多等 10 秒 |
+| 換憑證 | 主控台後端 `accounting_hub_gate_ticket`（須已通過登入驗證） |
+| 不附憑證就送出，瀏覽器留警告 | `[HubGateTicket][WARN]`；失敗記 `tanxin_hub_gate_ticket_fail_v1`，60 秒內不再換 |
+| 會計後端對員工表 | `resolveAccountingAuth_`／`HubUserIdGate` |
+| 仍放行並記警告 | 觀察模式（程式預設；也可用指令碼屬性改成強制或改回觀察） |
+| 拒絕，請回主控台重開 | 強制模式，代碼 `HUB_GATE_TICKET_REQUIRED` |
 
-**呼叫端**：`shared/js/hub_gate_ticket.js`（`accounting_api.js` 沒先載時會自動補載）；`spa/app.js` 款項待辦；`tools/sketchup-render-studio/app.js`。後端驗證 `accounting-gas/core/HubUserIdGate.js`。
+**會附憑證的呼叫**：`shared/js/accounting_api.js` 的 `post()`（頁面沒先載程式時會自己補載 `hub_gate_ticket.js`）；主控台款項待辦；`tools/sketchup-render-studio/app.js`；員工編輯裡的存摺辨識（帶操作者編號，經同一個 `post()`）。
+
+**不會把登入憑證直接交給會計後端的路**：從主控台來的請求，`buildAuth` 只放員工編號。登入憑證只用來向主控台換上面那張短效憑證。
+
+### 風險與等待
+
+- 開會計頁會先用網址上的人與權限顯示選單，背景才核對。人不必乾等換憑證。真正送出前若還沒有憑證，最多再等約 5 秒。
+- 換票失敗後 60 秒內不再試。這 60 秒裡的會計請求會不附憑證就送出。
+- 款項待辦讀取失敗時留下舊清單並顯示可再試，不會變成「沒有待辦」。一邊成功、一邊失敗且已有舊清單時，整包都留舊的。
+- 主控台「員工登入閘」仍是關閉，和這張會計憑證不是同一道門。見 backend `project-console/SPEC/CONSOLE_LIFF_SESSION_P0.md`。
+
+## 9.6 已知問題（不要當成正確規格）
+
+| # | 現況 | 應該怎樣 |
+|---|------|----------|
+| 1 | 收支登錄送出若標成從主控台來，又帶了員工編號，會計後端**不看**主控台憑證就記帳。權限仍會查員工表（至少要能記帳）。主控台專案裡還有一份相同入口，連這層權限都不查，改以伺服器金鑰代寫。前端雖然會附憑證，這條送出不讀它。 | 沒有有效憑證就不要記。兩份入口同一套規則。沿用 2026-11-13 待修 |
+| 2 | 子頁來要登入狀態時，主控台沒有先確認對方是同一個網站，就把登入狀態回給對方。重新登入那條有先確認。現在內嵌的都是自己的頁面 | 跟重新登入一樣，只回應同一個網站 |
+| 3 | 換票失敗後的 60 秒內，就算已經拿到新的登入狀態，也不再換票（只有「先前是沒有登入狀態」這一種失敗，才會因為新狀態而重試） | 已有新的登入狀態就要再換一次 |
+| 4 | 已用網址權限打開會計後，背景發現人已離職、查無此人，或權限比網址低，頁面不會收回。只有訊息裡像「過期／登入憑證」的失敗才會整頁擋住。逾時不當成致命錯誤是故意的 | 離職與權限不夠要收回頁面，不要只留在背景紀錄 |
+| 5 | 後端回傳的權限若比網址或本分頁記得的低，本分頁仍留下較高的數字，之後開子頁會繼續帶著 | 以後端查表為準；網址只做第一次顯示 |
 
 ---
 
@@ -368,6 +405,7 @@
 
 | 日期 | 變更 |
 |------|------|
+| 2026-11-19 | v1.11：對照已上線的短效主控台憑證。更正「從主控台進不借登入狀態」。補流程圖、風險與等待、已知問題（送出不看憑證、回登入狀態沒核對來源、換票失敗 60 秒內不重試、背景核對不收回頁面、權限取較高值）。 |
 | 2026-11-16 | v1.9.13：§9.5 主控台只帶使用者編號的會計請求附 `hub_gate_ticket`（快取到期前、失敗照常送出＋console WARN）。前端 only，無 clasp。 |
 | 2026-10-30 | v1.9.12：團隊工作總覽讀 `HubRefCache` 後正規化權限字串 2／3、排除離職；篩完空則 API（避免離職被標缺交）。 |
 | 2026-10-30 | v1.9.11：總監人事筆記讀 `HubRefCache` 後排除廠商／離職／權限≥5；篩完空則 API；**本頁不寫回**共用 `employees`（demo 不污染）。 |
