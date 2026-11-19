@@ -1,6 +1,7 @@
 # HUB 與會計 — 全域身分與應傳承資料
 
 **版本**：v1.10（2026-08-21）  
+**最後對照程式**：2026-11-20（Asia/Taipei；本輪只更正會計主檔包那一列，身分傳承其餘段落沿用 2026-11-19）  
 **關聯**：[`15_會計系統模組規格書.md`](15_會計系統模組規格書.md)、[`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md)、[`08_專案主控台核心功能與通訊協定規格書.md`](08_專案主控台核心功能與通訊協定規格書.md)、backend `accounting-gas/SPEC/LINE_OA_SPEC.md`、`accounting-gas/SPEC/VENDOR_LINE_BINDING_SPEC.md`
 
 ---
@@ -136,7 +137,7 @@
 | **案場列表** | 案號、客戶名、店別… | **`tanxin_ref_v1:projects`**（相容 `spa_hub_projects`） | `window.__tanxinRef.projects`；父層 `spaAllProjects` | **3 天**；**24h SWR** | HUB、`AccountingContext`、記帳案號快選 |
 | **官方顧客名冊** | `official_customer_search` 整包 | **`tanxin_ref_v1:customers`**（全公司共用，**不分 userId**） | `window.__tanxinRef.customers` | **24 小時** | `AccountingListCache.searchMasterList`、客戶財務綁定 |
 | **當月班表** | HUB 排程 | `spa_hub_schedule_{YYYY}_{MM}` | — | **7 天**；**僅成功才寫入**；失敗不把空班表當成大家都上班 | HUB 主控台（會計較少直接用） |
-| **會計 bootstrap** | 廠商、收款帳戶、列舉… | `sessionStorage` `tanxin_accounting_bootstrap_v4:{userId}` | 模組內 `_mem` | **3 天** | `AccountingCache`；**依 operator userId 分 key**；CRUD 成功優先 patch |
+| **會計 bootstrap** | 廠商與列舉；收款帳戶已不進這包 | `sessionStorage`＋`localStorage`，key `tanxin_accounting_bootstrap_v6:{userId}` | 模組內 `_mem` | **3 天**；已有廠商就不再背景更新 | `AccountingCache`。細節與已知問題見 [`18_會計與主檔快取策略.md`](18_會計與主檔快取策略.md) |
 
 **讀寫責任（參考主檔）**
 
