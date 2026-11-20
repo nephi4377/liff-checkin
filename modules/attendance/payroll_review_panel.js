@@ -2,6 +2,18 @@
  * 個人頁 — 薪資出勤核對申請（Phase B1）
  */
 
+import {
+    mergeOvertimeDailyRows,
+    overtimeDailyRowsToObject,
+    sumOvertimeDailyRows,
+    sumOvertimeDailyMinutes,
+    payrollOvertimeMinutesToHours,
+    reportOvertimeMinutesFromSnapshot,
+    validatePayrollOvertimeDailyHours,
+    validatePayrollOvertimeSubmit,
+    overtimeDailyMismatchMessage
+} from './payroll_overtime_daily.js';
+
 function escPayrollHtml(s) {
     if (s == null) return '';
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -686,6 +698,121 @@ function buildProjectRewardHtml(drafts, esc) {
     </div>`;
 }
 
+function readOvertimeDailyRowsFromContainer(rowsEl) {
+    if (!rowsEl) return [];
+    return [...rowsEl.querySelectorAll('[data-ot-date]')].map((inp) => ({
+        date: inp.getAttribute('data-ot-date') || '',
+        hours: Number(inp.value) || 0
+    })).filter((r) => r.date);
+}
+
+function renderOvertimeDailyRowInputs(rowsEl, rows, escFn) {
+    if (!rowsEl) return;
+    const esc = escFn || escPayrollHtml;
+    if (!rows.length) {
+        rowsEl.innerHTML = '<p class="text-xs text-gray-500">報表無逐日加班資料；請確認上方加班小時數，或請主管協助代開審。</p>';
+        return;
+    }
+    rowsEl.innerHTML = rows.map((r) => `
+        <label class="flex items-center gap-2 text-sm">
+            <span class="w-28 shrink-0 text-gray-600">${esc(r.date)}</span>
+            <input type="number" min="0" step="0.5" class="payroll-ot-day-input flex-1 rounded-md border-gray-300 sm:text-sm"
+                data-ot-date="${esc(r.date)}" value="${Number(r.hours) || 0}" />
+            <span class="text-xs text-gray-500 shrink-0">小時</span>
+        </label>
+    `).join('');
+}
+
+function applyOvertimeFeedbackEl(warnEl, blockMsg, warnMsg) {
+    if (!warnEl) return;
+    warnEl.classList.remove(
+        'hidden', 'text-red-700', 'bg-red-50', 'border-red-100',
+        'text-amber-900', 'bg-amber-50', 'border-amber-200'
+    );
+    const text = blockMsg || warnMsg;
+    if (!text) {
+        warnEl.textContent = '';
+        warnEl.classList.add('hidden');
+        return;
+    }
+    warnEl.textContent = text;
+    warnEl.classList.remove('hidden');
+    if (blockMsg) {
+        warnEl.classList.add('text-red-700', 'bg-red-50', 'border-red-100');
+    } else {
+        warnEl.classList.add('text-amber-900', 'bg-amber-50', 'border-amber-200');
+    }
+}
+
+function syncOvertimeDailyUi(state) {
+    const {
+        wrapEl, rowsEl, sumEl, warnEl, rows,
+        overtimeHours, overtimeNote, overtimeDays, snapshot, readOnly
+    } = state;
+    const otH = Number(overtimeHours) || 0;
+    if (wrapEl) wrapEl.classList.toggle('hidden', otH <= 0);
+    if (otH <= 0) {
+        applyOvertimeFeedbackEl(warnEl, '', '');
+        return { validation: { ok: true }, dailyObject: {} };
+    }
+    const currentRows = readOnly ? rows : readOvertimeDailyRowsFromContainer(rowsEl);
+    const dailyObject = overtimeDailyRowsToObject(currentRows);
+    const dailyMin = sumOvertimeDailyMinutes(dailyObject);
+    if (sumEl) {
+        sumEl.textContent = `每日合計：${payrollOvertimeMinutesToHours(dailyMin)} 小時（${dailyMin} 分）`;
+    }
+    const submitCheck = validatePayrollOvertimeSubmit({
+        overtimeHours: otH,
+        overtimeNote: String(overtimeNote || '').trim(),
+        overtimeDays,
+        snapshot,
+        overtimeDailyHours: dailyObject
+    });
+    let blockMsg = '';
+    let warnMsg = '';
+    if (submitCheck.block && submitCheck.message) {
+        blockMsg = submitCheck.message;
+    } else if (submitCheck.warn && submitCheck.message) {
+        warnMsg = submitCheck.message;
+    } else if (!submitCheck.ok) {
+        blockMsg = submitCheck.message || overtimeDailyMismatchMessage(
+            validatePayrollOvertimeDailyHours({
+                overtimeHours: otH,
+                overtimeDays,
+                overtimeDailyHours: dailyObject,
+                reportOvertimeMinutes: reportOvertimeMinutesFromSnapshot(snapshot, overtimeDays)
+            })
+        );
+    }
+    applyOvertimeFeedbackEl(warnEl, blockMsg, warnMsg);
+    const validation = validatePayrollOvertimeDailyHours({
+        overtimeHours: otH,
+        overtimeDays,
+        overtimeDailyHours: dailyObject,
+        reportOvertimeMinutes: reportOvertimeMinutesFromSnapshot(snapshot, overtimeDays)
+    });
+    return { validation, dailyObject, dailyTotal: payrollOvertimeMinutesToHours(dailyMin), submitCheck };
+}
+
+function collectOvertimeSubmitFields(els, snapshot) {
+    const overtimeHours = Number(els.overtimeHours?.value) || 0;
+    const overtimeNote = String(els.overtimeNote?.value || '').trim();
+    const overtimeDays = Number(snapshot?.stats?.overtimeDays) || 0;
+    const rows = readOvertimeDailyRowsFromContainer(els.overtimeDailyRows);
+    const dailyObject = overtimeDailyRowsToObject(rows);
+    const result = validatePayrollOvertimeSubmit({
+        overtimeHours,
+        overtimeNote,
+        overtimeDays,
+        snapshot,
+        overtimeDailyHours: dailyObject
+    });
+    if (!result.ok) {
+        return { ok: false, message: result.message || '加班資料不符，無法送出' };
+    }
+    return { ok: true, payload: result.payload, warn: result.warn, message: result.message };
+}
+
 export function initPayrollReviewPanel(ctx) {
     const {
         apiBaseUrl, userId, userName, showGlobalNotification, fetchApi
@@ -708,7 +835,11 @@ export function initPayrollReviewPanel(ctx) {
         supplement: document.getElementById('payroll-supplement'),
         statusBox: document.getElementById('payroll-status-box'),
         submitBtn: document.getElementById('payroll-submit-btn'),
-        refreshBtn: document.getElementById('payroll-refresh-btn')
+        refreshBtn: document.getElementById('payroll-refresh-btn'),
+        overtimeDailyWrap: document.getElementById('payroll-overtime-daily-wrap'),
+        overtimeDailyRows: document.getElementById('payroll-overtime-daily-rows'),
+        overtimeDailySum: document.getElementById('payroll-overtime-daily-sum'),
+        overtimeDailyWarn: document.getElementById('payroll-overtime-daily-warn')
     };
 
     if (!els.periodSelect) return;
@@ -716,6 +847,8 @@ export function initPayrollReviewPanel(ctx) {
     let contextData = null;
     let payrollLoaded = false;
     let submitGateTimer = null;
+    let employeeOvertimeDailyRows = [];
+    let overtimeDailyUiInitialized = false;
 
     function clearSubmitGateTimer() {
         if (submitGateTimer) {
@@ -881,6 +1014,7 @@ export function initPayrollReviewPanel(ctx) {
         }
         applySubmitGateUi();
         scheduleSubmitGateRecheck();
+        refreshEmployeeOvertimeDailyUi();
         els.formWrap.classList.remove('hidden');
     }
 
@@ -892,6 +1026,12 @@ export function initPayrollReviewPanel(ctx) {
             alert('填寫遠程津貼時，請一併填寫說明');
             return;
         }
+        const otFields = collectOvertimeSubmitFields(els, contextData.snapshot);
+        if (!otFields.ok) {
+            alert(otFields.message);
+            refreshEmployeeOvertimeDailyUi();
+            return;
+        }
         els.submitBtn.disabled = true;
         els.submitBtn.textContent = '送出中…';
         try {
@@ -899,8 +1039,7 @@ export function initPayrollReviewPanel(ctx) {
                 action: 'payroll_review', op: 'submit',
                 operatorId: userId, userName,
                 periodLabel: contextData.period.periodLabel,
-                overtimeHours: Number(els.overtimeHours.value) || 0,
-                overtimeNote: els.overtimeNote.value.trim(),
+                ...otFields.payload,
                 remoteAllowanceAmount: Number(els.remoteAmount.value) || 0,
                 remoteAllowanceNote: els.remoteNote.value.trim(),
                 supplementNote: els.supplement.value.trim()
@@ -922,13 +1061,49 @@ export function initPayrollReviewPanel(ctx) {
         }
     }
 
+    function refreshEmployeeOvertimeDailyUi() {
+        if (!contextData) return;
+        const st = contextData.snapshot?.stats || {};
+        const otH = Number(els.overtimeHours?.value) || 0;
+        const reportMin = reportOvertimeMinutesFromSnapshot(contextData.snapshot, st.overtimeDays);
+        if (!els.overtimeHours?.dataset.userEdited && !overtimeDailyUiInitialized) {
+            employeeOvertimeDailyRows = mergeOvertimeDailyRows(contextData.snapshot, employeeOvertimeDailyRows);
+            if (reportMin > 0 && els.overtimeHours) {
+                els.overtimeHours.value = String(payrollOvertimeMinutesToHours(reportMin));
+            } else {
+                const sum = sumOvertimeDailyRows(employeeOvertimeDailyRows);
+                if (sum > 0 && els.overtimeHours) els.overtimeHours.value = String(sum);
+            }
+        }
+        renderOvertimeDailyRowInputs(els.overtimeDailyRows, employeeOvertimeDailyRows, esc);
+        syncOvertimeDailyUi({
+            wrapEl: els.overtimeDailyWrap,
+            rowsEl: els.overtimeDailyRows,
+            sumEl: els.overtimeDailySum,
+            warnEl: els.overtimeDailyWarn,
+            rows: employeeOvertimeDailyRows,
+            overtimeHours: otH,
+            overtimeNote: els.overtimeNote?.value,
+            overtimeDays: st.overtimeDays,
+            snapshot: contextData.snapshot,
+            readOnly: false
+        });
+        overtimeDailyUiInitialized = true;
+    }
+
     els.periodSelect.addEventListener('change', () => {
         if (els.supplement) delete els.supplement.dataset.userEdited;
+        if (els.overtimeHours) delete els.overtimeHours.dataset.userEdited;
+        employeeOvertimeDailyRows = [];
+        overtimeDailyUiInitialized = false;
         fetchContext(els.periodSelect.value);
     });
     els.refreshBtn.addEventListener('click', () => {
         payrollLoaded = false;
         if (els.supplement) delete els.supplement.dataset.userEdited;
+        if (els.overtimeHours) delete els.overtimeHours.dataset.userEdited;
+        employeeOvertimeDailyRows = [];
+        overtimeDailyUiInitialized = false;
         fetchContext(els.periodSelect.value);
     });
     els.submitBtn.addEventListener('click', submitReview);
@@ -938,8 +1113,20 @@ export function initPayrollReviewPanel(ctx) {
         });
     }
     ['input', 'change'].forEach((ev) => {
-        els.overtimeHours.addEventListener(ev, () => { if (contextData) renderContext(); });
+        els.overtimeHours?.addEventListener(ev, () => {
+            if (els.overtimeHours) els.overtimeHours.dataset.userEdited = '1';
+            if (contextData) {
+                renderContext();
+                refreshEmployeeOvertimeDailyUi();
+            }
+        });
         els.remoteAmount.addEventListener(ev, () => { if (contextData) renderContext(); });
+        els.overtimeNote?.addEventListener(ev, () => { if (contextData) refreshEmployeeOvertimeDailyUi(); });
+    });
+    els.overtimeDailyRows?.addEventListener('input', (e) => {
+        if (!e.target.classList?.contains('payroll-ot-day-input')) return;
+        employeeOvertimeDailyRows = readOvertimeDailyRowsFromContainer(els.overtimeDailyRows);
+        refreshEmployeeOvertimeDailyUi();
     });
 
     const historyCtx = { apiBaseUrl, userId, fetchApi };
@@ -1221,17 +1408,64 @@ export function initPayrollAdminPreview(ctx) {
     const statsBox = document.getElementById('payroll-admin-stats');
     const titleEl = document.getElementById('payroll-admin-title');
     const submitBtn = document.getElementById('payroll-admin-submit-btn');
+    const overtimeFieldsWrap = document.getElementById('payroll-admin-overtime-fields');
+    const adminOvertimeEls = {
+        overtimeHours: document.getElementById('payroll-admin-overtime-hours'),
+        overtimeNote: document.getElementById('payroll-admin-overtime-note'),
+        overtimeDailyWrap: document.getElementById('payroll-admin-overtime-daily-wrap'),
+        overtimeDailyRows: document.getElementById('payroll-admin-overtime-daily-rows'),
+        overtimeDailySum: document.getElementById('payroll-admin-overtime-daily-sum'),
+        overtimeDailyWarn: document.getElementById('payroll-admin-overtime-daily-warn')
+    };
     if (!wrap || !empSelect || !periodSelect) return null;
 
     wrap.classList.remove('hidden');
     let adminContext = null;
+    let adminOvertimeDailyRows = [];
+    let adminOvertimeUiInitialized = false;
 
     function esc(s) { return escPayrollHtml(s); }
+
+    function refreshAdminOvertimeDailyUi() {
+        if (!adminContext) return;
+        const st = adminContext.snapshot?.stats || {};
+        const otH = Number(adminOvertimeEls.overtimeHours?.value) || 0;
+        if (!adminOvertimeEls.overtimeHours?.dataset.userEdited && !adminOvertimeUiInitialized) {
+            adminOvertimeDailyRows = mergeOvertimeDailyRows(adminContext.snapshot, adminOvertimeDailyRows);
+            const reportMin = reportOvertimeMinutesFromSnapshot(adminContext.snapshot, st.overtimeDays);
+            if (reportMin > 0 && adminOvertimeEls.overtimeHours) {
+                adminOvertimeEls.overtimeHours.value = String(payrollOvertimeMinutesToHours(reportMin));
+            } else {
+                const sum = sumOvertimeDailyRows(adminOvertimeDailyRows);
+                if (sum > 0 && adminOvertimeEls.overtimeHours) adminOvertimeEls.overtimeHours.value = String(sum);
+            }
+        }
+        renderOvertimeDailyRowInputs(adminOvertimeEls.overtimeDailyRows, adminOvertimeDailyRows, esc);
+        syncOvertimeDailyUi({
+            wrapEl: adminOvertimeEls.overtimeDailyWrap,
+            rowsEl: adminOvertimeEls.overtimeDailyRows,
+            sumEl: adminOvertimeEls.overtimeDailySum,
+            warnEl: adminOvertimeEls.overtimeDailyWarn,
+            rows: adminOvertimeDailyRows,
+            overtimeHours: otH,
+            overtimeNote: adminOvertimeEls.overtimeNote?.value,
+            overtimeDays: st.overtimeDays,
+            snapshot: adminContext.snapshot,
+            readOnly: false
+        });
+        adminOvertimeUiInitialized = true;
+    }
 
     async function managerSubmit() {
         if (!adminContext?.period || !empSelect.value) return;
         if (adminContext.existingReview) {
             alert('此期別已有申請');
+            return;
+        }
+        const otFields = collectOvertimeSubmitFields(adminOvertimeEls, adminContext.snapshot);
+        if (!otFields.ok) {
+            alert(otFields.message);
+            refreshAdminOvertimeDailyUi();
             return;
         }
         if (!confirm(`確定為「${adminContext.previewEmployee?.userName || ''}」代開審 ${adminContext.period.periodLabel}？`)) return;
@@ -1245,7 +1479,7 @@ export function initPayrollAdminPreview(ctx) {
                 operatorId,
                 targetUserId: empSelect.value,
                 periodLabel: adminContext.period.periodLabel,
-                overtimeHours: 0,
+                ...otFields.payload,
                 remoteAllowanceAmount: 0,
                 supplementNote: ''
             };
@@ -1276,6 +1510,7 @@ export function initPayrollAdminPreview(ctx) {
         if (!targetUserId) {
             calcBox.innerHTML = '<p class="text-gray-500 text-sm">請先選擇單一員工</p>';
             statsBox.innerHTML = '';
+            overtimeFieldsWrap?.classList.add('hidden');
             return;
         }
         loadingEl?.classList.remove('hidden');
@@ -1299,6 +1534,7 @@ export function initPayrollAdminPreview(ctx) {
                 })();
             if (!json.success) throw new Error(json.message || '載入失敗');
             adminContext = json.data;
+            overtimeFieldsWrap?.classList.remove('hidden');
             const empName = adminContext.previewEmployee?.userName || empSelect.selectedOptions[0]?.textContent || '';
             if (titleEl) titleEl.textContent = `${empName} — 薪資試算（可代開審）`;
             periodSelect.innerHTML = (adminContext.periods || []).map((p) => {
@@ -1322,7 +1558,10 @@ export function initPayrollAdminPreview(ctx) {
                 adminContext.settings,
                 adminContext.period.payType,
                 adminContext.snapshot,
-                { remoteAllowanceAmount: 0, overtimeHours: 0 },
+                {
+                    remoteAllowanceAmount: 0,
+                    overtimeHours: Number(adminOvertimeEls.overtimeHours?.value) || 0
+                },
                 adminContext.insurancePreview,
                 adminContext.attendanceBonusPolicy,
                 adminContext.period,
@@ -1338,6 +1577,7 @@ export function initPayrollAdminPreview(ctx) {
                 submitBtn.disabled = !!existing;
                 submitBtn.title = existing ? '此期別已有申請' : '';
             }
+            refreshAdminOvertimeDailyUi();
         } catch (err) {
             if (errorEl) {
                 errorEl.textContent = err.message || '載入失敗';
@@ -1348,8 +1588,38 @@ export function initPayrollAdminPreview(ctx) {
         }
     }
 
-    periodSelect.addEventListener('change', loadPreview);
-    empSelect.addEventListener('change', loadPreview);
+    function resetAdminOvertimeUi() {
+        adminOvertimeDailyRows = [];
+        adminOvertimeUiInitialized = false;
+        if (adminOvertimeEls.overtimeHours) {
+            adminOvertimeEls.overtimeHours.value = '0';
+            delete adminOvertimeEls.overtimeHours.dataset.userEdited;
+        }
+        if (adminOvertimeEls.overtimeNote) adminOvertimeEls.overtimeNote.value = '';
+    }
+
+    periodSelect.addEventListener('change', () => {
+        resetAdminOvertimeUi();
+        loadPreview();
+    });
+    empSelect.addEventListener('change', () => {
+        resetAdminOvertimeUi();
+        loadPreview();
+    });
+    ['input', 'change'].forEach((ev) => {
+        adminOvertimeEls.overtimeHours?.addEventListener(ev, () => {
+            if (adminOvertimeEls.overtimeHours) adminOvertimeEls.overtimeHours.dataset.userEdited = '1';
+            if (adminContext) refreshAdminOvertimeDailyUi();
+        });
+        adminOvertimeEls.overtimeNote?.addEventListener(ev, () => {
+            if (adminContext) refreshAdminOvertimeDailyUi();
+        });
+    });
+    adminOvertimeEls.overtimeDailyRows?.addEventListener('input', (e) => {
+        if (!e.target.classList?.contains('payroll-ot-day-input')) return;
+        adminOvertimeDailyRows = readOvertimeDailyRowsFromContainer(adminOvertimeEls.overtimeDailyRows);
+        refreshAdminOvertimeDailyUi();
+    });
     submitBtn?.addEventListener('click', managerSubmit);
     return { refresh: loadPreview };
 }
