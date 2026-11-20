@@ -388,6 +388,7 @@
     document.getElementById('adminResetBtn').addEventListener('click', function () {
       if (!confirm('還原全部預設？')) return;
       state.settings = JSON.parse(JSON.stringify(DEFAULTS));
+      qrSanitizeSettingsSecrets(state.settings);
       try {
         var cachedTabs = JSON.parse(localStorage.getItem(TABS_CACHE_KEY));
         if (Array.isArray(cachedTabs) && cachedTabs.length > 0) {
@@ -414,6 +415,7 @@
     });
     document.getElementById('adminExportBtn').addEventListener('click', function () {
       readAdminForm();
+      qrSanitizeSettingsSecrets(state.settings);
       var blob = new Blob([JSON.stringify(state.settings, null, 2)], { type: 'application/json' });
       var a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
@@ -427,7 +429,10 @@
       var r = new FileReader();
       r.onload = function () {
         try {
-          state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), JSON.parse(r.result));
+          var incoming = JSON.parse(r.result);
+          qrSanitizeSettingsSecrets(incoming);
+          state.settings = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), incoming);
+          qrSanitizeSettingsSecrets(state.settings);
           if (state.settings.mepPerZone == null && state.settings.mepPerRoom != null) {
             state.settings.mepPerZone = state.settings.mepPerRoom;
           }
@@ -751,6 +756,111 @@
     show(pref);
   }
 
+  var QR_ADMIN_UNLOCK_SESSION_KEY = 'qr_admin_unlocked_sha256_v1';
+
+  function qrSha256Hex(text) {
+    if (!window.crypto || !crypto.subtle || !window.TextEncoder) {
+      return Promise.reject(new Error('此瀏覽器不支援安全雜湊，無法驗證 PIN'));
+    }
+    var data = new TextEncoder().encode(String(text == null ? '' : text));
+    return crypto.subtle.digest('SHA-256', data).then(function (buf) {
+      return Array.prototype.map
+        .call(new Uint8Array(buf), function (b) {
+          return ('0' + b.toString(16)).slice(-2);
+        })
+        .join('');
+    });
+  }
+
+  function qrHexEqual(a, b) {
+    a = String(a || '').toLowerCase();
+    b = String(b || '').toLowerCase();
+    if (a.length !== b.length || !a.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    return diff === 0;
+  }
+
+  function qrAdminSessionUnlocked() {
+    try {
+      return sessionStorage.getItem(QR_ADMIN_UNLOCK_SESSION_KEY) === String(QR_ADMIN_PIN_SHA256 || '');
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function qrAdminMarkUnlocked() {
+    try {
+      sessionStorage.setItem(QR_ADMIN_UNLOCK_SESSION_KEY, String(QR_ADMIN_PIN_SHA256 || ''));
+    } catch (e) { /* ignore */ }
+  }
+
+  function qrAdminSetGateVisible(locked) {
+    var gate = document.getElementById('qrAdminPinGate');
+    var form = document.getElementById('adminForm');
+    var header = document.querySelector('body[data-qr-standalone-admin="1"] > header');
+    if (gate) gate.classList.toggle('hidden', !locked);
+    if (form) form.classList.toggle('hidden', !!locked);
+    if (header) header.classList.toggle('hidden', !!locked);
+  }
+
+  function qrAdminVerifyPinInput(raw) {
+    var pin = String(raw == null ? '' : raw);
+    if (!pin) return Promise.resolve({ ok: false, reason: 'empty' });
+    if (QR_ADMIN_PIN_REVOKED && QR_ADMIN_PIN_REVOKED[pin]) {
+      return Promise.resolve({ ok: false, reason: 'revoked' });
+    }
+    return qrSha256Hex(pin).then(function (hex) {
+      if (qrHexEqual(hex, QR_ADMIN_PIN_SHA256)) return { ok: true };
+      return { ok: false, reason: 'mismatch' };
+    });
+  }
+
+  function qrAdminBindPinGate(onUnlocked) {
+    var form = document.getElementById('qrAdminPinForm');
+    var input = document.getElementById('qrAdminPinInput');
+    var err = document.getElementById('qrAdminPinError');
+    if (!form || !input) {
+      onUnlocked();
+      return;
+    }
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      if (err) {
+        err.textContent = '';
+        err.classList.add('hidden');
+      }
+      qrAdminVerifyPinInput(input.value)
+        .then(function (res) {
+          if (res.ok) {
+            qrAdminMarkUnlocked();
+            input.value = '';
+            qrAdminSetGateVisible(false);
+            onUnlocked();
+            return;
+          }
+          var msg =
+            res.reason === 'revoked'
+              ? '此 PIN 已作廢，請使用輪換後的新 PIN。'
+              : res.reason === 'empty'
+                ? '請輸入管理 PIN。'
+                : 'PIN 不正確。';
+          if (err) {
+            err.textContent = msg;
+            err.classList.remove('hidden');
+          } else alert(msg);
+          input.select();
+        })
+        .catch(function (e) {
+          var msg = (e && e.message) || String(e);
+          if (err) {
+            err.textContent = msg;
+            err.classList.remove('hidden');
+          } else alert(msg);
+        });
+    });
+  }
+
   function qrAdminPageReady() {
     var st = document.getElementById('qrFbSyncStatus');
     if (st && state.fbLoadNote) st.textContent = state.fbLoadNote;
@@ -761,19 +871,33 @@
     }
   }
 
+  function qrAdminBootAfterSettings() {
+    qrSanitizeSettingsSecrets(state.settings);
+    if (qrAdminSessionUnlocked()) {
+      qrAdminSetGateVisible(false);
+      qrAdminShellInitNavigation();
+      qrAdminPageReady();
+      return;
+    }
+    qrAdminSetGateVisible(true);
+    qrAdminBindPinGate(function () {
+      qrAdminShellInitNavigation();
+      qrAdminPageReady();
+    });
+  }
+
   var isAdminStandalonePage = !!(document.body && document.body.dataset.qrStandaloneAdmin === '1');
-  if (isAdminStandalonePage) qrAdminShellInitNavigation();
 
   loadSettings();
   var preferRemoteOnLoad =
     typeof qrShouldPreferRemoteOnLoad === 'function' ? qrShouldPreferRemoteOnLoad() : false;
   qrFbPullOnce({ silent: true, preferRemote: preferRemoteOnLoad })
     .then(function () {
-      if (isAdminStandalonePage) qrAdminPageReady();
+      if (isAdminStandalonePage) qrAdminBootAfterSettings();
       else qrAfterSettingsReady();
     })
     .catch(function () {
-      if (isAdminStandalonePage) qrAdminPageReady();
+      if (isAdminStandalonePage) qrAdminBootAfterSettings();
       else qrAfterSettingsReady();
     });
 

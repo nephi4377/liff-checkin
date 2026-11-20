@@ -148,8 +148,25 @@
    * - 出線／插座參考：表為「座／處」計價，與工具「式」語意不同時請手調或改列。
    */
 
+  /**
+   * 管理 PIN 不以明文進版控／DEFAULTS。
+   * 管理頁以 prompt 輸入後，與本雜湊（SHA-256 hex，UTF-8）比對；明文只在私密交付管道。
+   */
+  var QR_ADMIN_PIN_SHA256 =
+    '7e3772a6bc5b03fe5b02a8c484bbca722d74b9fdbba96b38115b2dc517c66ab5';
+  /** 已公開洩漏、永遠拒絕的舊明文（勿再當口令、勿寫回雲端）。 */
+  var QR_ADMIN_PIN_REVOKED = { '0426': true };
+
+  /** 從設定物件拿掉明文 adminPin（本機／雲端／匯出皆不應再帶）。 */
+  function qrSanitizeSettingsSecrets(settings) {
+    if (!settings || typeof settings !== 'object') return settings;
+    if (Object.prototype.hasOwnProperty.call(settings, 'adminPin')) {
+      delete settings.adminPin;
+    }
+    return settings;
+  }
+
   var DEFAULTS = {
-    adminPin: '0426',
     schemaVersion: SCHEMA_V,
     /* 與 v1 相同之「添心設計標準計價表」；管理頁可改 */
     priceSheetGvizId: '1-9Ztmawv5tnAsQBmoHXzW_THYLyUOahGFsITvtmHaUk',

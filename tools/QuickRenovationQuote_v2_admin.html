@@ -15,7 +15,31 @@
   </style>
 </head>
 <body class="bg-stone-100 text-stone-900 min-h-screen" data-qr-standalone-admin="1">
-  <header class="no-print border-b border-stone-200 bg-white/95 backdrop-blur px-4 py-3 sticky top-0 z-30 shadow-sm">
+  <!-- 管理 PIN 閘：明文不進版控；輸入後與前端 SHA-256 比對。解鎖前隱藏下方主介面。 -->
+  <div id="qrAdminPinGate" class="min-h-screen flex items-center justify-center px-4 py-10">
+    <form id="qrAdminPinForm" class="w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-sm p-6 space-y-4" autocomplete="off">
+      <div>
+        <h1 class="text-lg font-bold text-amber-900 m-0">快速報價｜管理員解鎖</h1>
+        <p class="text-xs text-stone-600 m-0 mt-2 leading-relaxed">請輸入管理 PIN。PIN 不會寫在公開程式裡；舊 PIN 已作廢。</p>
+      </div>
+      <label class="block text-sm text-stone-800"
+        >管理 PIN
+        <input
+          id="qrAdminPinInput"
+          type="password"
+          inputmode="text"
+          autocomplete="current-password"
+          class="mt-1 w-full border border-stone-300 rounded-lg px-3 py-2 text-base"
+          required
+        />
+      </label>
+      <p id="qrAdminPinError" class="hidden text-sm text-red-800 m-0" role="alert"></p>
+      <button type="submit" class="w-full min-h-[2.75rem] rounded-xl bg-stone-800 text-white font-semibold hover:bg-stone-900">解鎖</button>
+      <p class="text-[11px] text-stone-500 m-0"><a href="QuickRenovationQuote_v2.html" class="text-amber-900 underline">回客戶報價頁</a></p>
+    </form>
+  </div>
+
+  <header class="hidden no-print border-b border-stone-200 bg-white/95 backdrop-blur px-4 py-3 sticky top-0 z-30 shadow-sm">
     <div class="w-full px-2 sm:px-3 flex flex-wrap items-start justify-between gap-3">
       <div>
         <h1 class="text-xl font-bold text-amber-900 m-0">快速報價｜管理員設定</h1>
@@ -31,7 +55,7 @@
     <p id="qrAdminActionBar" class="hidden w-full px-2 sm:px-3 mt-2 text-xs py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900" role="status" aria-live="polite"></p>
   </header>
 
-  <div id="adminForm" class="w-full px-2 sm:px-3 flex flex-col lg:flex-row min-h-0 lg:min-h-[calc(100vh-5.5rem)] pb-24">
+  <div id="adminForm" class="hidden w-full px-2 sm:px-3 flex flex-col lg:flex-row min-h-0 lg:min-h-[calc(100vh-5.5rem)] pb-24">
     <!-- 左：分段導覽（寬螢幕直向／窄螢幕橫向） -->
     <nav
       id="qrAdminNav"
