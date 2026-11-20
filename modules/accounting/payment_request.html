@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=12"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=13"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -1412,7 +1412,13 @@
                 }
                 updatePretaxHint(row);
                 var a = parseAllocAmount(inp.value);
-                if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
+                if (!isNaN(a)) {
+                  row.setAttribute('data-base-amount', String(a));
+                  var descInpEdit = row.querySelector('.inp-desc');
+                  if (descInpEdit && typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.embedBaseInDesc) {
+                    descInpEdit.value = AccountingTaxMode.embedBaseInDesc(descInpEdit.value, a);
+                  }
+                }
                 row.setAttribute('data-tax-add-applied', '0');
               }
             }
@@ -1732,10 +1738,23 @@
       }
 
       function stripTaxTag(desc) {
-        return String(desc || '').replace(/\s*[\(（]?(含稅|未稅)[\)）]?/g, '').trim();
+        if (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.stripTaxTag) {
+          return AccountingTaxMode.stripTaxTag(desc);
+        }
+        var marks = [];
+        var s = String(desc || '').replace(/〔未稅-?\d+〕/g, function (m) {
+          marks.push(m);
+          return '\uE000' + (marks.length - 1) + '\uE001';
+        });
+        s = s.replace(/\s*[（(]含稅[）)]\s*/g, ' ').replace(/\s*[（(]未稅[）)]\s*/g, ' ');
+        for (var i = 0; i < marks.length; i++) s = s.replace('\uE000' + i + '\uE001', marks[i]);
+        return s.replace(/\s+/g, ' ').trim();
       }
 
       function applyTaxTag(desc, inclusive) {
+        if (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.formatInclusiveTaxTag) {
+          return AccountingTaxMode.formatInclusiveTaxTag(desc, inclusive);
+        }
         var base = stripTaxTag(desc);
         var tag = inclusive ? '(含稅)' : '(未稅)';
         return base ? base + ' ' + tag : tag;
@@ -1820,13 +1839,22 @@
         noteEl.value = taxLine ? (stripped ? stripped + '；' + taxLine : taxLine) : stripped;
       }
 
-      /** 含稅：只標記，不改金額（稅別加成改由上方三模式處理） */
+      /** 含稅：只標記，不改金額（走 AccountingTaxMode.setRowTaxInclusive） */
       function onTaxInclusiveChange(rowEl) {
         var cb = rowEl.querySelector('.inp-tax');
         var amtInp = rowEl.querySelector('.inp-amt');
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
-        descInp.value = applyTaxTag(descInp.value, cb.checked);
+        var amtBefore = amtInp.value;
+        var next = (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.setRowTaxInclusive)
+          ? AccountingTaxMode.setRowTaxInclusive({
+            amount: parseAllocAmount(amtBefore),
+            item_desc: descInp.value,
+            tax_inclusive: cb.checked
+          }, cb.checked)
+          : { item_desc: applyTaxTag(descInp.value, cb.checked) };
+        descInp.value = next.item_desc;
+        amtInp.value = amtBefore;
         updatePretaxHint(rowEl);
         rowEl.setAttribute('data-source', 'manual');
         syncTaxFormNote();

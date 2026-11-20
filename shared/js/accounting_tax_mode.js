@@ -77,14 +77,51 @@ var AccountingTaxMode = (function () {
     return NaN;
   }
 
+  /**
+   * 去掉畫面「(含稅)/(未稅)」標，保留 〔未稅N〕（勿讓 未稅 二字被剝成 〔1000〕）。
+   */
+  function stripTaxTag(desc) {
+    var marks = [];
+    var s = String(desc || '').replace(/〔未稅-?\d+〕/g, function (m) {
+      marks.push(m);
+      return '\uE000' + (marks.length - 1) + '\uE001';
+    });
+    s = s
+      .replace(/\s*[（(]含稅[）)]\s*/g, ' ')
+      .replace(/\s*[（(]未稅[）)]\s*/g, ' ')
+      .replace(/(^|[\s　])含稅(?=[\s　]|$)/g, '$1')
+      .replace(/(^|[\s　])未稅(?=[\s　]|$)/g, '$1');
+    for (var i = 0; i < marks.length; i++) {
+      s = s.replace('\uE000' + i + '\uE001', marks[i]);
+    }
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  /** 分攤存檔用：有 (含稅) 就標，否則清掉含稅標（可留 〔未稅N〕） */
   function applyTaxTag(desc, on) {
     var baseMark = '';
     var m = String(desc || '').match(/〔未稅-?\d+〕/);
     if (m) baseMark = m[0];
-    var s = stripBaseMark(desc).replace(/\s*[（(]含稅[）)]\s*/g, ' ').trim();
+    var s = stripTaxTag(stripBaseMark(desc));
     if (on) s = (s ? s + ' ' : '') + '(含稅)';
     if (baseMark) s = (s ? s + ' ' : '') + baseMark;
     return s.trim();
+  }
+
+  /** 請款／審核勾選用：標成 (含稅) 或 (未稅)，保留 〔未稅N〕 */
+  function formatInclusiveTaxTag(desc, inclusive) {
+    var base = stripTaxTag(desc);
+    var tag = inclusive ? '(含稅)' : '(未稅)';
+    return base ? base + ' ' + tag : tag;
+  }
+
+  /** 對齊 onTaxInclusiveChange：只改標記，不改金額 */
+  function setRowTaxInclusive(row, checked) {
+    row = row || {};
+    return Object.assign({}, row, {
+      tax_inclusive: !!checked,
+      item_desc: formatInclusiveTaxTag(row.item_desc, !!checked)
+    });
   }
 
   function normalizeMode(raw) {
@@ -145,48 +182,51 @@ var AccountingTaxMode = (function () {
   }
 
   /**
-   * 舊單無未稅基數／整張稅時：用 ÷1.05 試算，僅當再套用可還原原含稅額才採用（多為 5% 歷史單）。
+   * 舊單無未稅基數／整張稅時：以「整張含稅合計」反推稅額（勿逐列÷1.05，折讓會偏）。
+   * 僅當再套用可還原原含稅額才採用（多為 5% 歷史單）。回傳 { rows, tax } 供稅欄回填。
    */
   function inferLegacyProratePretax(rows) {
-    var guess = [];
+    var list = rows || [];
+    if (!list.length) return null;
     var inclusiveSum = 0;
-    var pretaxSum = 0;
     var i;
-    for (i = 0; i < (rows || []).length; i++) {
-      var r = rows[i] || {};
-      var amt = parseAmount(r.amount);
+    for (i = 0; i < list.length; i++) {
+      var amt = parseAmount(list[i].amount);
       if (isNaN(amt)) amt = 0;
       inclusiveSum += amt;
-      var base = amt;
-      if (amt > 0 && (r.tax_inclusive || /含稅/.test(String(r.item_desc || '')))) {
-        base = removeTax(amt);
-      }
-      pretaxSum += base;
-      guess.push(Object.assign({}, r, {
-        amount: base,
-        _base_amount: base,
-        tax_inclusive: false,
-        tax_add_applied: false,
-        item_desc: applyTaxTag(r.item_desc, false)
-      }));
     }
-    var taxGuess = inclusiveSum - pretaxSum;
+    var pretaxNet = removeTax(inclusiveSum);
+    var taxGuess = inclusiveSum - pretaxNet;
     if (taxGuess < 0) return null;
+    var guess = restoreProratePretaxByTax(list, taxGuess);
     var reapplied = prorateTax(guess, taxGuess);
     for (i = 0; i < reapplied.length; i++) {
-      if (parseAmount(reapplied[i].amount) !== parseAmount(rows[i].amount)) return null;
+      if (parseAmount(reapplied[i].amount) !== parseAmount(list[i].amount)) return null;
     }
     return { rows: guess, tax: taxGuess };
+  }
+
+  function readOptsProrateTax(opts) {
+    opts = opts || {};
+    var taxRaw = opts.taxAmount;
+    if (taxRaw == null || String(taxRaw).trim() === '') {
+      return opts.paymentNote != null ? parseProrateTaxFromNote(opts.paymentNote) : NaN;
+    }
+    return parseAmount(taxRaw);
   }
 
   /**
    * 含稅分攤列 → 未稅列（勿用每列÷1.05）。
    * 優先：列上未稅基數；否則：含稅合計 − 已存稅額，再按正數列比例還原。
+   * 若 opts 傳入物件，成功推得整張稅時寫入 opts.restoredTax（供空白稅欄回填）。
    */
   function restoreProratePretaxRows(rows, opts) {
     opts = opts || {};
     var list = rows || [];
     if (!list.length) return [];
+    delete opts.restoredTax;
+
+    var taxRaw = readOptsProrateTax(opts);
 
     var allHaveBase = true;
     var fromStored = list.map(function (r) {
@@ -206,21 +246,21 @@ var AccountingTaxMode = (function () {
         note: encodeBaseInAllocNote(r.note, base)
       });
     });
-    if (allHaveBase) return fromStored;
-
-    var taxRaw = opts.taxAmount;
-    if (taxRaw == null || String(taxRaw).trim() === '') {
-      taxRaw = opts.paymentNote != null ? parseProrateTaxFromNote(opts.paymentNote) : NaN;
-    } else {
-      taxRaw = parseAmount(taxRaw);
+    if (allHaveBase) {
+      if (!isNaN(taxRaw) && taxRaw >= 0) opts.restoredTax = taxRaw;
+      return fromStored;
     }
 
     if (!isNaN(taxRaw) && taxRaw >= 0) {
+      opts.restoredTax = taxRaw;
       return restoreProratePretaxByTax(list, taxRaw);
     }
 
     var legacy = inferLegacyProratePretax(list);
-    if (legacy) return legacy.rows;
+    if (legacy) {
+      opts.restoredTax = legacy.tax;
+      return legacy.rows;
+    }
 
     // 無法安全還原：維持原額並清含稅標（避免再加一次稅時至少可見）；呼叫端應補稅額
     return list.map(function (r) {
@@ -303,14 +343,11 @@ var AccountingTaxMode = (function () {
     });
   }
 
-  /** 列是否已是「整張分攤後的含稅額」（重開要還原）；畫面上的未稅列則否 */
+  /** 列是否已是「整張分攤後的含稅額」（重開要還原）。不可用「金額≠基數」判斷（使用者改未稅會誤判）。 */
   function rowLooksProrateTaxInclusive(row) {
     row = row || {};
     if (row.tax_inclusive) return true;
     if (/\(含稅\)|（含稅）/.test(String(row.item_desc || ''))) return true;
-    var amt = parseAmount(row.amount);
-    var stored = readStoredProrateBase(row);
-    if (!isNaN(stored) && !isNaN(amt) && stored !== amt) return true;
     return false;
   }
 
@@ -323,7 +360,7 @@ var AccountingTaxMode = (function () {
 
   /**
    * 畫面用：還原成未稅列（不加稅）。整張分攤時欄位應一直是未稅。
-   * 注意：prevMode=prorate 且列已是未稅時，不可再用稅額倒扣（否則存檔會變成「假含稅」）。
+   * 注意：prevMode=prorate 且列已是未稅時，以欄位金額為基數（使用者改過就更新，勿鎖舊 〔未稅〕）。
    */
   function toPretaxRows(rows, prevMode, opts) {
     var prev = normalizeMode(prevMode) || '';
@@ -334,15 +371,14 @@ var AccountingTaxMode = (function () {
       return (rows || []).map(function (r) {
         var amt = parseAmount(r.amount);
         if (isNaN(amt)) amt = 0;
-        var base = readStoredProrateBase(r);
-        if (isNaN(base)) base = amt;
+        // 未稅編輯中：欄位金額即基數
         return Object.assign({}, r, {
           amount: amt,
-          _base_amount: base,
+          _base_amount: amt,
           tax_inclusive: false,
           tax_add_applied: false,
-          item_desc: applyTaxTag(embedBaseInDesc(r.item_desc, base), false),
-          note: encodeBaseInAllocNote(r.note, base)
+          item_desc: applyTaxTag(embedBaseInDesc(r.item_desc, amt), false),
+          note: encodeBaseInAllocNote(r.note, amt)
         });
       });
     }
@@ -618,12 +654,16 @@ var AccountingTaxMode = (function () {
     parseAmount: parseAmount,
     addTax: addTax,
     removeTax: removeTax,
+    stripTaxTag: stripTaxTag,
     applyTaxTag: applyTaxTag,
+    formatInclusiveTaxTag: formatInclusiveTaxTag,
+    setRowTaxInclusive: setRowTaxInclusive,
     normalizeMode: normalizeMode,
     modeLabel: modeLabel,
     applyModeToRows: applyModeToRows,
     toPretaxRows: toPretaxRows,
     restoreProratePretaxRows: restoreProratePretaxRows,
+    inferLegacyProratePretax: inferLegacyProratePretax,
     resolveProrateTax: resolveProrateTax,
     rowBaseAmount: rowBaseAmount,
     readStoredProrateBase: readStoredProrateBase,
