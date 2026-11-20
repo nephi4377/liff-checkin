@@ -215,10 +215,29 @@ var AccountingTaxMode = (function () {
     return parseAmount(taxRaw);
   }
 
+  /** 含稅列合計 − 未稅基數合計 → 整張稅（缺【整張稅】時回填用） */
+  function inferTaxFromInclusiveMinusBases(inclusiveRows, pretaxRows) {
+    var inclusiveSum = 0;
+    var baseSum = 0;
+    var i;
+    for (i = 0; i < (inclusiveRows || []).length; i++) {
+      var inc = parseAmount(inclusiveRows[i].amount);
+      if (isNaN(inc)) inc = 0;
+      inclusiveSum += inc;
+    }
+    for (i = 0; i < (pretaxRows || []).length; i++) {
+      var base = parseAmount(pretaxRows[i].amount);
+      if (isNaN(base)) base = 0;
+      baseSum += base;
+    }
+    var tax = inclusiveSum - baseSum;
+    return tax >= 0 ? tax : NaN;
+  }
+
   /**
    * 含稅分攤列 → 未稅列（勿用每列÷1.05）。
    * 優先：列上未稅基數；否則：含稅合計 − 已存稅額，再按正數列比例還原。
-   * 若 opts 傳入物件，成功推得整張稅時寫入 opts.restoredTax（供空白稅欄回填）。
+   * 若 opts 傳入物件，寫入 opts.restoredTax（供空白稅欄回填；失敗時為 0，避免再自動×5%）。
    */
   function restoreProratePretaxRows(rows, opts) {
     opts = opts || {};
@@ -247,7 +266,13 @@ var AccountingTaxMode = (function () {
       });
     });
     if (allHaveBase) {
-      if (!isNaN(taxRaw) && taxRaw >= 0) opts.restoredTax = taxRaw;
+      if (!isNaN(taxRaw) && taxRaw >= 0) {
+        opts.restoredTax = taxRaw;
+      } else {
+        // 有〔未稅〕／基數但缺【整張稅】：含稅合計 − 基數合計
+        var inferred = inferTaxFromInclusiveMinusBases(list, fromStored);
+        opts.restoredTax = !isNaN(inferred) ? inferred : 0;
+      }
       return fromStored;
     }
 
@@ -262,7 +287,8 @@ var AccountingTaxMode = (function () {
       return legacy.rows;
     }
 
-    // 無法安全還原：維持原額並清含稅標（避免再加一次稅時至少可見）；呼叫端應補稅額
+    // 無法安全還原：維持原含稅合計；稅欄回填 0，避免空白再自動×5% 加一次稅
+    opts.restoredTax = 0;
     return list.map(function (r) {
       var amt = parseAmount(r.amount);
       if (isNaN(amt)) amt = 0;
@@ -271,7 +297,8 @@ var AccountingTaxMode = (function () {
         _base_amount: amt,
         tax_inclusive: false,
         tax_add_applied: false,
-        item_desc: applyTaxTag(r.item_desc, false)
+        item_desc: applyTaxTag(embedBaseInDesc(r.item_desc, amt), false),
+        note: encodeBaseInAllocNote(r.note, amt)
       });
     });
   }

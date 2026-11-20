@@ -145,6 +145,36 @@ var byTaxOnly = Tax.restoreProratePretaxRows(
 );
 assert(byTaxOnly[0].amount === 1000, '只靠整張稅還原 1000');
 
+// —— 有〔未稅〕基數但缺【整張稅】：含稅合計−基數合計回填稅 ——
+var baseNoTaxOpts = { taxAmount: '' };
+var baseNoTax = Tax.restoreProratePretaxRows(
+  [{ amount: 1100, item_desc: 'A (含稅) 〔未稅1000〕', tax_inclusive: true, note: '【未稅】1000' }],
+  baseNoTaxOpts
+);
+assert(baseNoTax[0].amount === 1000, '有基數缺整張稅：重開未稅 1000');
+assert(baseNoTaxOpts.restoredTax === 100, '有基數缺整張稅：回填稅 100，得 ' + baseNoTaxOpts.restoredTax);
+assert(Tax.summarize(baseNoTax, 'prorate', String(baseNoTaxOpts.restoredTax)).payable === 1100,
+  '有基數缺整張稅：應付維持 1100（不是空白×5%→1050）');
+assert(Tax.summarize(baseNoTax, 'prorate', '').payable === 1050, '對照：空白稅欄會變成 1050');
+
+// —— legacy 推算失敗（原稅 0、[10,10,1]）：稅欄回填 0，應付維持 21 ——
+var legacyFailOpts = { taxAmount: '' };
+var legacyFailRows = [
+  { amount: 10, item_desc: 'a', tax_inclusive: true },
+  { amount: 10, item_desc: 'b', tax_inclusive: true },
+  { amount: 1, item_desc: 'c', tax_inclusive: true }
+];
+assert(Tax.inferLegacyProratePretax(legacyFailRows) === null, 'legacy [10,10,1] 推算失敗');
+var legacyFail = Tax.restoreProratePretaxRows(legacyFailRows, legacyFailOpts);
+assert(legacyFailOpts.restoredTax === 0, 'legacy 失敗回填稅 0，得 ' + legacyFailOpts.restoredTax);
+assert(sumAmt(legacyFail) === 21, 'legacy 失敗維持原額合計 21');
+assert(Tax.summarize(legacyFail, 'prorate', '0').payable === 21, 'legacy 失敗應付 21（稅=0）');
+assert(Tax.summarize(legacyFail, 'prorate', '').payable === 22, '對照：空白稅欄會變成 22');
+assert(sumAmt(Tax.applyModeToRows(legacyFail, 'prorate', {
+  prevMode: 'prorate',
+  taxAmount: '0'
+})) === 21, 'legacy 失敗再存檔合計仍 21');
+
 // —— 舊單沒標記又有折讓：含稅 1040、−200 → 未稅 1000、−200，稅 40，應付 840 ——
 var legacyAllowSaved = [
   { project_no: '1', amount: 1040, item_desc: '出貨 (含稅)', tax_inclusive: true },
@@ -234,7 +264,7 @@ assert(mixedUn.amount === 800, '混合未稅列金額不變');
 // HTML 必須走 setRowTaxInclusive／保護 stripTaxTag
 var pay = fs.readFileSync(path.join(root, 'modules/accounting/payment_request.html'), 'utf8');
 var rev = fs.readFileSync(path.join(root, 'modules/accounting/ledger_review.html'), 'utf8');
-assert(/accounting_tax_mode\.js\?v=13/.test(pay) && /accounting_tax_mode\.js\?v=13/.test(rev), 'cache bust v=13');
+assert(/accounting_tax_mode\.js\?v=14/.test(pay) && /accounting_tax_mode\.js\?v=14/.test(rev), 'cache bust v=14');
 assert(/setRowTaxInclusive/.test(pay) && /setRowTaxInclusive/.test(rev), 'onTaxInclusiveChange 呼叫 setRowTaxInclusive');
 assert(/AccountingTaxMode\.stripTaxTag/.test(pay) && /AccountingTaxMode\.stripTaxTag/.test(rev), 'HTML stripTaxTag 走共用');
 assert(/restoredTax/.test(rev), 'ledger_review 回填 restoredTax');
