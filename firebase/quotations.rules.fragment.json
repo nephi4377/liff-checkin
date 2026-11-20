@@ -1,8 +1,8 @@
 {
-  "_NOTICE": "片段：禁止 firebase deploy / firebase deploy --only database。僅在 Firebase Console 手動合併進「完整匯出 rules」。合併前請確認上層無 .read:true 覆蓋 quotations（見 runbook）。",
+  "_NOTICE": "片段：禁止 firebase deploy / firebase deploy --only database。僅在 Firebase Console 手動合併進「完整匯出 rules」。合併前請確認上層無 .read:true 覆蓋 quotations（見 runbook）。P0 含 notifications／quickRenovationQuote 時請改用 rtdb-rules.p0-sensitive.fragment.json。",
   "quotations": {
+    ".read": "auth != null",
     "$projectNo": {
-      ".read": "auth != null",
       ".write": "auth != null"
     }
   }

@@ -20,12 +20,13 @@
 | 9 | R+W（後端） | `Backend_GAS/project-console/ProjectLogic.js` | `_updateProjectStatus_` 結案時觸發 Firebase 同步 | 同 #8 |
 | 10 | R（後端） | `Backend_GAS/project-console/SiteReportAcceptance.js` | `fetchQuotationContextFromFirebase_(projectNo)` → RTDB `quotations/{案號}`（`TOS/TOS_AUDIT_ROUND12`：讀 `items`、`total_summary.overall_completion`、`price` 等；`buildQuotationSummaryFromContext_`） | **讀取**收緊為 `auth!=null` 時：**若 GAS 未帶 auth 會失敗**（本 repo 無法讀 Backend 源碼，無法確認是否共用 `FIREBASE_RTDB_AUTH`）。發布 read 規則前請豪哥試跑驗收／毛利相關 API。前端 BudgetAuditor 不受此條影響（已匿名登入） |
 
-## 非 `quotations` 但同專案 RTDB（本任務不變規則）
+## 非 `quotations` 但同專案 RTDB（P0 一併收緊讀取）
 
-| 路徑 | 讀者（本 repo） | 備註 |
-|------|-----------------|------|
-| `quickRenovationQuote/settingsV2` | `tools/quick-renovation-quote/*` | 本 PR 僅補預設匿名登入；**不修改**該路徑規則 |
-| （其他） | 施工回報等見 `reportV3`（Storage 為主） | 部署規則前必從 Console **匯出完整 rules** 比對（runbook） |
+| 路徑 | 讀者／寫者 | 規則（P0 片段） | 備註 |
+|------|------------|-----------------|------|
+| `quickRenovationQuote/settingsV2` | `tools/quick-renovation-quote/*`（已 `ensureAuth`） | read+write `auth != null` | 含 `adminPin`；未登入 curl 應拒 |
+| `notifications/{UID}` | 寫：GAS `pushToFirebase`（無 auth）；讀：添心助手 taupdata（**尚無 Auth**） | read `auth != null`；write `true` | 發布前 taupdata 須先補匿名登入；Hub SPA 走 GAS 不直連 |
+| （其他） | 施工回報等見 `reportV3`（Storage 為主） | 預設拒絕（若拿掉根公開讀） | 部署規則前必從 Console **匯出完整 rules** 比對（runbook） |
 
 ## 規則收緊後仍可能失敗的讀者
 
@@ -36,4 +37,4 @@
 | GAS 讀 `quotations` 未帶 auth 且 **read** 收緊 | `SiteReportAcceptance` 等後端讀取失敗 | 同上；或後端改帶 token／Admin SDK |
 | 外部直接 `curl` 公開 `.json` | 刻意封閉 | 預期行為 |
 
-*文件版本：RTDB-READ-RULES-1 · 2026-10-23（TINA #215 A/B）*
+*文件版本：RTDB-READ-RULES-1 + P0 · 2026-11-17*

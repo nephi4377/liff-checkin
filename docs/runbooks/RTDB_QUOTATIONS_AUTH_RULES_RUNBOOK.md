@@ -1,12 +1,14 @@
-# Runbook：`quotations/*` RTDB 讀取改為需登入（RTDB-READ-RULES-1）
+# Runbook：RTDB 敏感節點改為需登入（RTDB-READ-RULES-1 + P0）
 
 **Cloud Agent 不執行本 runbook 內任何 Console／GAS Script Property／正式部署步驟。** 供豪哥或值班依序操作。
 
 ## 0. 目標
 
 - `quotations/{案號}`：**未登入不可讀**（含單價、案場名稱）。
-- 寫入：不得比現行更寬；預設片段與讀取同為 `auth != null`（**見 §1.5**：後端未帶 auth 時勿盲目收緊寫入）。
-- 前端：BudgetWeb、BudgetAuditor V2、客戶進度頁等先支援**匿名登入**再讀寫。
+- `notifications/{UID}`：**未登入不可讀**（員工 LINE userId／即時訊息）。
+- `quickRenovationQuote/**`（含 `settingsV2`／`adminPin`）：**未登入不可讀寫**。
+- 寫入：不得比現行更寬；`quotations` 預設片段與讀取同為 `auth != null`（**見 §1.5**：後端未帶 auth 時勿盲目收緊寫入）。`notifications` 寫入暫維持公開（GAS `pushToFirebase` 未帶 token）。
+- 前端：BudgetWeb、BudgetAuditor V2、客戶進度頁、QuickRenovationQuote 等先支援**匿名登入**再讀寫。
 
 ## 1. Firebase Console 前置（豪哥）
 
@@ -14,7 +16,7 @@
 2. 記錄目前 **Realtime Database → Rules** 全文：  
    - Rules 頁 → 右上角 **⋮** → 匯出／或複製整份 JSON 存檔 `rules-before-YYYYMMDD.json`。
 3. **不要**在未匯出前覆寫整份 rules。
-4. **禁止**對本 repo 執行 `firebase deploy`／`firebase deploy --only database`：根目錄無正式 `firebase.json`；`firebase/quotations.rules.fragment.json` 僅為片段，部署會**抹掉**其他節點規則。
+4. **禁止**對本 repo 執行 `firebase deploy`／`firebase deploy --only database`：根目錄無正式 `firebase.json`；`firebase/rtdb-rules.p0-sensitive.fragment.json`（及舊 `quotations.rules.fragment.json`）僅為片段，CLI 部署會**抹掉**其他節點規則。
 
 ### 1.5 發布規則前必做：GAS `FIREBASE_RTDB_AUTH`（僅核對名稱，禁止由本任務新增）
 
@@ -37,20 +39,32 @@ Cloud Agent **無法**讀取 Script Properties；以下只能由豪哥在 **Goog
 
 **讀取收緊與 `SiteReportAcceptance.js`：** 依 `TOS/TOS_AUDIT_ROUND12`，後端 `fetchQuotationContextFromFirebase_(projectNo)` 讀 `quotations/{案號}`（含 `items`、`total_summary` 等）。**讀取改為 `auth != null` 後，若 GAS 未帶與 `FIREBASE_RTDB_AUTH` 相同機制之 auth，驗收加總／毛利對照可能失敗。** 本 repo 無 Backend 源碼，無法確認實作是否已讀取該屬性；發布 read 規則前請在 GAS 試跑相關 action 或看執行記錄是否 `permission_denied`。
 
-## 2. 合併規則片段（僅改 `quotations`，僅 Console）
+## 2. 合併規則片段（P0：三節點，僅 Console）
 
-Repo 片段：**`firebase/quotations.rules.fragment.json`**（內含 `_NOTICE`；合併時**不要**把 `_NOTICE` 貼進 Console）。
+Repo 片段：**`firebase/rtdb-rules.p0-sensitive.fragment.json`**（內含 `_NOTICE`／`_AUTH_NOTES`；合併時**不要**把這兩個鍵貼進 Console）。
 
-建議合併進完整 rules 的 `quotations` 節點（依 §1.5 決定 write 是否一併收緊）：
+建議合併進完整 rules 的節點（`quotations` write 依 §1.5）：
 
 ```json
 "quotations": {
+  ".read": "auth != null",
   "$projectNo": {
-    ".read": "auth != null",
     ".write": "auth != null"
   }
+},
+"notifications": {
+  "$uid": {
+    ".read": "auth != null",
+    ".write": true
+  }
+},
+"quickRenovationQuote": {
+  ".read": "auth != null",
+  ".write": "auth != null"
 }
 ```
+
+> **BudgetAuditor 總覽**：`db.ref('quotations').once('value')` 需要**父層** `.read`；只放 `$projectNo` 子層時，已登入列整包仍會 DENIED。
 
 ### 2.1 上層規則檢查（子層收緊是否會生效）
 
@@ -59,16 +73,24 @@ Firebase 規則：**父節點若已有 `.read: true` 或 `.write: true`，子節
 在 `rules-before-YYYYMMDD.json` 中檢查：
 
 1. 根 `"rules"` 或任何**父層**是否對整棵樹設 `.read: true`／`.write: true`。
-2. 是否存在 `"quotations": { ".read": true, ... }` 且子路徑未覆寫。
-3. 若發現上層公開讀寫：須**先調整父層**（或改路徑結構），再設子層 `auth != null`；否則發布後 quotations 仍可能公開。
+2. 是否存在 `"quotations": { ".read": true, ... }`（或 `notifications`／`quickRenovationQuote`）且子路徑未覆寫。
+3. 若發現上層公開讀寫：須**先拿掉根／父層公開讀**，再設上列子節點；否則發布後仍可能公開。
 
 操作：
 
 1. 開啟步驟 1 匯出的完整 rules。
-2. 完成 §2.1 檢查後，**只替換** `"quotations"` 節點（write 依 §1.5）。
-3. 其他 top-level 節點（`quickRenovationQuote`、上傳佇列等）**逐字保留**。
+2. 完成 §2.1 檢查後，替換／寫入 `"quotations"`、`"notifications"`、`"quickRenovationQuote"`（quotations write 依 §1.5）。
+3. 其他 top-level 節點（若有上傳佇列等）**逐字保留**；若根曾 `.read: true`，改為預設拒絕（僅允許上列節點依規則讀寫）。
 4. 在 Console **Publish**（不要用 CLI 部署片段檔）。
 5. 本地 Emulator：`npm run test:rtdb-rules`、`npm run test:rtdb-rules-legacy`（使用 `firebase/emulator.firebase.json`，與正式 deploy 無關）。
+
+### 2.2 發布前相容（`notifications` 讀取端）
+
+| 客戶端 | 現況 | 發布前必做 |
+|--------|------|------------|
+| 添心助手 `taupdata` `client/src/firebaseService.js` | 只 `initializeApp`，**無** Firebase Auth | 先加 `signInAnonymously`（或同等），再 Publish `notifications` 讀取收緊 |
+| Hub SPA | 通知走 GAS，不直連此節點 | 無 |
+| GAS `pushToFirebase` | POST 無 `?auth=` | 寫入暫 `.write: true`；日後補 `FIREBASE_RTDB_AUTH` 再收緊寫入 |
 
 ## 3. 部署順序（重要）
 
@@ -87,10 +109,25 @@ flowchart LR
 | 3.1 | §1.5 GAS 屬性名稱核對 | 已選甲／乙／丙並記錄 |
 | 3.2 | 合併並 **先** 部署 **liff-checkin** 前端（#215） | BudgetWeb 案號檢查、Auditor 載入／同步 OK |
 | 3.3 | DevTools：Firebase Auth 有 anonymous `uid` | `quotations` 無 `permission_denied`（已登入） |
-| 3.4 | Console Publish **合併後** rules（§2.1 已檢查） | 見 3.5 |
-| 3.5 | 未帶 auth 讀取應失敗（勿用真案號公開測試） | `permission_denied` |
-| 3.6 | BudgetWeb、Auditor、客戶進度頁；**結案同步**；驗收／毛利相關 API | 無新增 `permission_denied` |
-| 3.7 | 若有 #212/#213：LayoutPlanner → BudgetWeb 雲端同步 | 寫回安全閘正常 |
+| 3.4 | 確認 taupdata 已能匿名登入（§2.2） | 助手仍收到測試推播 |
+| 3.5 | Console Publish **合併後** rules（§2.1 已檢查） | 見 3.6 |
+| 3.6 | 未帶 auth 讀取應失敗（勿用真案號／真 UID 公開測試） | 見下方 curl 探針 |
+| 3.7 | BudgetWeb、Auditor、客戶進度頁、QuickRenovationQuote；**結案同步**；驗收／毛利相關 API；助手即時通知 | 無新增 `permission_denied` |
+| 3.8 | 若有 #212/#213：LayoutPlanner → BudgetWeb 雲端同步 | 寫回安全閘正常 |
+
+### 3.6 匿名 curl 探針（Publish 後；勿帶真案號內容）
+
+```bash
+# 皆應失敗（非 200 完整 JSON；常見 401／permission denied）
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app/.json?shallow=true"
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app/quotations.json?shallow=true"
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app/notifications.json?shallow=true"
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  "https://brave-calling-391208-default-rtdb.asia-southeast1.firebasedatabase.app/quickRenovationQuote/settingsV2.json"
+```
 
 ## 4. 與 PR #212 / #213 合併順序
 
@@ -110,8 +147,9 @@ flowchart LR
 
 ## 6. 安全說明（匿名登入）
 
-- 阻擋未登入爬蟲／誤公開 `.json`；**不**等於案場 ACL。
-- Custom Token／GAS 脫敏 API 為後續升級（本任務不做）。
+- 阻擋**未帶 Firebase Auth**的爬蟲／公開 `.json`；任何人以公開 Web apiKey 仍可 `signInAnonymously` 後讀取——**不**等於案場／員工 ACL。
+- Custom Token／LIFF 綁定 claims／GAS 脫敏 API 為後續升級（本任務不做）。
+- `adminPin` 硬編碼於公開前端屬另案；規則收緊後陌生人至少不能再靠 REST 直接撈 `settingsV2`。
 
 ## 7. 本機驗證指令
 
@@ -122,4 +160,4 @@ npm run test:rtdb-rules-legacy
 npm run test:layout-planner:ci
 ```
 
-*Runbook 版本：2026-10-23（TINA #215 審查 A/B）*
+*Runbook 版本：2026-11-17（P0：quotations + notifications + quickRenovationQuote）*

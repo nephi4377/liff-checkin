@@ -2,7 +2,8 @@
 
 | 檔案 | 用途 |
 |------|------|
-| `quotations.rules.fragment.json` | **Console 手動合併用片段**（僅 `quotations`）。**禁止** `firebase deploy`／`firebase deploy --only database`。 |
+| `rtdb-rules.p0-sensitive.fragment.json` | **P0 Console 手動合併用片段**（`quotations`／`notifications`／`quickRenovationQuote`）。**禁止** `firebase deploy`／`firebase deploy --only database`。 |
+| `quotations.rules.fragment.json` | 僅 `quotations` 的舊片段；P0 請改用上列完整片段。 |
 | `emulator.firebase.json` | **僅 Emulator** 設定（含 rules 路徑）；非正式 deploy 設定。 |
 | `database.rules.emulator.json` | Emulator 單元測試 rules（含 `_emulator_unrelated_public` 探針）。 |
 | `database.rules.emulator-legacy-public.json` | 模擬舊規則（公開 quotations）相容測試。 |
