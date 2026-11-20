@@ -17,6 +17,8 @@ assert(
   html.indexOf('疑似重複記帳') >= 0 && html.indexOf('同類型、同金額、同日期') >= 0,
   'confirm copy states type+amount+date'
 );
+assert(html.indexOf('同廠商同金額') >= 0 && html.indexOf('party_amount') >= 0,
+  'also handles same-vendor same-amount soft warn');
 assert(html.indexOf('duplicate_prior') >= 0, 'uses prior detail for confirm');
 assert(html.indexOf('askDupConfirm') >= 0, 'uses in-page dup confirm helper');
 assert(html.indexOf('dupConfirmOverlay') >= 0, 'has page modal overlay');
