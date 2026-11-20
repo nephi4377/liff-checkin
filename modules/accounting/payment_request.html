@@ -8,7 +8,7 @@
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_master_data.js?v=19"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=11"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=12"></script>
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
@@ -1210,6 +1210,12 @@
         var noteEl = document.getElementById('note');
         if (!noteEl || typeof AccountingTaxMode === 'undefined') return;
         noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, taxMode);
+        if (taxMode === 'prorate') {
+          var s = AccountingTaxMode.summarize(readAllocRows(), 'prorate', getProrateTaxInput());
+          noteEl.value = AccountingTaxMode.syncProrateTaxNote(noteEl.value, s.tax, taxMode);
+        } else {
+          noteEl.value = AccountingTaxMode.syncProrateTaxNote(noteEl.value, '', 'inclusive');
+        }
         syncTaxFormNote();
       }
 
@@ -1227,11 +1233,16 @@
           syncTaxModeFormNote();
           return;
         }
+        var taxVal = getProrateTaxInput();
         var applied = next === 'prorate'
-          ? AccountingTaxMode.applyModeToRows(rows, next, { prevMode: prev, displayOnly: true })
+          ? AccountingTaxMode.applyModeToRows(rows, next, {
+            prevMode: prev,
+            displayOnly: true,
+            taxAmount: taxVal
+          })
           : AccountingTaxMode.applyModeToRows(rows, next, {
             prevMode: prev,
-            taxAmount: getProrateTaxInput()
+            taxAmount: taxVal
           });
         taxMode = next;
         taxModeTouched = true;
@@ -2309,6 +2320,7 @@
         var err = validateForm();
         if (err) { setMsg(err); return; }
         refreshTaxFromCurrentBases();
+        syncTaxModeFormNote();
         var label = mode === 'finance_direct' ? '財務直送待匯款' : '送出請款';
         var btn = mode === 'finance_direct'
           ? document.getElementById('financeBtn')
