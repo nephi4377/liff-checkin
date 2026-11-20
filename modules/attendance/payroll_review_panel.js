@@ -160,6 +160,16 @@ function calcProratedMonthlyBaseSalary(baseSalary, periodStart, periodEnd, hireD
     }, info);
 }
 
+/** 中途到職／離職：固定津貼／出勤獎金上限依在職日 ÷30 */
+function prorateFixedPayrollAmount(amount, employedDays, coversFullPeriod) {
+    const a = Number(amount) || 0;
+    if (a <= 0) return 0;
+    if (coversFullPeriod) return Math.round(a);
+    const days = Math.max(0, Number(employedDays) || 0);
+    if (days <= 0) return 0;
+    return Math.round(a * days / PAYROLL_MONTHLY_DAYS);
+}
+
 function fmtPayrollDay(v) {
     if (v == null || v === '') return '—';
     const n = Number(v);
@@ -346,18 +356,22 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
 
     let earnedBase = base;
     let fullAttendanceBonus = 0;
-    const maxFullAttendance = Number(settings.fullAttendanceBonusMax) || 0;
+    const maxFullAttendanceRaw = Number(settings.fullAttendanceBonusMax) || 0;
+    let maxFullAttendance = maxFullAttendanceRaw;
     let personalLeaveDeduction = 0;
     let sickLeaveDeduction = 0;
     let absentBaseDeduction = 0;
     let employedDaysInPeriod = 0;
     let coversFullPeriod = true;
+    let transportAmt = transport;
+    let otherAllowanceAmt = otherAllowance;
     if (payType === 'daily') {
         const days = Number(snapshot.daysWorked) || 0;
         const personalLeave = Number(st.personalLeave) || 0;
         const workPunchDays = snapshot.workPunchDays != null ? snapshot.workPunchDays : days;
         earnedBase = base * days;
-        personalLeaveDeduction = calcPersonalLeaveDeduction(base, personalLeave, payType);
+        // 日薪計薪天數已排除事假／特別假／天然災害，不另列減項（避免雙扣）
+        personalLeaveDeduction = 0;
         const annual = Number(st.annualLeave) || 0;
         const comp = Number(st.compensatoryLeave) || 0;
         const sick = Number(st.sickLeave) || 0;
@@ -368,7 +382,7 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         if (sick > 0) dayParts.push(`病假 ${fmtPayrollDay(sick)} 天（半薪）`);
         if (menstrual > 0) dayParts.push(`生理假 ${fmtPayrollDay(menstrual)} 天`);
         const dayNote = personalLeave > 0
-            ? `${dayParts.join('＋')}；事假 ${fmtPayrollDay(personalLeave)} 日另列減項`
+            ? `${dayParts.join('＋')}；事假 ${fmtPayrollDay(personalLeave)} 日已自計薪天數排除`
             : `${dayParts.join('＋')} × ${base.toLocaleString()} 元／日`;
         additions.push({
             label: '本薪（日薪 × 計薪天數）',
@@ -405,6 +419,9 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         earnedBase = prorate.amount;
         employedDaysInPeriod = prorate.employedDays;
         coversFullPeriod = !!prorate.coversFullPeriod;
+        transportAmt = prorateFixedPayrollAmount(transport, employedDaysInPeriod, coversFullPeriod);
+        otherAllowanceAmt = prorateFixedPayrollAmount(otherAllowance, employedDaysInPeriod, coversFullPeriod);
+        maxFullAttendance = prorateFixedPayrollAmount(maxFullAttendanceRaw, employedDaysInPeriod, coversFullPeriod);
         const bonusStats = {
             absent: rawAbsent,
             personalLeave,
@@ -484,9 +501,19 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
             });
         }
     }
-    if (transport > 0) additions.push({ label: '交通津貼', amount: transport });
-    if (otherAllowance > 0) {
-        additions.push({ label: '其他津貼', amount: otherAllowance, note: settings.otherAllowanceNote || '' });
+    if (transportAmt > 0) {
+        additions.push({
+            label: '交通津貼',
+            amount: transportAmt,
+            note: coversFullPeriod ? '' : `按在職 ${fmtPayrollDay(employedDaysInPeriod)} 日比例`
+        });
+    }
+    if (otherAllowanceAmt > 0) {
+        additions.push({
+            label: '其他津貼',
+            amount: otherAllowanceAmt,
+            note: (settings.otherAllowanceNote || '') + (coversFullPeriod ? '' : `；按在職 ${fmtPayrollDay(employedDaysInPeriod)} 日比例`)
+        });
     }
     const overtimeHours = Number(input.overtimeHours) || 0;
     let overtimePay = 0;
@@ -528,24 +555,14 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
         }
         deductions.push({ label: '遲到早退扣款', amount: attendanceTimeDeduction, note });
     }
-    if (personalLeaveDeduction > 0 && payType === 'daily') {
-        const personalLeave = Number(st.personalLeave) || 0;
-        deductions.push({
-            label: '事假扣款',
-            amount: personalLeaveDeduction,
-            note: `事假 ${fmtPayrollDay(personalLeave)} 日（日薪×天數）`
-        });
-    }
+    // 日薪：事假／天然災害已自計薪天數排除，不另列減項
     const typhoonDaily = Number(st.typhoonLeave) || 0;
     if (payType === 'daily' && typhoonDaily > 0) {
-        const typhoonDailyDed = calcPersonalLeaveDeduction(base, typhoonDaily, payType);
-        if (typhoonDailyDed > 0) {
-            deductions.push({
-                label: PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL,
-                amount: typhoonDailyDed,
-                note: `${PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL} ${fmtPayrollDay(typhoonDaily)} 日（不支薪；日薪×天數）`
-            });
-        }
+        deductions.push({
+            label: PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL,
+            amount: 0,
+            note: `${PAYROLL_NATURAL_DISASTER_DEDUCTION_LABEL} ${fmtPayrollDay(typhoonDaily)} 日已自計薪天數排除`
+        });
     }
 
     // 稅基＝加項 − 假勤／遲到等薪資減項（不含勞健保／稅本身）
@@ -591,8 +608,8 @@ function buildPayrollBreakdown(settings, payType, snapshot, input, insurancePrev
     return {
         additions, deductions, addTotal, dedTotal, estimatedNet,
         companyCosts, companyCostTotal,
-        baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transport,
-        otherAllowance, overtimePay, insurance: ins, employerCost,
+        baseSalary: earnedBase, fullAttendanceBonus, transportationAllowance: transportAmt,
+        otherAllowance: otherAllowanceAmt, overtimePay, insurance: ins, employerCost,
         attendanceBonusPolicy: policy,
         employedDaysInPeriod, coversFullPeriod,
         autoRemark: autoRemarkParts.join('；')
