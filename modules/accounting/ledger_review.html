@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=10"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=14"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
@@ -571,9 +571,23 @@
         return Math.round(amt / (1 + TAX_RATE));
       }
       function stripTaxTag(desc) {
-        return String(desc || '').replace(/\s*[\(（]?(含稅|未稅)[\)）]?/g, '').trim();
+        if (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.stripTaxTag) {
+          return AccountingTaxMode.stripTaxTag(desc);
+        }
+        // fallback：保留 〔未稅N〕，只剝 (含稅)/(未稅)
+        var marks = [];
+        var s = String(desc || '').replace(/〔未稅-?\d+〕/g, function (m) {
+          marks.push(m);
+          return '\uE000' + (marks.length - 1) + '\uE001';
+        });
+        s = s.replace(/\s*[（(]含稅[）)]\s*/g, ' ').replace(/\s*[（(]未稅[）)]\s*/g, ' ');
+        for (var i = 0; i < marks.length; i++) s = s.replace('\uE000' + i + '\uE001', marks[i]);
+        return s.replace(/\s+/g, ' ').trim();
       }
       function applyTaxTag(desc, inclusive) {
+        if (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.formatInclusiveTaxTag) {
+          return AccountingTaxMode.formatInclusiveTaxTag(desc, inclusive);
+        }
         var base = stripTaxTag(desc);
         var tag = inclusive ? '(含稅)' : '(未稅)';
         return base ? base + ' ' + tag : tag;
@@ -593,10 +607,11 @@
         var ocrInc = false;
         if (row && row.tax_inclusive != null) {
           taxInc = !!row.tax_inclusive;
-        } else if (desc.indexOf('未稅') >= 0) {
+        } else if (desc.indexOf('未稅') >= 0 && desc.indexOf('含稅') < 0) {
           taxInc = false;
         } else if (desc.indexOf('含稅') >= 0) {
           taxInc = true;
+          // inclusive／per_row：品項含稅仍當 OCR 原生，維持 uncheckFree 預設（取消勾選不改金額）
           ocrInc = true;
         } else {
           var fromNote = taxNoteFromItemNote(itemNote, row.project_no);
@@ -607,14 +622,23 @@
         var uncheckFree = row && row.tax_uncheck_free != null
           ? !!row.tax_uncheck_free
           : ocrInc;
+        var baseAmt;
+        if (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.readStoredProrateBase) {
+          baseAmt = AccountingTaxMode.readStoredProrateBase(row);
+          if (isNaN(baseAmt)) baseAmt = undefined;
+        } else if (row && row._base_amount != null && String(row._base_amount) !== '') {
+          baseAmt = row._base_amount;
+        }
         return {
           project_no: row.project_no || '',
           amount: row.amount || '',
           item_desc: row.item_desc || '',
+          note: row.note || '',
           tax_inclusive: taxInc,
           tax_add_applied: !!(row && row.tax_add_applied),
           ocr_tax_inclusive: ocrInc,
-          tax_uncheck_free: uncheckFree
+          tax_uncheck_free: uncheckFree,
+          _base_amount: baseAmt
         };
       }
       function updatePretaxHint(rowEl, panel) {
@@ -657,13 +681,22 @@
         if (noteTextEl) noteTextEl.textContent = noteEl.value;
         if (noteLine) noteLine.classList.toggle('hidden', !noteEl.value);
       }
-      /** 含稅：只標記，不改金額 */
+      /** 含稅：只標記，不改金額（走 AccountingTaxMode.setRowTaxInclusive） */
       function onTaxInclusiveChange(panel, rowEl) {
         var cb = rowEl.querySelector('.inp-tax');
         var amtInp = rowEl.querySelector('.inp-amt');
         var descInp = rowEl.querySelector('.inp-desc');
         if (!cb || !amtInp || !descInp) return;
-        descInp.value = applyTaxTag(descInp.value, cb.checked);
+        var amtBefore = amtInp.value;
+        var next = (typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.setRowTaxInclusive)
+          ? AccountingTaxMode.setRowTaxInclusive({
+            amount: parseAllocAmount(amtBefore),
+            item_desc: descInp.value,
+            tax_inclusive: cb.checked
+          }, cb.checked)
+          : { item_desc: applyTaxTag(descInp.value, cb.checked) };
+        descInp.value = next.item_desc;
+        amtInp.value = amtBefore;
         updatePretaxHint(rowEl, panel);
         syncTaxNoteForPanel(panel);
         updatePanelTotal(panel);
@@ -683,17 +716,30 @@
         }
         var rows = readAllocRowsFromPanel(panel);
         var taxInp = panel.querySelector('.inp-tax-amount');
+        var taxVal = taxInp ? taxInp.value : '';
         var applied = next === 'prorate'
-          ? AccountingTaxMode.applyModeToRows(rows, next, { prevMode: prev, displayOnly: true })
+          ? AccountingTaxMode.applyModeToRows(rows, next, {
+            prevMode: prev,
+            displayOnly: true,
+            taxAmount: taxVal
+          })
           : AccountingTaxMode.applyModeToRows(rows, next, {
             prevMode: prev,
-            taxAmount: taxInp ? taxInp.value : ''
+            taxAmount: taxVal
           });
         panel.setAttribute('data-tax-mode', next);
         renderAllocRowsInPanel(panel, applied);
         renderPanelTaxModeSeg(panel);
         var noteEl = panel.querySelector('.inp-note');
-        if (noteEl) noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, next);
+        if (noteEl) {
+          noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, next);
+          if (next === 'prorate') {
+            var sNote = AccountingTaxMode.summarize(applied, 'prorate', taxVal);
+            noteEl.value = AccountingTaxMode.syncProrateTaxNote(noteEl.value, sNote.tax, next);
+          } else {
+            noteEl.value = AccountingTaxMode.syncProrateTaxNote(noteEl.value, '', 'inclusive');
+          }
+        }
         syncTaxNoteForPanel(panel);
       }
       function renderPanelTaxModeSeg(panel) {
@@ -782,7 +828,9 @@
             return inferAllocRowTax({
               project_no: a.project_no || '',
               amount: a.amount || '',
-              item_desc: a.item_desc || ''
+              item_desc: a.item_desc || '',
+              note: a.note || '',
+              _base_amount: a._base_amount
             }, itemNote);
           });
         }
@@ -904,7 +952,14 @@
               }
               updatePretaxHint(row, panel);
               var a = parseAllocAmount(inp.value);
-              if (!isNaN(a)) row.setAttribute('data-base-amount', String(a));
+              if (!isNaN(a)) {
+                row.setAttribute('data-base-amount', String(a));
+                // 使用者改金額：更新 〔未稅〕基數（勿鎖舊值）
+                var descInpEdit = row.querySelector('.inp-desc');
+                if (descInpEdit && typeof AccountingTaxMode !== 'undefined' && AccountingTaxMode.embedBaseInDesc) {
+                  descInpEdit.value = AccountingTaxMode.embedBaseInDesc(descInpEdit.value, a);
+                }
+              }
               row.setAttribute('data-tax-add-applied', '0');
             }
             syncTaxNoteForPanel(panel);
@@ -1008,16 +1063,34 @@
           return copy;
         });
         var mode = getPanelTaxMode(panel);
+        var taxInp = panel.querySelector('.inp-tax-amount');
+        var taxVal = taxInp ? taxInp.value : '';
         if (rows.length && mode !== 'inclusive' && typeof AccountingTaxMode !== 'undefined') {
-          var taxInp = panel.querySelector('.inp-tax-amount');
           rows = AccountingTaxMode.applyModeToRows(rows, mode, {
             prevMode: mode,
-            taxAmount: taxInp ? taxInp.value : ''
+            taxAmount: taxVal
           });
         }
         var patch = { allocations: rows };
         var noteEl = panel.querySelector('.inp-note');
-        if (noteEl) patch.note = noteEl.value.trim();
+        if (noteEl) {
+          var noteVal = noteEl.value.trim();
+          if (typeof AccountingTaxMode !== 'undefined') {
+            noteVal = AccountingTaxMode.syncModeNote(noteVal, mode);
+            if (mode === 'prorate') {
+              var s = AccountingTaxMode.summarize(
+                readAllocRowsFromPanel(panel),
+                'prorate',
+                taxVal
+              );
+              noteVal = AccountingTaxMode.syncProrateTaxNote(noteVal, s.tax, mode);
+            } else {
+              noteVal = AccountingTaxMode.syncProrateTaxNote(noteVal, '', 'inclusive');
+            }
+          }
+          patch.note = noteVal;
+          noteEl.value = noteVal;
+        }
         var vendorInp = panel.querySelector('.inp-vendor');
         if (vendorInp) {
           var vid = String(vendorInp.dataset.vendorId || '').trim();
@@ -1339,17 +1412,36 @@
             ? '<p class="sub" style="margin-top:8px">（核准／退回需權限 ≥ 5）</p>'
             : '');
         var initRows = allocRowsFromItem(item);
+        var reopenTax = NaN;
+        var restoreOpts = null;
         if (initMode === 'prorate' && typeof AccountingTaxMode !== 'undefined') {
-          initRows = AccountingTaxMode.toPretaxRows(initRows, 'prorate');
+          reopenTax = AccountingTaxMode.parseProrateTaxFromNote(item.note);
+          restoreOpts = {
+            taxAmount: isNaN(reopenTax) ? '' : reopenTax,
+            paymentNote: item.note
+          };
+          initRows = AccountingTaxMode.restoreProratePretaxRows(initRows, restoreOpts);
+          // 舊單無【整張稅】時，legacy 推出的稅要回填，避免空白稅欄再×5%
+          if (isNaN(reopenTax) && restoreOpts.restoredTax != null && !isNaN(restoreOpts.restoredTax)) {
+            reopenTax = restoreOpts.restoredTax;
+          }
         }
         panel._reviewItem = item;
         renderAllocRowsInPanel(panel, initRows);
         renderPanelTaxModeSeg(panel);
+        if (initMode === 'prorate' && !isNaN(reopenTax)) {
+          var taxInpInit = panel.querySelector('.inp-tax-amount');
+          if (taxInpInit) taxInpInit.value = String(reopenTax);
+          updatePanelTotal(panel);
+        }
         var noteEl = panel.querySelector('.inp-note');
         if (noteEl) {
           noteEl.value = String(item.note || '');
           if (typeof AccountingTaxMode !== 'undefined') {
             noteEl.value = AccountingTaxMode.syncModeNote(noteEl.value, initMode);
+            if (initMode === 'prorate' && !isNaN(reopenTax)) {
+              noteEl.value = AccountingTaxMode.syncProrateTaxNote(noteEl.value, reopenTax, 'prorate');
+            }
           }
         }
         syncTaxNoteForPanel(panel);
