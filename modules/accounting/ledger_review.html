@@ -7,7 +7,7 @@
   <link rel="stylesheet" href="../../shared/css/accounting_layout.css?v=8" />
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script src="../../shared/js/accounting_amount_formula.js?v=1"></script>
-  <script src="../../shared/js/accounting_tax_mode.js?v=10"></script>
+  <script src="../../shared/js/accounting_tax_mode.js?v=11"></script>
   <script src="../../shared/js/operator_context.js?v=3"></script>
   <script src="../../shared/js/accounting_api.js?v=106"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
@@ -596,14 +596,14 @@
         } else if (desc.indexOf('未稅') >= 0) {
           taxInc = false;
         } else if (desc.indexOf('含稅') >= 0) {
+          // 存檔分攤常帶「(含稅)」＝整張加稅後金額，不是 OCR 原生含稅
           taxInc = true;
-          ocrInc = true;
         } else {
           var fromNote = taxNoteFromItemNote(itemNote, row.project_no);
           if (fromNote != null) taxInc = fromNote;
         }
+        // 只有列上明確帶 ocr_tax_inclusive 才當 OCR 原生；勿用「含稅」字樣推斷
         if (row && row.ocr_tax_inclusive != null) ocrInc = !!row.ocr_tax_inclusive;
-        else if (!ocrInc && taxInc && desc.indexOf('含稅') >= 0) ocrInc = true;
         var uncheckFree = row && row.tax_uncheck_free != null
           ? !!row.tax_uncheck_free
           : ocrInc;

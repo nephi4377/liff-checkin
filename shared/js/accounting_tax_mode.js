@@ -70,7 +70,9 @@ var AccountingTaxMode = (function () {
     if (mode === 'per_row' && (row.tax_add_applied || row.tax_inclusive)) {
       return removeTax(amt);
     }
-    if (mode === 'prorate' && row.tax_inclusive && !row.ocr_tax_inclusive) {
+    // 整張分攤：列上已標含稅＝存檔後的含稅分攤額，重開時一律反推未稅。
+    // 勿因 ocr_tax_inclusive 跳過（品項「(含稅)」常被誤標成 OCR 原生含稅，會加稅兩次）。
+    if (mode === 'prorate' && row.tax_inclusive) {
       return removeTax(amt);
     }
     return amt;
