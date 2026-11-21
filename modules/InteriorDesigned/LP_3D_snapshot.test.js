@@ -9,6 +9,10 @@ import {
     renderSceneToPngBlob,
     PNG_EXPORT_MAX_SIDE_PX,
     PNG_EXPORT_MAX_PIXELS,
+    buildLayout3DViewPresetOptions,
+    formatWalkRoomPresetId,
+    parseWalkRoomPresetId,
+    isOrbitCameraPresetId,
 } from './LP_3D_snapshot.js';
 import { buildLayout3DDescriptor, LP_3D_DEFAULTS, ringCentroidXZ } from './LP_3D_scene.js';
 
@@ -56,6 +60,107 @@ describe('computeOrbitPresetCamera', () => {
         const front = computeOrbitPresetCamera(ORBIT_CAMERA_PRESETS.FRONT_ISO, desc, LP_3D_DEFAULTS);
         expect(front.position.z).toBeLessThan(front.target.z);
         expect(front.position.y).toBeGreaterThan(front.target.y);
+    });
+
+    it('四向等角：相機在對應軸外側', () => {
+        const south = computeOrbitPresetCamera(ORBIT_CAMERA_PRESETS.ISO_SOUTH, desc, LP_3D_DEFAULTS);
+        expect(south.position.z).toBeGreaterThan(south.target.z);
+        const east = computeOrbitPresetCamera(ORBIT_CAMERA_PRESETS.ISO_EAST, desc, LP_3D_DEFAULTS);
+        expect(east.position.x).toBeGreaterThan(east.target.x);
+        const west = computeOrbitPresetCamera(ORBIT_CAMERA_PRESETS.ISO_WEST, desc, LP_3D_DEFAULTS);
+        expect(west.position.x).toBeLessThan(west.target.x);
+    });
+});
+
+describe('buildLayout3DViewPresetOptions', () => {
+    it('含四向等角與各地板房間視線', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [
+                {
+                    id: 'f1',
+                    type: 'floor',
+                    points: [
+                        { x: 100, y: 100 },
+                        { x: 400, y: 100 },
+                        { x: 400, y: 400 },
+                        { x: 100, y: 400 },
+                    ],
+                },
+                {
+                    id: 'f2',
+                    type: 'floor',
+                    points: [
+                        { x: 500, y: 100 },
+                        { x: 800, y: 100 },
+                        { x: 800, y: 400 },
+                        { x: 500, y: 400 },
+                    ],
+                },
+            ],
+            placedCabinets: [],
+        });
+        const { orbit, walkRooms } = buildLayout3DViewPresetOptions(desc);
+        expect(orbit.map((o) => o.id)).toContain(ORBIT_CAMERA_PRESETS.ISO_WEST);
+        expect(walkRooms).toHaveLength(2);
+        expect(parseWalkRoomPresetId(walkRooms[0].id)).toBe(0);
+        expect(isOrbitCameraPresetId(ORBIT_CAMERA_PRESETS.TOP)).toBe(true);
+        expect(isOrbitCameraPresetId(formatWalkRoomPresetId(1))).toBe(false);
+    });
+
+    it('有地板時 walk 環僅來自 floors；外圈牆存在時房間視線仍與地板數一致', () => {
+        const desc = buildLayout3DDescriptor({
+            workspaceSize: 2000,
+            drawnAreas: [
+                {
+                    id: 'wall-outer',
+                    type: 'wall',
+                    thickness: 15,
+                    points: [
+                        { x: 50, y: 50 },
+                        { x: 950, y: 50 },
+                        { x: 950, y: 950 },
+                        { x: 50, y: 950 },
+                    ],
+                },
+                {
+                    id: 'floor-a',
+                    type: 'floor',
+                    points: [
+                        { x: 100, y: 100 },
+                        { x: 400, y: 100 },
+                        { x: 400, y: 400 },
+                        { x: 100, y: 400 },
+                    ],
+                },
+                {
+                    id: 'floor-b',
+                    type: 'floor',
+                    points: [
+                        { x: 500, y: 100 },
+                        { x: 800, y: 100 },
+                        { x: 800, y: 400 },
+                        { x: 500, y: 400 },
+                    ],
+                },
+            ],
+            placedCabinets: [],
+        });
+        expect(desc.walls).toHaveLength(1);
+        expect(desc.floors).toHaveLength(2);
+        expect(desc.walkBounds?.rings?.length).toBe(2);
+        const { walkRooms } = buildLayout3DViewPresetOptions(desc);
+        expect(walkRooms).toHaveLength(desc.floors.length);
+        expect(walkRooms[0].label).toContain('floor-a');
+        expect(parseWalkRoomPresetId(walkRooms[1].id)).toBe(1);
+    });
+
+    it('僅牆體無地板時不提供房間視線選項（即使 walkBounds 有牆環）', () => {
+        const desc = buildLayout3DDescriptor(demoLayout);
+        expect(desc.floors).toHaveLength(0);
+        expect(desc.walkBounds?.rings?.length).toBe(1);
+        const { walkRooms } = buildLayout3DViewPresetOptions(desc);
+        expect(walkRooms).toHaveLength(0);
     });
 });
 

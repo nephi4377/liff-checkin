@@ -13,6 +13,9 @@
 | 移動 | WASD、方向鍵；速度約 220 cm/s |
 | 視角 | 桌機：按住左鍵拖曳；手機：左半屏平移、右半屏轉向 |
 | 切回鳥瞰 | 工具列「鳥瞰」 |
+| 預設視角 | 俯視、北／南／東／西四向等角、角落斜角；`drawnAreas.floor` 每圈一項「房間視線」（室內眼高，無地板則略過） |
+| PNG | 工具列「儲存圖片」；檔名 `layout-3d-YYYYMMDD-HHMM.png` |
+| 大平面 | ≥40 櫃體且 ≥10 牆段：`assessLayout3DHeavyMode` 啟用單盒櫃體、關地板 `receiveShadow`；`getDiagnostics().heavyLayout`／`sceneMeshCount`；e2e `lp-3d-perf-report.json` |
 | 邊界 | `walkBounds` 多邊形 clamp ＋ **WALK-2** 內牆線段／櫃體圓形碰撞（門洞可過、窗洞不可） |
 | 2D 隔離 | 漫遊時移動鍵在 capture 階段處理，不觸發 2D 櫃體快捷（見 `lp-walk-keyguard.json` e2e） |
 
