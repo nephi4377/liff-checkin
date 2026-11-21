@@ -607,14 +607,19 @@
         showPendingPreviews(pendingPhotos);
       }
 
-      function askDupConfirm(message) {
+      function askDupConfirm(message, opts) {
+        opts = opts || {};
         var overlay = document.getElementById('dupConfirmOverlay');
         var msgEl = document.getElementById('dupConfirmMsg');
+        var titleEl = document.getElementById('dupConfirmTitle');
         var btnOk = document.getElementById('dupConfirmOk');
         var btnCancel = document.getElementById('dupConfirmCancel');
         if (!overlay || !msgEl || !btnOk || !btnCancel) {
           // 後備：極少數載入異常才用原生 confirm
           return Promise.resolve(window.confirm(String(message || '')));
+        }
+        if (titleEl) {
+          titleEl.textContent = opts.title || '疑似重複記帳';
         }
         msgEl.textContent = String(message || '');
         overlay.classList.add('is-open');
@@ -669,6 +674,8 @@
           var data = await AccountingApi.post(body);
           if (!data.success && data.needs_dup_confirm) {
             var prior = data.duplicate_prior || {};
+            var byParty = String(prior.match_by || '') === 'party_amount' ||
+              /同廠商同金額/.test(String(data.message || ''));
             var dupMsg = data.message || '';
             if (!dupMsg) {
               var bits = [];
@@ -681,12 +688,18 @@
               var where = (prior.sheet && prior.row)
                 ? ('「' + prior.sheet + '」第 ' + prior.row + ' 列')
                 : '稍早一筆';
-              dupMsg = '疑似重複記帳（同類型、同金額、同日期）';
+              dupMsg = byParty
+                ? '已有同廠商同金額的記帳'
+                : '疑似重複記帳（同類型、同金額、同日期）';
               if (bits.length) dupMsg += '。已有：' + bits.join('｜') + '，在 ' + where;
               else dupMsg += '，可能已在 ' + where;
-              dupMsg += '。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
+              dupMsg += byParty
+                ? '。若這是重複送出請按「取消」；確認是另一筆再按「確定」。'
+                : '。是重複點擊／重送請按「取消」；今天真的有兩筆再按「確定」。';
             }
-            var forceOk = await askDupConfirm(dupMsg);
+            var forceOk = await askDupConfirm(dupMsg, {
+              title: byParty ? '同廠商同金額提醒' : '疑似重複記帳'
+            });
             if (!forceOk) throw new Error('已取消，沒有再記一筆');
             body.force_duplicate = true;
             data = await AccountingApi.post(body);
