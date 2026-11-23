@@ -37,5 +37,8 @@ assert(payVer && idxVer && payVer === idxVer, 'payment_request and index share a
 assert(parseInt(payVer, 10) >= 109, 'api cache bust >= v109');
 assert(html.indexOf('本機測試（勿當正式稽核）') >= 0, 'legacy bypass label string may remain for dead branch');
 assert(html.indexOf('先進門再補員工名單') >= 0, 'showApp before waitForHubData');
+assert(html.indexOf('pendingPhotoError') >= 0, 'LINE photo carry error region');
+assert(html.indexOf('pendingPhotosLoadedOk') >= 0, 'guards repeat pending photo fetch');
+assert(html.indexOf('再帶一次照片') >= 0, 'manual retry for LINE photos on payment_request');
 
 console.log('test-payment-request-auth-bypass: OK');
