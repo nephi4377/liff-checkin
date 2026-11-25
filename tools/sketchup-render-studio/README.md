@@ -1,6 +1,6 @@
 # SketchUp 渲染工作室（前端）
 
-完整 API／部署規格：`accounting-gas/SPEC/SKETCHUP_RENDER_STUDIO_SPEC.md`
+人怎麼走與已知問題：`SPEC/23_SKETCHUP_RENDER_STUDIO_SPEC.md`。後端契約在 Backend_GAS `accounting-gas/SPEC/SKETCHUP_RENDER_STUDIO_SPEC.md`。
 
 部署路徑：`CODING/tools/sketchup-render-studio/` → `https://info.tanxin.space/tools/sketchup-render-studio/`
 
@@ -10,7 +10,7 @@
 - **左右對照**：左原圖、右渲染結果，依螢幕高度盡量大圖顯示
 - **燈光來源標籤**：窗戶自然光、間接照明、投射燈、櫃內燈光、燈帶等（可多選）
 - **多版本**：同一張圖可多次渲染，下排「此圖版本」小圖切換
-- **批次渲染**：呼叫 `sketchup_render_batch`，第一張成功後自動作整案風格錨點
+- **批次渲染**：畫面上的按鈕是一張一張呼叫單張渲染，做完會顯示「批次渲染結束」。整包批次接口存在，這個按鈕沒有接上
 
 ## 開發測試
 
