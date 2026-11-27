@@ -12,7 +12,7 @@
   <script src="../../shared/js/operator_context.js?v=4"></script>
   <script src="../../shared/js/hub_ref_cache.js?v=2"></script>
   <script src="../../shared/js/accounting_context.js?v=3"></script>
-  <script src="../../shared/js/accounting_api.js?v=112"></script>
+  <script src="../../shared/js/accounting_api.js?v=113"></script>
   <script src="../../shared/js/accounting_cache.js?v=34"></script>
   <script src="../../shared/js/accounting_form_helpers.js?v=7"></script>
   <script src="../../shared/js/accounting_ui.js?v=26"></script>
@@ -178,9 +178,36 @@
     @media (min-width: 560px) {
       .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
+    /* 同廠商同金額提醒：頁內對話（勿用 window.confirm——巢狀 iframe／await 後常被擋） */
+    #dupConfirmOverlay {
+      position: fixed; inset: 0; z-index: 9999; display: none;
+      align-items: center; justify-content: center;
+      background: rgba(32, 33, 36, 0.45); padding: 16px; box-sizing: border-box;
+    }
+    #dupConfirmOverlay.is-open { display: flex; }
+    #dupConfirmPanel {
+      width: min(100%, 420px); background: #fff; border-radius: 14px;
+      padding: 18px 16px 14px; box-shadow: 0 8px 28px rgba(0,0,0,.18);
+    }
+    #dupConfirmPanel h3 { margin: 0 0 10px; font-size: 18px; color: #b06000; }
+    #dupConfirmMsg { margin: 0 0 14px; font-size: 15px; line-height: 1.5; color: #333; white-space: pre-wrap; }
+    #dupConfirmActions { display: flex; gap: 8px; }
+    #dupConfirmActions .btn { margin-top: 0; flex: 1; }
+    #dupConfirmCancel { background: #e8eaed; color: #333; }
+    #dupConfirmOk { background: #b06000; color: #fff; }
   </style>
 </head>
 <body class="acct-page acct-page-form acct-page-wide">
+  <div id="dupConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="dupConfirmTitle">
+    <div id="dupConfirmPanel">
+      <h3 id="dupConfirmTitle">同廠商同金額提醒</h3>
+      <p id="dupConfirmMsg"></p>
+      <div id="dupConfirmActions">
+        <button type="button" class="btn" id="dupConfirmCancel">取消</button>
+        <button type="button" class="btn" id="dupConfirmOk">繼續送出</button>
+      </div>
+    </div>
+  </div>
   <div id="loading">載入中…</div>
   <div id="app" class="hidden acct-main">
     <p class="nav"><a class="acct-nav-back" href="index.html">← 會計功能選單</a><span class="acct-nav-back"> · </span><span class="acct-nav-current" aria-current="page">待付款請款</span><span> · </span><a href="submit_records.html" id="navSubmitRecordsLink">送出紀錄</a></p>
@@ -2343,6 +2370,36 @@
         return photos.length >= 2;
       }
 
+      function askDupConfirm(message) {
+        var overlay = document.getElementById('dupConfirmOverlay');
+        var msgEl = document.getElementById('dupConfirmMsg');
+        var btnOk = document.getElementById('dupConfirmOk');
+        var btnCancel = document.getElementById('dupConfirmCancel');
+        if (!overlay || !msgEl || !btnOk || !btnCancel) {
+          return Promise.resolve(window.confirm(String(message || '')));
+        }
+        msgEl.textContent = String(message || '');
+        overlay.classList.add('is-open');
+        return new Promise(function (resolve) {
+          function finish(ok) {
+            overlay.classList.remove('is-open');
+            btnOk.removeEventListener('click', onOk);
+            btnCancel.removeEventListener('click', onCancel);
+            overlay.removeEventListener('click', onBackdrop);
+            resolve(!!ok);
+          }
+          function onOk() { finish(true); }
+          function onCancel() { finish(false); }
+          function onBackdrop(e) {
+            if (e.target === overlay) finish(false);
+          }
+          btnOk.addEventListener('click', onOk);
+          btnCancel.addEventListener('click', onCancel);
+          overlay.addEventListener('click', onBackdrop);
+          try { btnCancel.focus(); } catch (eFocus) {}
+        });
+      }
+
       async function submitRequest(mode) {
         if (submitting) return;
         var err = validateForm();
@@ -2379,6 +2436,16 @@
           AccountingUi.tap(label);
           AccountingUi.detail('送出內容', summarizeSubmitPayload(payload));
           var data = await AccountingApi.paymentRequestSubmit(session, payload);
+          if (!data.success && data.needs_dup_confirm) {
+            if (useOverlay) setFormSubmitOverlay(false);
+            var dupMsg = data.message ||
+              '已有同廠商同金額的請款。若這是重複送出請按「取消」；確認是另一筆再按「繼續送出」。';
+            var forceOk = await askDupConfirm(dupMsg);
+            if (!forceOk) throw new Error('已取消，沒有再送出');
+            payload.force_duplicate = true;
+            if (useOverlay) setFormSubmitOverlay(true, '送出中…');
+            data = await AccountingApi.paymentRequestSubmit(session, payload);
+          }
           if (!data.success) throw new Error(data.message || '送出失敗');
           document.getElementById('formCard').classList.add('hidden');
           document.getElementById('successCard').classList.remove('hidden');
@@ -2404,6 +2471,10 @@
           if (errHost) { errHost.innerHTML = ''; errHost.className = ''; }
         }).catch(function (e) {
           var human = e.message || '送出失敗';
+          if (/已取消，沒有再送出/.test(human)) {
+            setWarn(human);
+            return;
+          }
           markPayResumeFailed();
           showQuickReviewStayBanner('送出還沒成功（' + human + '）');
           AccountingUi.showErrorReport(document.getElementById('submitErrorHost'), {

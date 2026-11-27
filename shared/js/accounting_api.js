@@ -1125,6 +1125,7 @@ var AccountingApi = (function () {
       if (patch && patch.ai_override_reason != null && String(patch.ai_override_reason).trim()) {
         body.ai_override_reason = String(patch.ai_override_reason).trim();
       }
+      if (patch && patch.force_duplicate) body.force_duplicate = true;
       return post(body, 120000);
     },
     vendorPaymentReject: function (sessionOrToken, paymentRequestId, reason, extra) {
@@ -1235,7 +1236,7 @@ var AccountingApi = (function () {
       });
     },
     paymentRequestSubmit: function (sessionOrToken, payload) {
-      return post({
+      var body = {
         action: 'payment_request_submit',
         auth: resolveAuth(sessionOrToken),
         submit_mode: payload.submit_mode || 'review',
@@ -1255,7 +1256,9 @@ var AccountingApi = (function () {
         photos: payload.photos || [],
         from_line: payload.from_line,
         quick_review_id: payload.quick_review_id || ''
-      }, 180000);
+      };
+      if (payload && payload.force_duplicate) body.force_duplicate = true;
+      return post(body, 180000);
     },
     vendorPaymentUpdate: function (sessionOrToken, paymentRequestId, patch) {
       patch = patch || {};
