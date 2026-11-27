@@ -454,6 +454,9 @@ export default {
         const scheduleLoadFailed = computed(() => !!props.scheduleError);
         const showScheduleRetry = computed(() => scheduleLoadFailed.value && !props.scheduleLoading);
 
+        /** 員工主檔已到（空陣列可能是尚未載入，不可當成「沒有排班制員工」） */
+        const shiftEmployeeRosterReady = computed(() => (props.allEmployees || []).length > 0);
+
         return {
             projectIdInput,
             openProjectConsole,
@@ -499,6 +502,7 @@ export default {
             hasAnyScheduleData,
             scheduleLoadFailed,
             showScheduleRetry,
+            shiftEmployeeRosterReady,
         };
     },
     template: `
@@ -563,6 +567,7 @@ export default {
                             </div>
                         </div>
                     </div>
+                    <div v-else-if="!shiftEmployeeRosterReady || scheduleLoadFailed" class="text-xs text-gray-500 py-1">員工名單暫時還沒讀到，請稍後再試。</div>
                     <div v-else class="text-xs text-gray-500 py-1">目前沒有排班制員工資料。</div>
                     <div v-if="day.standardAnomalies.length > 0" class="mt-2 pt-2 border-t border-dashed border-gray-100">
                         <div class="text-[10px] text-gray-500 font-semibold mb-1">標準制員工 · 異動</div>

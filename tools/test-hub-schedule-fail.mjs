@@ -44,3 +44,11 @@ test('spa/app.js wires scheduleError into Dashboard and sidebar', () => {
   assert.match(app, /@retry-schedule="refreshScheduleInBackground"/);
   assert.doesNotMatch(app, /出席區塊將退回基本顯示/);
 });
+
+test('Dashboard does not show empty-shift copy when roster or schedule not ready', () => {
+  const dash = readFileSync(new URL('../spa/Dashboard.js', import.meta.url), 'utf8');
+  assert.match(dash, /shiftEmployeeRosterReady/);
+  assert.match(dash, /員工名單暫時還沒讀到/);
+  assert.match(dash, /v-else-if="!shiftEmployeeRosterReady \|\| scheduleLoadFailed"/);
+  assert.match(dash, /目前沒有排班制員工資料/);
+});
